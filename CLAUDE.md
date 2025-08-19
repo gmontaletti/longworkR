@@ -101,4 +101,29 @@ Rscript -e "devtools::check_man()"
 - Tests located in `tests/testthat/`
 - Each major module has corresponding test file
 - Focus on data transformation correctness and edge cases
+
+## Project Memory and Conventions
+
+### File Organization
+- **Temporary files and drafts**: Store in `../reference/longworkR/` directory
+- **Test files (temporary)**: Create in `../reference/longworkR/` before integration
+- **Documentation drafts**: Draft .md files in `../reference/longworkR/`
+- **TODO lists and notes**: Maintain in `../reference/longworkR/`
+
+### Cleanup Process
+- The r-project-maintainer agent will move non-compilation artifacts to `../reference/longworkR/`
+- This keeps the main package directory clean for CRAN submission
+- The reference directory is gitignored to prevent accidental commits
+
+### Version Control
+- Git repository initialized with comprehensive .gitignore
+- GitHub repository to be created at: `https://github.com/[username]/longworkR`
+- Initial commit includes all package structure and documentation
+- Future commits should follow conventional commit messages
+
+### Development Workflow
+1. Create drafts and experimental code in `../reference/longworkR/`
+2. Test thoroughly before moving to main package directory
+3. Use r-project-maintainer for cleanup before builds
+4. Ensure all tests pass before committing to main branch
 - temporary and complementary tests file, .md documents and note and todo lists should be created in ../reference/longworkR directory. On cleaning the packege agent-r-project-maintainer will move all the artefacts not needed for project compilation there.
