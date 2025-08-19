@@ -421,7 +421,7 @@ calculate_contract_quality_metrics <- function(data,
 #' }
 #'
 #' @export
-calculate_career_complexity_metrics <- function(data,
+calculate_impact_career_complexity_metrics <- function(data,
                                               id_column = "cf",
                                               period_column = "event_period",
                                               complexity_variables = c("over_id", "arco", "prior")) {
@@ -765,7 +765,7 @@ calculate_comprehensive_impact_metrics <- function(data,
   }
   
   if ("complexity" %in% metrics) {
-    metric_results$complexity <- calculate_career_complexity_metrics(
+    metric_results$complexity <- calculate_impact_career_complexity_metrics(
       data, id_column, period_column
     )
   }

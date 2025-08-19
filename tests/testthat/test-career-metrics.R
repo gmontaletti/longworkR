@@ -1,0 +1,331 @@
+test_that("calculate_career_quality_metrics works with basic data", {
+  # Create test data
+  dt <- data.table(
+    cf = rep(c("person1", "person2"), each = 6),
+    inizio = as.Date(c("2020-01-01", "2020-06-01", "2021-01-01", "2021-06-01", "2022-01-01", "2022-06-01",
+                       "2020-02-01", "2020-07-01", "2021-02-01", "2021-07-01", "2022-02-01", "2022-07-01")),
+    fine = as.Date(c("2020-05-31", "2020-12-31", "2021-05-31", "2021-12-31", "2022-05-31", "2022-12-31",
+                     "2020-06-30", "2021-01-31", "2021-06-30", "2022-01-31", "2022-06-30", "2023-01-31")),
+    durata = c(151, 214, 150, 214, 150, 214, 150, 214, 149, 214, 149, 214),
+    over_id = c(1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6),
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.01.00", "A.03.00", "A.01.00", "A.03.00", "A.01.00", "A.07.00",
+                                   "A.03.00", "A.01.00", "A.07.00", "A.01.00", "A.03.00", "A.01.00"),
+    prior = c(1, 0, 2, 1, 3, 1, 0, 1, 0, 2, 1, 3)
+  )
+  
+  # Test basic functionality
+  result <- calculate_career_quality_metrics(
+    dt,
+    permanent_codes = c("A.01.00"),
+    temporary_codes = c("A.03.00"),
+    internship_codes = c("A.07.00")
+  )
+  
+  expect_s3_class(result, "data.table")
+  expect_equal(nrow(result), 2)
+  expect_true(all(c("cf", "total_employment_days", "fulltime_employment_rate", 
+                    "composite_quality_index") %in% names(result)))
+  
+  # Check that quality scores are between 0 and 1
+  expect_true(all(result$composite_quality_index >= 0 & result$composite_quality_index <= 1))
+  expect_true(all(result$fulltime_employment_rate >= 0 & result$fulltime_employment_rate <= 1))
+})
+
+test_that("calculate_career_quality_metrics handles time periods", {
+  # Create test data with time periods
+  dt <- data.table(
+    cf = rep("person1", 4),
+    inizio = as.Date(c("2020-01-01", "2020-06-01", "2021-01-01", "2021-06-01")),
+    durata = c(150, 150, 150, 150),
+    over_id = 1:4,
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.01.00", "A.03.00", "A.01.00", "A.03.00"),
+    prior = c(1, 0, 2, 1),
+    year = c(2020, 2020, 2021, 2021)
+  )
+  
+  result <- calculate_career_quality_metrics(
+    dt,
+    time_period_column = "year",
+    permanent_codes = c("A.01.00"),
+    temporary_codes = c("A.03.00")
+  )
+  
+  expect_s3_class(result, "data.table")
+  expect_equal(nrow(result), 2)  # 1 person × 2 years
+  expect_true("time_period" %in% names(result))
+  expect_equal(sort(unique(result$time_period)), c(2020, 2021))
+})
+
+test_that("calculate_career_transition_metrics works with basic data", {
+  # Create test data with transitions
+  dt <- data.table(
+    cf = rep("person1", 6),
+    inizio = as.Date(c("2020-01-01", "2020-06-01", "2021-01-01", "2021-06-01", "2022-01-01", "2022-06-01")),
+    durata = c(150, 150, 150, 150, 150, 150),
+    over_id = 1:6,
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.03.00", "A.01.00", "A.03.00", "A.01.00", "A.01.00", "A.01.00"),
+    prior = c(0, 1, 0, 1, 2, 3),
+    fine = as.Date(c("2020-05-30", "2020-10-29", "2021-05-30", "2021-10-29", "2022-05-30", "2022-10-29"))
+  )
+  
+  # Create mock survival data
+  survival_data <- list(
+    median_survival = c("A.01.00" = 365, "A.03.00" = 180, "A.07.00" = 120)
+  )
+  
+  result <- calculate_career_transition_metrics(
+    dt,
+    survival_data = survival_data
+  )
+  
+  expect_s3_class(result, "data.table")
+  expect_equal(nrow(result), 1)
+  expect_true(all(c("cf", "total_transitions", "duration_improvements", 
+                    "composite_improvement_rate") %in% names(result)))
+  
+  # Should have at least some transitions
+  expect_true(result$total_transitions > 0)
+  expect_true(result$composite_improvement_rate >= 0)
+})
+
+test_that("calculate_career_transition_metrics handles salary data", {
+  # Create test data with salary information
+  dt <- data.table(
+    cf = rep("person1", 4),
+    inizio = as.Date(c("2020-01-01", "2020-06-01", "2021-01-01", "2021-06-01")),
+    durata = c(150, 150, 150, 150),
+    over_id = 1:4,
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.03.00", "A.01.00", "A.01.00", "A.01.00"),
+    prior = c(0, 1, 1, 2),
+    fine = as.Date(c("2020-05-30", "2020-10-29", "2021-05-30", "2021-10-29")),
+    monthly_wage = c(1000, 1200, 1300, 1500)
+  )
+  
+  result <- calculate_career_transition_metrics(
+    dt,
+    salary_column = "monthly_wage"
+  )
+  
+  expect_s3_class(result, "data.table")
+  expect_true(all(c("salary_improvements", "salary_deteriorations") %in% names(result)))
+  
+  # With increasing salaries, should have improvements
+  expect_true(result$salary_improvements > 0)
+  expect_equal(result$salary_deteriorations, 0)
+})
+
+test_that("calculate_career_risk_metrics works with basic data", {
+  # Create test data
+  dt <- data.table(
+    cf = rep(c("person1", "person2"), each = 3),
+    durata = c(100, 200, 300, 150, 250, 180),
+    over_id = rep(1:3, 2),
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.01.00", "A.03.00", "A.07.00", "A.03.00", "A.01.00", "A.07.00")
+  )
+  
+  # Create mock survival data
+  survival_data <- list(
+    median_survival = c("A.01.00" = 365, "A.03.00" = 180, "A.07.00" = 120)
+  )
+  
+  result <- calculate_career_risk_metrics(
+    dt,
+    survival_data = survival_data
+  )
+  
+  expect_s3_class(result, "data.table")
+  expect_equal(nrow(result), 2)
+  expect_true(all(c("cf", "average_termination_risk", "risk_adjusted_stability", 
+                    "career_risk_score") %in% names(result)))
+  
+  # Risk scores should be between 0 and 1
+  expect_true(all(result$average_termination_risk >= 0 & result$average_termination_risk <= 1))
+  expect_true(all(result$career_risk_score >= 0 & result$career_risk_score <= 1))
+  expect_true(all(result$risk_adjusted_stability >= 0 & result$risk_adjusted_stability <= 1))
+})
+
+test_that("calculate_comprehensive_career_metrics integrates all metrics", {
+  # Create comprehensive test data
+  dt <- data.table(
+    cf = rep(c("person1", "person2"), each = 4),
+    inizio = as.Date(rep(c("2020-01-01", "2020-06-01", "2021-01-01", "2021-06-01"), 2)),
+    durata = c(150, 150, 150, 150, 180, 120, 200, 140),
+    over_id = rep(1:4, 2),
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.03.00", "A.01.00", "A.01.00", "A.01.00", 
+                                   "A.07.00", "A.03.00", "A.01.00", "A.01.00"),
+    prior = c(0, 1, 2, 2, 0, 0, 1, 2),
+    fine = as.Date(rep(c("2020-05-30", "2020-10-29", "2021-05-30", "2021-10-29"), 2)),
+    monthly_wage = c(1000, 1200, 1300, 1400, 800, 900, 1100, 1300)
+  )
+  
+  # Test all metrics in wide format
+  result_wide <- calculate_comprehensive_career_metrics(
+    dt,
+    metrics = "all",
+    output_format = "wide",
+    salary_column = "monthly_wage",
+    permanent_codes = c("A.01.00"),
+    temporary_codes = c("A.03.00"),
+    internship_codes = c("A.07.00")
+  )
+  
+  expect_s3_class(result_wide, "data.table")
+  expect_equal(nrow(result_wide), 2)
+  
+  # Should contain metrics from all categories
+  quality_cols <- grep("quality|fulltime|permanent", names(result_wide), value = TRUE)
+  transition_cols <- grep("transition|improvement", names(result_wide), value = TRUE)
+  risk_cols <- grep("risk|stability", names(result_wide), value = TRUE)
+  
+  expect_true(length(quality_cols) > 0)
+  expect_true(length(transition_cols) > 0)
+  expect_true(length(risk_cols) > 0)
+  
+  # Test list format
+  result_list <- calculate_comprehensive_career_metrics(
+    dt,
+    metrics = c("quality", "transitions"),
+    output_format = "list",
+    salary_column = "monthly_wage"
+  )
+  
+  expect_type(result_list, "list")
+  expect_true(all(c("quality", "transitions") %in% names(result_list)))
+  expect_s3_class(result_list$quality, "data.table")
+  expect_s3_class(result_list$transitions, "data.table")
+  
+  # Test long format
+  result_long <- calculate_comprehensive_career_metrics(
+    dt,
+    metrics = c("quality", "risk"),
+    output_format = "long"
+  )
+  
+  expect_s3_class(result_long, "data.table")
+  expect_true(all(c("cf", "metric_name", "metric_value", "metric_category") %in% names(result_long)))
+  expect_true(all(unique(result_long$metric_category) %in% c("quality", "risk", "other")))
+})
+
+test_that("career metrics handle edge cases", {
+  # Test with single observation
+  dt_single <- data.table(
+    cf = "person1",
+    inizio = as.Date("2020-01-01"),
+    durata = 100,
+    over_id = 1,
+    COD_TIPOLOGIA_CONTRATTUALE = "A.01.00",
+    prior = 1,
+    fine = as.Date("2020-04-10")
+  )
+  
+  quality_result <- calculate_career_quality_metrics(dt_single)
+  expect_s3_class(quality_result, "data.table")
+  expect_equal(nrow(quality_result), 1)
+  
+  transition_result <- calculate_career_transition_metrics(dt_single)
+  expect_s3_class(transition_result, "data.table")
+  expect_equal(transition_result$total_transitions, 0)
+  
+  risk_result <- calculate_career_risk_metrics(dt_single)
+  expect_s3_class(risk_result, "data.table")
+  expect_equal(nrow(risk_result), 1)
+  
+  # Test with no employment periods
+  dt_empty <- data.table(
+    cf = "person1",
+    durata = 100,
+    over_id = 0,  # No employment
+    COD_TIPOLOGIA_CONTRATTUALE = "A.01.00",
+    prior = 1
+  )
+  
+  expect_warning(quality_result_empty <- calculate_career_quality_metrics(dt_empty))
+  expect_equal(nrow(quality_result_empty), 0)
+})
+
+test_that("career metrics validate input parameters", {
+  dt <- data.table(
+    cf = "person1",
+    durata = 100,
+    over_id = 1,
+    COD_TIPOLOGIA_CONTRATTUALE = "A.01.00",
+    prior = 1
+  )
+  
+  # Test invalid data type
+  expect_error(
+    calculate_career_quality_metrics(as.data.frame(dt)),
+    "Input data must be a data.table"
+  )
+  
+  # Test missing required columns
+  dt_missing <- dt[, -"durata"]
+  expect_error(
+    calculate_career_quality_metrics(dt_missing),
+    "Missing required columns"
+  )
+  
+  # Test invalid output format
+  expect_error(
+    calculate_comprehensive_career_metrics(dt, output_format = "invalid"),
+    "output_format must be one of"
+  )
+  
+  # Test invalid metrics
+  expect_error(
+    calculate_comprehensive_career_metrics(dt, metrics = "invalid"),
+    "Invalid metrics specified"
+  )
+})
+
+test_that("career metrics handle contract code variations", {
+  # Test with different contract code formats
+  dt <- data.table(
+    cf = rep("person1", 3),
+    durata = c(150, 200, 180),
+    over_id = 1:3,
+    COD_TIPOLOGIA_CONTRATTUALE = c("PERMANENT", "TEMPORARY", "INTERNSHIP"),
+    prior = c(1, 0, 1)
+  )
+  
+  result <- calculate_career_quality_metrics(
+    dt,
+    permanent_codes = c("PERMANENT"),
+    temporary_codes = c("TEMPORARY"),
+    internship_codes = c("INTERNSHIP")
+  )
+  
+  expect_s3_class(result, "data.table")
+  expect_equal(nrow(result), 1)
+  expect_true(result$permanent_contract_days > 0)
+})
+
+test_that("career transition metrics compute improvements correctly", {
+  # Create data with clear improvements
+  dt <- data.table(
+    cf = "person1",
+    inizio = as.Date(c("2020-01-01", "2020-06-01", "2021-01-01")),
+    durata = c(150, 150, 150),
+    over_id = 1:3,
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.03.00", "A.07.00", "A.01.00"),  # temp -> internship -> permanent
+    prior = c(0, 1, 2),  # part-time -> full-time -> more full-time
+    fine = as.Date(c("2020-05-30", "2020-10-29", "2021-05-30")),
+    monthly_wage = c(1000, 1200, 1500)  # increasing salary
+  )
+  
+  survival_data <- list(
+    median_survival = c("A.01.00" = 365, "A.03.00" = 180, "A.07.00" = 240)
+  )
+  
+  result <- calculate_career_transition_metrics(
+    dt,
+    survival_data = survival_data,
+    salary_column = "monthly_wage"
+  )
+  
+  expect_equal(result$total_transitions, 2)
+  expect_true(result$duration_improvements > 0)
+  expect_true(result$fulltime_improvements > 0)
+  expect_true(result$salary_improvements > 0)
+  expect_true(result$career_progression_index > 0.5)  # Should be high with all improvements
+})

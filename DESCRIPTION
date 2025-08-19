@@ -10,7 +10,7 @@ Description: Analytics and visualization tools for longitudinal employment data
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
 Depends:
     R (>= 4.0.0),
     vecshift
@@ -29,7 +29,8 @@ Imports:
     rlang,
     stats,
     grDevices,
-    utils
+    utils,
+    collapse
 Suggests:
     g6r,
     networkD3,

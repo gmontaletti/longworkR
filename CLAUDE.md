@@ -102,6 +102,21 @@ Rscript -e "devtools::check_man()"
 - Each major module has corresponding test file
 - Focus on data transformation correctness and edge cases
 
+## Sample Data
+- **Location**: `data/sample.rds` 
+- **Format**: R data.table object with vecshift-processed employment records
+- **Purpose**: Testing and development of career evaluation functions
+- **Usage**: Load with `readRDS("data/sample.rds")` for function testing
+- **Structure**: Contains typical vecshift output columns including:
+  - `cf`: Person identifier
+  - `inizio`, `fine`: Contract start/end dates
+  - `durata`: Contract duration in days
+  - `over_id`: Employment period identifier for consolidation
+  - `arco`: Concurrent employment indicator
+  - `prior`: Employment intensity (1 = full-time, 0 = part-time/other)
+  - `COD_TIPOLOGIA_CONTRATTUALE`: Contract type codes (X.01.00 format)
+  - Salary/wage information when available
+
 ## Project Memory and Conventions
 
 ### File Organization
@@ -127,3 +142,4 @@ Rscript -e "devtools::check_man()"
 3. Use r-project-maintainer for cleanup before builds
 4. Ensure all tests pass before committing to main branch
 - temporary and complementary tests file, .md documents and note and todo lists should be created in ../reference/longworkR directory. On cleaning the packege agent-r-project-maintainer will move all the artefacts not needed for project compilation there.
+- the project is using renv(), use it when testing
