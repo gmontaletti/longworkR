@@ -1,0 +1,14 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^README\.Rmd$
+^LICENSE\.md$
+^\.github$
+^data-raw$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.travis\.yml$
+^\.gitlab-ci\.yml$
+^cran-comments\.md$
+^CRAN-RELEASE$
+^\.DS_Store$

@@ -1,0 +1,47 @@
+Package: longworkR
+Title: Longitudinal Employment Analytics for vecshift Data
+Version: 0.1.0
+Authors@R: 
+    person("Your", "Name", , "email@example.com", role = c("aut", "cre"))
+Description: Analytics and visualization tools for longitudinal employment data
+    processed by the vecshift package. Includes survival analysis, impact evaluation,
+    difference-in-differences, network analysis, and advanced visualization capabilities
+    for employment transitions and career trajectories.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Depends:
+    R (>= 4.0.0),
+    vecshift
+Imports:
+    data.table,
+    ggplot2,
+    survival,
+    ggraph,
+    tidygraph,
+    viridis,
+    RColorBrewer,
+    scales,
+    dplyr,
+    tidyr,
+    purrr,
+    rlang,
+    stats,
+    grDevices,
+    utils
+Suggests:
+    g6r,
+    networkD3,
+    plotly,
+    gganimate,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    augsynth,
+    MatchIt,
+    rdrobust,
+    lfe,
+    fixest
+VignetteBuilder: knitr
+Config/testthat/edition: 3
