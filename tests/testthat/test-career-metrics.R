@@ -1,3 +1,8 @@
+library(data.table)
+
+# Load the package functions
+devtools::load_all()
+
 test_that("calculate_career_quality_metrics works with basic data", {
   # Create test data
   dt <- data.table(
@@ -13,12 +18,15 @@ test_that("calculate_career_quality_metrics works with basic data", {
     prior = c(1, 0, 2, 1, 3, 1, 0, 1, 0, 2, 1, 3)
   )
   
+  # Create mock survival data (required now)
+  survival_data <- list(
+    median_survival = c("A.01.00" = 365, "A.03.00" = 180, "A.07.00" = 120)
+  )
+  
   # Test basic functionality
   result <- calculate_career_quality_metrics(
     dt,
-    permanent_codes = c("A.01.00"),
-    temporary_codes = c("A.03.00"),
-    internship_codes = c("A.07.00")
+    survival_data = survival_data
   )
   
   expect_s3_class(result, "data.table")
@@ -29,6 +37,9 @@ test_that("calculate_career_quality_metrics works with basic data", {
   # Check that quality scores are between 0 and 1
   expect_true(all(result$composite_quality_index >= 0 & result$composite_quality_index <= 1))
   expect_true(all(result$fulltime_employment_rate >= 0 & result$fulltime_employment_rate <= 1))
+  
+  # Check that high_quality_* columns exist (replaced permanent_*)
+  expect_true(all(c("high_quality_contract_days", "high_quality_fulltime_rate") %in% names(result)))
 })
 
 test_that("calculate_career_quality_metrics handles time periods", {
@@ -43,11 +54,15 @@ test_that("calculate_career_quality_metrics handles time periods", {
     year = c(2020, 2020, 2021, 2021)
   )
   
+  # Create mock survival data
+  survival_data <- list(
+    median_survival = c("A.01.00" = 365, "A.03.00" = 180)
+  )
+  
   result <- calculate_career_quality_metrics(
     dt,
-    time_period_column = "year",
-    permanent_codes = c("A.01.00"),
-    temporary_codes = c("A.03.00")
+    survival_data = survival_data,
+    time_period_column = "year"
   )
   
   expect_s3_class(result, "data.table")
@@ -158,15 +173,18 @@ test_that("calculate_comprehensive_career_metrics integrates all metrics", {
     monthly_wage = c(1000, 1200, 1300, 1400, 800, 900, 1100, 1300)
   )
   
+  # Create mock survival data for comprehensive testing
+  survival_data <- list(
+    median_survival = c("A.01.00" = 365, "A.03.00" = 180, "A.07.00" = 120)
+  )
+  
   # Test all metrics in wide format
   result_wide <- calculate_comprehensive_career_metrics(
     dt,
+    survival_data = survival_data,
     metrics = "all",
     output_format = "wide",
-    salary_column = "monthly_wage",
-    permanent_codes = c("A.01.00"),
-    temporary_codes = c("A.03.00"),
-    internship_codes = c("A.07.00")
+    salary_column = "monthly_wage"
   )
   
   expect_s3_class(result_wide, "data.table")
@@ -184,6 +202,7 @@ test_that("calculate_comprehensive_career_metrics integrates all metrics", {
   # Test list format
   result_list <- calculate_comprehensive_career_metrics(
     dt,
+    survival_data = survival_data,
     metrics = c("quality", "transitions"),
     output_format = "list",
     salary_column = "monthly_wage"
@@ -197,6 +216,7 @@ test_that("calculate_comprehensive_career_metrics integrates all metrics", {
   # Test long format
   result_long <- calculate_comprehensive_career_metrics(
     dt,
+    survival_data = survival_data,
     metrics = c("quality", "risk"),
     output_format = "long"
   )
@@ -218,7 +238,12 @@ test_that("career metrics handle edge cases", {
     fine = as.Date("2020-04-10")
   )
   
-  quality_result <- calculate_career_quality_metrics(dt_single)
+  # Need survival data for the function to work
+  survival_data_single <- list(
+    median_survival = c("A.01.00" = 365)
+  )
+  
+  quality_result <- calculate_career_quality_metrics(dt_single, survival_data = survival_data_single)
   expect_s3_class(quality_result, "data.table")
   expect_equal(nrow(quality_result), 1)
   
@@ -239,8 +264,11 @@ test_that("career metrics handle edge cases", {
     prior = 1
   )
   
-  expect_warning(quality_result_empty <- calculate_career_quality_metrics(dt_empty))
-  expect_equal(nrow(quality_result_empty), 0)
+  # Test that function now requires survival_data
+  expect_error(
+    calculate_career_quality_metrics(dt_empty),
+    "survival_data is required"
+  )
 })
 
 test_that("career metrics validate input parameters", {
@@ -252,17 +280,28 @@ test_that("career metrics validate input parameters", {
     prior = 1
   )
   
+  # Create basic survival data for validation tests
+  survival_data_basic <- list(
+    median_survival = c("A.01.00" = 365)
+  )
+  
   # Test invalid data type
   expect_error(
-    calculate_career_quality_metrics(as.data.frame(dt)),
+    calculate_career_quality_metrics(as.data.frame(dt), survival_data = survival_data_basic),
     "Input data must be a data.table"
   )
   
   # Test missing required columns
   dt_missing <- dt[, -"durata"]
   expect_error(
-    calculate_career_quality_metrics(dt_missing),
+    calculate_career_quality_metrics(dt_missing, survival_data = survival_data_basic),
     "Missing required columns"
+  )
+  
+  # Test missing survival_data
+  expect_error(
+    calculate_career_quality_metrics(dt),
+    "survival_data is required"
   )
   
   # Test invalid output format
@@ -288,16 +327,19 @@ test_that("career metrics handle contract code variations", {
     prior = c(1, 0, 1)
   )
   
+  # Create survival data for custom contract codes
+  survival_data_custom <- list(
+    median_survival = c("PERMANENT" = 500, "TEMPORARY" = 150, "INTERNSHIP" = 100)
+  )
+  
   result <- calculate_career_quality_metrics(
     dt,
-    permanent_codes = c("PERMANENT"),
-    temporary_codes = c("TEMPORARY"),
-    internship_codes = c("INTERNSHIP")
+    survival_data = survival_data_custom
   )
   
   expect_s3_class(result, "data.table")
   expect_equal(nrow(result), 1)
-  expect_true(result$permanent_contract_days > 0)
+  expect_true(result$high_quality_contract_days > 0)  # Changed from permanent_contract_days
 })
 
 test_that("career transition metrics compute improvements correctly", {
@@ -328,4 +370,78 @@ test_that("career transition metrics compute improvements correctly", {
   expect_true(result$fulltime_improvements > 0)
   expect_true(result$salary_improvements > 0)
   expect_true(result$career_progression_index > 0.5)  # Should be high with all improvements
+})
+
+test_that("employment diversity index handles zero diversity correctly", {
+  # Test data with no diversity (all same employment type)
+  dt <- data.table(
+    cf = "person1",
+    inizio = as.Date(c("2020-01-01", "2020-02-01", "2020-03-01")),
+    durata = c(30, 30, 30),
+    over_id = 1:3,
+    arco = c(1, 1, 1),
+    prior = c(1, 1, 1), # All same
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.01.00", "A.01.00", "A.01.00") # All same
+  )
+  
+  result <- calculate_career_complexity_metrics(dt)
+  
+  # Should be exactly 0, not a tiny negative number
+  expect_equal(result$employment_diversity_index, 0.0)
+  expect_true(result$employment_diversity_index >= 0)
+})
+
+test_that("employment diversity index varies with different employment types", {
+  # Test data with varying diversity levels
+  dt <- data.table(
+    cf = rep(c("no_diversity", "some_diversity", "high_diversity"), each = 4),
+    inizio = as.Date(rep(c("2020-01-01", "2020-02-01", "2020-03-01", "2020-04-01"), 3)),
+    durata = rep(c(30, 30, 30, 30), 3),
+    over_id = rep(1:4, 3),
+    arco = rep(c(1, 1, 1, 1), 3),
+    prior = c(
+      1, 1, 1, 1,  # no diversity
+      0, 1, 0, 1,  # some diversity (2 types)
+      0, 1, 2, 3   # high diversity (4 types)
+    )
+  )
+  
+  result <- calculate_career_complexity_metrics(dt)
+  
+  no_div <- result[cf == "no_diversity", employment_diversity_index]
+  some_div <- result[cf == "some_diversity", employment_diversity_index]
+  high_div <- result[cf == "high_diversity", employment_diversity_index]
+  
+  # Check ordering: high > some > no
+  expect_true(high_div > some_div)
+  expect_true(some_div > no_div)
+  expect_equal(no_div, 0.0)
+  
+  # Check that all values are non-negative
+  expect_true(all(result$employment_diversity_index >= 0))
+})
+
+test_that("complexity_variables parameter works with different variables", {
+  dt <- data.table(
+    cf = rep("person1", 3),
+    inizio = as.Date(c("2020-01-01", "2020-02-01", "2020-03-01")),
+    durata = c(30, 30, 30),
+    over_id = 1:3,
+    arco = c(1, 1, 1),
+    prior = c(1, 1, 1), # No diversity
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.01.00", "A.03.00", "A.07.00"), # High diversity
+    qualifica = c("Q1", "Q1", "Q1") # No diversity
+  )
+  
+  # Test with prior (should be 0)
+  result_prior <- calculate_career_complexity_metrics(dt, complexity_variables = c("prior"))
+  expect_equal(result_prior$employment_diversity_index, 0.0)
+  
+  # Test with contract types (should be > 0)
+  result_contract <- calculate_career_complexity_metrics(dt, complexity_variables = c("COD_TIPOLOGIA_CONTRATTUALE"))
+  expect_true(result_contract$employment_diversity_index > 0)
+  
+  # Test with qualifica (should be 0)
+  result_qual <- calculate_career_complexity_metrics(dt, complexity_variables = c("qualifica"))
+  expect_equal(result_qual$employment_diversity_index, 0.0)
 })

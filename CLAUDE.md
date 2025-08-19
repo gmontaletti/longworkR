@@ -143,3 +143,4 @@ Rscript -e "devtools::check_man()"
 4. Ensure all tests pass before committing to main branch
 - temporary and complementary tests file, .md documents and note and todo lists should be created in ../reference/longworkR directory. On cleaning the packege agent-r-project-maintainer will move all the artefacts not needed for project compilation there.
 - the project is using renv(), use it when testing
+- annotate the .claude directory should'nt be moved during cleanup

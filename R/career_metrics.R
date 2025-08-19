@@ -9,26 +9,48 @@
 #' @author vecshift package
 #' @importFrom collapse fmean fmedian fmax fvar
 #' @importFrom data.table fcase
-#' @importFrom stats coef lm
 NULL
 
 # Required packages imported via NAMESPACE
 
-#' Calculate Career Quality Metrics with Full-Time Analysis
+#' Calculate Career Quality Metrics Using Survival Analysis
 #'
-#' Calculates comprehensive career quality metrics incorporating both contract types
-#' and employment intensity (full-time vs part-time). Provides a more nuanced view
-#' of career quality by weighting contract stability with employment intensity.
+#' Calculates comprehensive career quality metrics based exclusively on survival analysis
+#' results combined with employment intensity (full-time vs part-time). This data-driven
+#' approach provides objective career quality assessment without relying on predefined
+#' contract type hierarchies.
 #'
-#' @param data A data.table containing employment records
+#' @details 
+#' The function computes career quality using empirical survival analysis results.
+#' Contract quality scores are derived exclusively from survival data:
+#' 
+#' **Survival-Based Scoring:**
+#' \itemize{
+#'   \item Contract quality scores are based on median survival times from survival analysis
+#'   \item Longer median survival times indicate higher contract quality
+#'   \item Scores are normalized to a 0-1 scale with a minimum quality floor of 0.1
+#'   \item Contract types not present in survival data receive a default moderate score (0.5)
+#'   \item High-quality contracts are defined as those with quality scores > 0.7
+#' }
+#' 
+#' The composite quality index combines contract quality (60% weight) with employment
+#' intensity (40% weight), where full-time employment (prior >= 1) contributes more
+#' to career quality than part-time employment.
+#'
+#' @param data A data.table containing employment records with required columns:
+#'   \code{durata} (contract duration), \code{over_id} (employment period ID), 
+#'   and columns specified by other parameters
+#' @param survival_data Required. Pre-computed survival analysis results from 
+#'   \code{estimate_contract_survival_optimized()} containing a named vector 
+#'   \code{median_survival} with median survival times by contract type.
+#'   Expected structure: \code{list(median_survival = c("A.01.00" = 365, "A.03.00" = 180, ...))}
+#'   This parameter is mandatory as the function relies exclusively on survival data.
 #' @param id_column Character. Name of person identifier column. Default: "cf"
 #' @param time_period_column Character. Optional column for grouping by time periods. 
 #'   If NULL, analyzes entire career trajectory. Default: NULL
 #' @param contract_code_column Character. Column containing contract type codes. Default: "COD_TIPOLOGIA_CONTRATTUALE"
-#' @param employment_intensity_column Character. Column indicating employment intensity. Default: "prior"
-#' @param permanent_codes Character vector. Contract codes indicating permanent contracts. Default: c("A.01.00")
-#' @param temporary_codes Character vector. Contract codes indicating temporary contracts. Default: c("A.03.00", "A.03.01", "A.09.00")
-#' @param internship_codes Character vector. Contract codes indicating internship/apprenticeship contracts. Default: c("A.07.00", "A.07.01")
+#' @param employment_intensity_column Character. Column indicating employment intensity (prior). 
+#'   Values >= 1 indicate full-time employment, 0 indicates part-time. Default: "prior"
 #' @param min_spell_duration Numeric. Minimum duration (days) to include in analysis. Default: 7
 #'
 #' @return A data.table with comprehensive quality metrics:
@@ -37,44 +59,76 @@ NULL
 #'   \item{total_employment_days}{Total days in employment}
 #'   \item{fulltime_employment_days}{Days in full-time employment (prior >= 1)}
 #'   \item{parttime_employment_days}{Days in part-time employment (prior == 0)}
-#'   \item{fulltime_employment_rate}{Proportion of employment in full-time}
-#'   \item{permanent_contract_days}{Days in permanent contracts}
-#'   \item{permanent_fulltime_days}{Days in permanent AND full-time contracts}
-#'   \item{contract_quality_score}{Average contract quality (0-1 scale)}
-#'   \item{employment_intensity_score}{Average employment intensity}
-#'   \item{composite_quality_index}{Weighted combination of contract quality and intensity}
-#'   \item{quality_improvement_trend}{Linear trend in quality over time}
-#'
+#'   \item{fulltime_employment_rate}{Proportion of employment in full-time (0-1 scale)}
+#'   \item{high_quality_contract_days}{Days in high-quality contracts (survival score > 0.7)}
+#'   \item{high_quality_fulltime_days}{Days in high-quality AND full-time contracts}
+#'   \item{high_quality_fulltime_rate}{Proportion of employment in high-quality full-time contracts}
+#'   \item{contract_quality_score}{Duration-weighted average contract quality (0-1 scale)}
+#'   \item{employment_intensity_score}{Duration-weighted average employment intensity (0-1 scale)}
+#'   \item{composite_quality_index}{Weighted combination: 60% contract quality + 40% intensity (0-1 scale)}
+#' #'
 #' @examples
 #' \dontrun{
-#' # Analyze overall career quality
-#' career_quality <- calculate_career_quality_metrics(
+#' # Load sample employment data
+#' employment_data <- readRDS("data/sample.rds")
+#' 
+#' # Example 1: Career quality analysis with survival data (required)
+#' survival_results <- estimate_contract_survival_optimized(
 #'   data = employment_data,
-#'   permanent_codes = c("A.01.00"),
-#'   temporary_codes = c("A.03.00", "A.09.00")
+#'   contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
+#'   duration_var = "durata",
+#'   censored_var = "censored"
 #' )
 #' 
-#' # Analyze quality by year
+#' career_quality <- calculate_career_quality_metrics(
+#'   data = employment_data,
+#'   survival_data = survival_results
+#' )
+#' 
+#' # View results
+#' print(career_quality[, .(cf, composite_quality_index, 
+#'                          fulltime_employment_rate, contract_quality_score)])
+#' 
+#' # Example 2: Time-period analysis (e.g., by year)
+#' employment_data[, year := year(inizio)]
 #' yearly_quality <- calculate_career_quality_metrics(
 #'   data = employment_data,
-#'   time_period_column = "year",
-#'   permanent_codes = c("A.01.00")
+#'   survival_data = survival_results,
+#'   time_period_column = "year"
+#' )
+#' 
+#' # Example 3: Custom parameters and minimum spell duration
+#' custom_quality <- calculate_career_quality_metrics(
+#'   data = employment_data,
+#'   survival_data = survival_results,
+#'   contract_code_column = "contract_type",
+#'   employment_intensity_column = "intensity",
+#'   min_spell_duration = 30  # Only include spells of 30+ days
 #' )
 #' }
 #'
+#' @seealso 
+#' \code{\link{estimate_contract_survival_optimized}} for survival analysis computation,
+#' \code{\link{calculate_career_transition_metrics}} for analyzing career transitions,
+#' \code{\link{calculate_comprehensive_career_metrics}} for integrated career analysis
+#'
 #' @export
 calculate_career_quality_metrics <- function(data,
+                                           survival_data = NULL,
                                            id_column = "cf",
                                            time_period_column = NULL,
                                            contract_code_column = "COD_TIPOLOGIA_CONTRATTUALE",
                                            employment_intensity_column = "prior",
-                                           permanent_codes = c("A.01.00"),
-                                           temporary_codes = c("A.03.00", "A.03.01", "A.09.00"),
-                                           internship_codes = c("A.07.00", "A.07.01"),
                                            min_spell_duration = 7) {
   
   if (!inherits(data, "data.table")) {
     stop("Input data must be a data.table")
+  }
+  
+  # Validate survival_data is provided and has required structure
+  if (is.null(survival_data) || !"median_survival" %in% names(survival_data)) {
+    stop("survival_data is required and must contain 'median_survival' component. ",
+         "Use estimate_contract_survival_optimized() to generate survival data.")
   }
   
   required_cols <- c(id_column, contract_code_column, employment_intensity_column, "durata", "over_id")
@@ -105,22 +159,52 @@ calculate_career_quality_metrics <- function(data,
     group_cols <- c("cf", "time_period")
   }
   
-  # Classify contract types and employment intensity
+  # Classify employment intensity only (contract types handled via survival data)
   dt[, `:=`(
-    is_permanent = contract_code %in% permanent_codes,
-    is_temporary = contract_code %in% temporary_codes,
-    is_internship = contract_code %in% internship_codes,
     is_fulltime = employment_intensity >= 1,
     is_parttime = employment_intensity == 0
   )]
   
-  # Contract quality scores
-  dt[, contract_quality_score := fcase(
-    is_permanent, 1.0,
-    is_internship, 0.5,
-    is_temporary, 0.0,
-    default = 0.25
-  )]
+  # Contract quality scores based exclusively on survival data
+  # Use survival-based scoring: normalize median survival times to 0-1 scale
+  median_survivals <- survival_data$median_survival
+  
+  # Remove NA values and ensure we have valid data
+  valid_medians <- median_survivals[!is.na(median_survivals) & median_survivals > 0]
+  
+  if (length(valid_medians) == 0) {
+    stop("No valid survival data found. All median survival times are NA or <= 0. ",
+         "Please check your survival analysis results.")
+  }
+  
+  # Normalize survival times to 0-1 scale where higher survival = higher quality
+  max_survival <- max(valid_medians)
+  min_survival <- min(valid_medians)
+  
+  # Create survival-based quality scores
+  survival_scores <- if (max_survival > min_survival) {
+    # Scale to 0-1 range with some minimum quality floor (0.1)
+    0.1 + 0.9 * (valid_medians - min_survival) / (max_survival - min_survival)
+  } else {
+    # If all survival times are equal, assign moderate quality
+    rep(0.5, length(valid_medians))
+  }
+  
+  names(survival_scores) <- names(valid_medians)
+  
+  # Add survival-based quality scores to data
+  dt[, contract_quality_score := {
+    score <- as.numeric(survival_scores[contract_code])
+    # Handle contract types not present in survival data
+    if (any(is.na(score))) {
+      missing_contracts <- unique(contract_code[is.na(score)])
+      warning("Contract types not found in survival data: ", 
+              paste(missing_contracts, collapse = ", "), 
+              ". These will be assigned median quality score.")
+      score[is.na(score)] <- 0.5
+    }
+    score
+  }]
   
   # Employment intensity scores (normalize prior values)
   dt[, intensity_score := pmax(0, pmin(1, employment_intensity / 3))]
@@ -130,8 +214,11 @@ calculate_career_quality_metrics <- function(data,
     total_days <- sum(durata, na.rm = TRUE)
     fulltime_days <- sum(durata[is_fulltime == TRUE], na.rm = TRUE)
     parttime_days <- sum(durata[is_parttime == TRUE], na.rm = TRUE)
-    permanent_days <- sum(durata[is_permanent == TRUE], na.rm = TRUE)
-    permanent_fulltime_days <- sum(durata[is_permanent == TRUE & is_fulltime == TRUE], na.rm = TRUE)
+    
+    # Calculate high-quality contract days based on survival scores
+    # Consider contracts with quality score > 0.7 as "high quality" (similar to permanent)
+    high_quality_days <- sum(durata[contract_quality_score > 0.7], na.rm = TRUE)
+    high_quality_fulltime_days <- sum(durata[contract_quality_score > 0.7 & is_fulltime == TRUE], na.rm = TRUE)
     
     # Weighted averages
     avg_contract_quality <- fmean(contract_quality_score, w = durata, na.rm = TRUE)
@@ -140,30 +227,18 @@ calculate_career_quality_metrics <- function(data,
     # Composite quality index (60% contract quality, 40% employment intensity)
     composite_quality <- 0.6 * avg_contract_quality + 0.4 * avg_intensity_score
     
-    # Quality trend over time (if multiple observations)
-    quality_trend <- if (.N >= 3 && "inizio" %in% names(.SD)) {
-      time_seq <- as.numeric(as.Date(inizio) - min(as.Date(inizio), na.rm = TRUE))
-      combined_quality <- 0.6 * contract_quality_score + 0.4 * intensity_score
-      tryCatch({
-        trend_coef <- coef(lm(combined_quality ~ time_seq, weights = durata))[2]
-        if (is.na(trend_coef)) 0.0 else as.numeric(trend_coef) * 365.25  # Annualize
-      }, error = function(e) 0.0)
-    } else {
-      0.0
-    }
     
     list(
       total_employment_days = as.double(total_days),
       fulltime_employment_days = as.double(fulltime_days),
       parttime_employment_days = as.double(parttime_days),
       fulltime_employment_rate = as.double(fulltime_days / pmax(1, total_days)),
-      permanent_contract_days = as.double(permanent_days),
-      permanent_fulltime_days = as.double(permanent_fulltime_days),
-      permanent_fulltime_rate = as.double(permanent_fulltime_days / pmax(1, total_days)),
+      high_quality_contract_days = as.double(high_quality_days),
+      high_quality_fulltime_days = as.double(high_quality_fulltime_days),
+      high_quality_fulltime_rate = as.double(high_quality_fulltime_days / pmax(1, total_days)),
       contract_quality_score = as.double(avg_contract_quality),
       employment_intensity_score = as.double(avg_intensity_score),
-      composite_quality_index = as.double(composite_quality),
-      quality_improvement_trend = as.double(quality_trend)
+      composite_quality_index = as.double(composite_quality)
     )
   }, by = group_cols]
   
@@ -250,8 +325,8 @@ calculate_career_transition_metrics <- function(data,
   }
   
   # Add time period if specified
-  if (!is.null(time_period_column) && time_period_column %in% names(data)) {
-    dt[, time_period := data[[time_period_column]]]
+  if (!is.null(time_period_column) && time_period_column %in% names(dt)) {
+    dt[, time_period := dt[[time_period_column]]]
     group_cols <- c("cf", "time_period")
   } else {
     dt[, time_period := "overall"]
@@ -272,9 +347,9 @@ calculate_career_transition_metrics <- function(data,
   dt[is.na(expected_duration), expected_duration := fmedian(durata, na.rm = TRUE)]
   
   # Include salary column if provided
-  has_salary <- !is.null(salary_column) && salary_column %in% names(data)
+  has_salary <- !is.null(salary_column) && salary_column %in% names(dt)
   if (has_salary) {
-    dt[, salary := data[[salary_column]]]
+    dt[, salary := dt[[salary_column]]]
   }
   
   # Calculate transition metrics
@@ -439,8 +514,8 @@ calculate_career_risk_metrics <- function(data,
   }
   
   # Add time period if specified
-  if (!is.null(time_period_column) && time_period_column %in% names(data)) {
-    dt[, time_period := data[[time_period_column]]]
+  if (!is.null(time_period_column) && time_period_column %in% names(dt)) {
+    dt[, time_period := dt[[time_period_column]]]
     group_cols <- c("cf", "time_period")
   } else {
     dt[, time_period := "overall"]
@@ -618,8 +693,8 @@ calculate_career_stability_metrics <- function(data,
   }
   
   # Add time period column if specified
-  if (!is.null(time_period_column) && time_period_column %in% names(data)) {
-    dt[, time_period := data[[time_period_column]]]
+  if (!is.null(time_period_column) && time_period_column %in% names(dt)) {
+    dt[, time_period := dt[[time_period_column]]]
     group_cols <- c("cf", "time_period")
   } else {
     dt[, time_period := "overall"]
@@ -794,8 +869,8 @@ calculate_career_complexity_metrics <- function(data,
   }
   
   # Add time period column if specified
-  if (!is.null(time_period_column) && time_period_column %in% names(data)) {
-    dt[, time_period := data[[time_period_column]]]
+  if (!is.null(time_period_column) && time_period_column %in% names(dt)) {
+    dt[, time_period := dt[[time_period_column]]]
     group_cols <- c("cf", "time_period")
   } else {
     dt[, time_period := "overall"]
@@ -831,21 +906,57 @@ calculate_career_complexity_metrics <- function(data,
   concurrent_metrics[, concurrent_employment_rate := 
     as.double(concurrent_employment_days) / pmax(1.0, as.double(total_employment_days))]
   
-  # Calculate diversity metrics
+  # Calculate diversity metrics using specified complexity variables
   diversity_metrics <- dt[, {
     diversity_components <- list()
     
-    # Employment type diversity (if prior available)
-    if ("prior" %in% available_vars && any(over_id > 0)) {
-      emp_types <- get("prior")[over_id > 0]
-      if (length(emp_types) > 0) {
-        type_props <- table(emp_types) / length(emp_types)
-        employment_diversity <- as.double(-sum(type_props * log(type_props + 1e-10)))
-        diversity_components$employment_diversity_index <- employment_diversity
+    # Calculate employment diversity based on complexity variables
+    if (any(over_id > 0)) {
+      emp_data <- .SD[over_id > 0]
+      
+      # Use available complexity variables for diversity calculation
+      diversity_vars <- intersect(available_vars, c("prior", "COD_TIPOLOGIA_CONTRATTUALE", "qualifica", "ateco"))
+      
+      if (length(diversity_vars) > 0) {
+        # If prior is available, use it for employment intensity diversity
+        if ("prior" %in% diversity_vars) {
+          emp_types <- emp_data$prior
+          if (length(emp_types) > 0) {
+            if (length(unique(emp_types)) == 1) {
+              employment_diversity <- 0.0
+            } else {
+              type_props <- table(emp_types) / length(emp_types)
+              employment_diversity <- as.double(-sum(type_props * log(type_props)))
+            }
+            diversity_components$employment_diversity_index <- employment_diversity
+          } else {
+            diversity_components$employment_diversity_index <- 0.0
+          }
+        } else {
+          # Fallback: use the first available complexity variable
+          first_var <- diversity_vars[1]
+          if (first_var %in% names(emp_data)) {
+            emp_types <- emp_data[[first_var]]
+            if (length(emp_types) > 0 && !all(is.na(emp_types))) {
+              unique_types <- unique(emp_types[!is.na(emp_types)])
+              if (length(unique_types) == 1) {
+                employment_diversity <- 0.0
+              } else {
+                type_props <- table(emp_types[!is.na(emp_types)]) / length(emp_types[!is.na(emp_types)])
+                employment_diversity <- as.double(-sum(type_props * log(type_props)))
+              }
+              diversity_components$employment_diversity_index <- employment_diversity
+            } else {
+              diversity_components$employment_diversity_index <- 0.0
+            }
+          } else {
+            diversity_components$employment_diversity_index <- 0.0
+          }
+        }
+      } else {
+        diversity_components$employment_diversity_index <- 0.0
       }
-    }
-    
-    if (length(diversity_components) == 0) {
+    } else {
       diversity_components$employment_diversity_index <- 0.0
     }
     
@@ -905,9 +1016,6 @@ calculate_career_complexity_metrics <- function(data,
 #' @param output_format Character. Output format: "wide", "long", or "list". Default: "wide"
 #' @param contract_code_column Character. Column containing contract type codes. Default: "COD_TIPOLOGIA_CONTRATTUALE"
 #' @param salary_column Character. Column containing salary information. Default: NULL
-#' @param permanent_codes Character vector. Contract codes for permanent contracts. Default: c("A.01.00")
-#' @param temporary_codes Character vector. Contract codes for temporary contracts. Default: c("A.03.00", "A.03.01", "A.09.00")
-#' @param internship_codes Character vector. Contract codes for internships. Default: c("A.07.00", "A.07.01")
 #'
 #' @return Based on output_format:
 #'   \item{wide}{Single data.table with all metrics as columns}
@@ -946,10 +1054,7 @@ calculate_comprehensive_career_metrics <- function(data,
                                                  time_period_column = NULL,
                                                  output_format = "wide",
                                                  contract_code_column = "COD_TIPOLOGIA_CONTRATTUALE",
-                                                 salary_column = NULL,
-                                                 permanent_codes = c("A.01.00"),
-                                                 temporary_codes = c("A.03.00", "A.03.01", "A.09.00"),
-                                                 internship_codes = c("A.07.00", "A.07.01")) {
+                                                 salary_column = NULL) {
   
   if (!inherits(data, "data.table")) {
     stop("Input data must be a data.table")
@@ -975,12 +1080,10 @@ calculate_comprehensive_career_metrics <- function(data,
   if ("quality" %in% metrics) {
     metric_results$quality <- calculate_career_quality_metrics(
       data = data,
+      survival_data = survival_data,
       id_column = id_column,
       time_period_column = time_period_column,
-      contract_code_column = contract_code_column,
-      permanent_codes = permanent_codes,
-      temporary_codes = temporary_codes,
-      internship_codes = internship_codes
+      contract_code_column = contract_code_column
     )
   }
   
