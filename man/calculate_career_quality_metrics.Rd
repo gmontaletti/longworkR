@@ -2,7 +2,7 @@
 % Please edit documentation in R/career_metrics.R
 \name{calculate_career_quality_metrics}
 \alias{calculate_career_quality_metrics}
-\title{Calculate Career Quality Metrics Using Survival Analysis}
+\title{Calculate Career Quality Metrics Combining Quality and Stability}
 \usage{
 calculate_career_quality_metrics(
   data,
@@ -15,73 +15,62 @@ calculate_career_quality_metrics(
 )
 }
 \arguments{
-\item{data}{A data.table containing employment records with required columns:
-\code{durata} (contract duration), \code{over_id} (employment period ID),
-and columns specified by other parameters}
+\item{data}{A data.table containing employment records}
 
-\item{survival_data}{Required. Pre-computed survival analysis results from
-\code{estimate_contract_survival_optimized()} containing a named vector
-\code{median_survival} with median survival times by contract type.
-Expected structure: \code{list(median_survival = c("A.01.00" = 365, "A.03.00" = 180, ...))}
-This parameter is mandatory as the function relies exclusively on survival data.}
+\item{survival_data}{Optional. Pre-computed survival analysis results. If NULL, will
+compute basic duration measures.}
 
 \item{id_column}{Character. Name of person identifier column. Default: "cf"}
 
-\item{time_period_column}{Character. Optional column for grouping by time periods.
-If NULL, analyzes entire career trajectory. Default: NULL}
+\item{time_period_column}{Character. Optional column for grouping by time periods. Default: NULL}
 
 \item{contract_code_column}{Character. Column containing contract type codes. Default: "COD_TIPOLOGIA_CONTRATTUALE"}
 
-\item{employment_intensity_column}{Character. Column indicating employment intensity (prior).
-Values >= 1 indicate full-time employment, 0 indicates part-time. Default: "prior"}
+\item{employment_intensity_column}{Character. Column indicating employment intensity (prior). Default: "prior"}
 
 \item{min_spell_duration}{Numeric. Minimum duration (days) to include in analysis. Default: 7}
 }
 \value{
-A data.table with comprehensive quality metrics:
+A data.table with comprehensive career metrics:
 \item{cf}{Person identifier}
-\item{time_period}{Time period (if time_period_column provided)}
+\item{time_period}{Time period (if specified)}
 \item{total_employment_days}{Total days in employment}
-\item{fulltime_employment_days}{Days in full-time employment (prior >= 1)}
-\item{parttime_employment_days}{Days in part-time employment (prior == 0)}
-\item{fulltime_employment_rate}{Proportion of employment in full-time (0-1 scale)}
-\item{high_quality_contract_days}{Days in high-quality contracts (survival score > 0.7)}
-\item{high_quality_fulltime_days}{Days in high-quality AND full-time contracts}
-\item{high_quality_fulltime_rate}{Proportion of employment in high-quality full-time contracts}
-\item{contract_quality_score}{Duration-weighted average contract quality (0-1 scale)}
-\item{employment_intensity_score}{Duration-weighted average employment intensity (0-1 scale)}
-\item{composite_quality_index}{Weighted combination: 60\% contract quality + 40\% intensity (0-1 scale)}
-#'
+\item{contract_quality_score}{Duration-weighted average contract quality (0-1)}
+\item{employment_intensity_score}{Duration-weighted average employment intensity (0-1)}
+\item{career_stability_score}{Stability based on duration consistency (0-1)}
+\item{growth_opportunity_score}{Access to diverse, high-quality contracts (0-1)}
+\item{career_quality_index}{Unified career performance index (0-1)}
 }
 \description{
-Calculates comprehensive career quality metrics based exclusively on survival analysis
-results combined with employment intensity (full-time vs part-time). This data-driven
-approach provides objective career quality assessment without relying on predefined
-contract type hierarchies.
+Computes a unified career performance index that combines quality, stability, and
+opportunity measures from survival analysis. This single index replaces the separate
+quality and risk metrics to provide a coherent 0-1 scale where higher values indicate
+better career outcomes with balanced stability and growth potential.
 }
 \details{
-The function computes career quality using empirical survival analysis results.
-Contract quality scores are derived exclusively from survival data:
-
-\strong{Survival-Based Scoring:}
+The comprehensive career index combines multiple dimensions:
 \itemize{
-\item Contract quality scores are based on median survival times from survival analysis
-\item Longer median survival times indicate higher contract quality
-\item Scores are normalized to a 0-1 scale with a minimum quality floor of 0.1
-\item Contract types not present in survival data receive a default moderate score (0.5)
-\item High-quality contracts are defined as those with quality scores > 0.7
+\item \strong{Contract Quality (35\%)}: Based on survival analysis median durations
+\item \strong{Employment Intensity (25\%)}: Full-time vs part-time employment patterns
+\item \strong{Career Stability (25\%)}: Contract duration consistency and low volatility
+\item \strong{Growth Opportunity (15\%)}: Access to diverse, higher-quality contract types
 }
 
-The composite quality index combines contract quality (60\% weight) with employment
-intensity (40\% weight), where full-time employment (prior >= 1) contributes more
-to career quality than part-time employment.
+Unlike separate quality/risk metrics that were highly correlated, this unified approach
+balances stability (preferring consistent employment) with opportunity (rewarding
+access to better contracts) in a single interpretable 0-1 scale.
 }
 \examples{
 \dontrun{
 # Load sample employment data
 employment_data <- readRDS("data/sample.rds")
 
-# Example 1: Career quality analysis with survival data (required)
+# Basic comprehensive career analysis
+career_index <- calculate_career_quality_metrics(
+  data = employment_data
+)
+
+# With survival analysis for enhanced quality assessment
 survival_results <- estimate_contract_survival_optimized(
   data = employment_data,
   contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
@@ -89,36 +78,22 @@ survival_results <- estimate_contract_survival_optimized(
   censored_var = "censored"
 )
 
-career_quality <- calculate_career_quality_metrics(
+enhanced_index <- calculate_career_quality_metrics(
   data = employment_data,
   survival_data = survival_results
 )
 
-# View results
-print(career_quality[, .(cf, composite_quality_index, 
-                         fulltime_employment_rate, contract_quality_score)])
-
-# Example 2: Time-period analysis (e.g., by year)
+# Time-period analysis
 employment_data[, year := year(inizio)]
-yearly_quality <- calculate_career_quality_metrics(
+yearly_index <- calculate_career_quality_metrics(
   data = employment_data,
   survival_data = survival_results,
   time_period_column = "year"
-)
-
-# Example 3: Custom parameters and minimum spell duration
-custom_quality <- calculate_career_quality_metrics(
-  data = employment_data,
-  survival_data = survival_results,
-  contract_code_column = "contract_type",
-  employment_intensity_column = "intensity",
-  min_spell_duration = 30  # Only include spells of 30+ days
 )
 }
 
 }
 \seealso{
-\code{\link{estimate_contract_survival_optimized}} for survival analysis computation,
-\code{\link{calculate_career_transition_metrics}} for analyzing career transitions,
-\code{\link{calculate_comprehensive_career_metrics}} for integrated career analysis
+\code{\link{estimate_contract_survival_optimized}} for survival analysis,
+\code{\link{calculate_comprehensive_career_metrics}} for multiple metric analysis
 }

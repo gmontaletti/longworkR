@@ -1,8 +1,9 @@
 Package: longworkR
 Title: Longitudinal Employment Analytics for vecshift Data
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: 
-    person("Your", "Name", , "email@example.com", role = c("aut", "cre"))
+    person("Giampaolo", "Montaletti", , "giampaolo.montaletti@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0002-5327-1122"))
 Description: Analytics and visualization tools for longitudinal employment data
     processed by the vecshift package. Includes survival analysis, impact evaluation,
     difference-in-differences, network analysis, and advanced visualization capabilities

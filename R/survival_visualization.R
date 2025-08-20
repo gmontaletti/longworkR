@@ -27,7 +27,9 @@ NULL
 #' @param subtitle Character. Plot subtitle
 #' @param x_label Character. X-axis label (default: "Time (days)")
 #' @param y_label Character. Y-axis label (default: "Survival Probability")
-#' @param color_palette Character. Color palette name or custom colors
+#' @param color_palette Character or vector. RColorBrewer palette name (e.g., "Set2", "Dark2") 
+#'   or custom color vector. For large numbers of categories (>8), colors are automatically
+#'   extended using interpolation
 #' @param theme_function Function. ggplot2 theme to apply
 #'
 #' @return A ggplot object or combined plot with risk table
@@ -99,7 +101,7 @@ visualize_contract_survival <- function(
   
   # Create main survival plot
   p <- ggplot(plot_data, aes(x = time, y = survival_prob, color = contract_type)) +
-    geom_step(size = 1) +
+    geom_step(linewidth = 1) +
     labs(
       title = title,
       subtitle = subtitle,
@@ -119,10 +121,35 @@ visualize_contract_survival <- function(
   
   # Add confidence intervals if requested
   if (show_confidence) {
+    # Create stepped confidence interval data
+    stepped_ci_data <- data.table()
+    
+    for (ct in unique(plot_data$contract_type)) {
+      ct_data <- plot_data[contract_type == ct][order(time)]
+      
+      # Create stepped ribbon data by duplicating points
+      stepped_data <- data.table()
+      
+      for (i in 1:nrow(ct_data)) {
+        # Add current point
+        stepped_data <- rbind(stepped_data, ct_data[i])
+        
+        # Add next point with same survival values (for horizontal step)
+        if (i < nrow(ct_data)) {
+          next_time <- ct_data[i + 1, time]
+          step_point <- copy(ct_data[i])
+          step_point[, time := next_time]
+          stepped_data <- rbind(stepped_data, step_point)
+        }
+      }
+      
+      stepped_ci_data <- rbind(stepped_ci_data, stepped_data)
+    }
+    
     p <- p + geom_ribbon(
+      data = stepped_ci_data,
       aes(ymin = lower_ci, ymax = upper_ci, fill = contract_type),
-      alpha = 0.2,
-      stat = "stepribbon"
+      alpha = 0.2
     )
   }
   
@@ -155,13 +182,48 @@ visualize_contract_survival <- function(
   }
   
   # Apply color palette
-  if (is.character(color_palette)) {
+  n_colors <- length(contract_types)
+  
+  if (is.character(color_palette) && length(color_palette) == 1) {
+    # Single palette name provided
     if (color_palette %in% rownames(RColorBrewer::brewer.pal.info)) {
-      n_colors <- length(contract_types)
-      colors <- RColorBrewer::brewer.pal(min(n_colors, 8), color_palette)
+      # Handle different numbers of categories
+      if (n_colors <= 1) {
+        # Single color case
+        colors <- RColorBrewer::brewer.pal(3, color_palette)[1]
+      } else if (n_colors <= 8) {
+        # Use RColorBrewer directly for small numbers
+        colors <- RColorBrewer::brewer.pal(max(3, n_colors), color_palette)
+        if (n_colors < length(colors)) {
+          colors <- colors[1:n_colors]
+        }
+      } else {
+        # Generate extended color palette for large numbers
+        base_colors <- RColorBrewer::brewer.pal(8, color_palette)
+        
+        # Interpolate additional colors using colorRampPalette
+        color_func <- colorRampPalette(base_colors)
+        colors <- color_func(n_colors)
+      }
+      
       p <- p + scale_color_manual(values = colors) +
                scale_fill_manual(values = colors)
+    } else {
+      # Fallback to default ggplot2 colors for unknown palette names
+      warning(sprintf("Color palette '%s' not found in RColorBrewer. Using default ggplot2 colors.", color_palette))
     }
+  } else if (is.vector(color_palette) && length(color_palette) >= n_colors) {
+    # Use custom color vector if provided and sufficient
+    colors <- color_palette[1:n_colors]
+    p <- p + scale_color_manual(values = colors) +
+             scale_fill_manual(values = colors)
+  } else if (is.vector(color_palette) && length(color_palette) > 0 && length(color_palette) < n_colors) {
+    # Extend insufficient custom color vector
+    warning(sprintf("Color palette has %d colors but %d needed. Extending palette.", length(color_palette), n_colors))
+    color_func <- colorRampPalette(color_palette)
+    colors <- color_func(n_colors)
+    p <- p + scale_color_manual(values = colors) +
+             scale_fill_manual(values = colors)
   }
   
   # Add risk table if requested
@@ -551,7 +613,7 @@ animate_survival_curves <- function(
   
   # Create animated plot
   p <- ggplot(anim_data, aes(x = time, y = survival_prob, color = contract_type)) +
-    geom_line(size = 1.5) +
+    geom_line(linewidth = 1.5) +
     geom_point(size = 3) +
     labs(
       title = "Survival Curves Animation",

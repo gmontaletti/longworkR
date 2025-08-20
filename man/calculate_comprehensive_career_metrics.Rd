@@ -12,17 +12,19 @@ calculate_comprehensive_career_metrics(
   time_period_column = NULL,
   output_format = "wide",
   contract_code_column = "COD_TIPOLOGIA_CONTRATTUALE",
-  salary_column = NULL
+  employment_intensity_column = "prior",
+  complexity_variables = c("over_id", "arco", "prior"),
+  salary_column = NULL,
+  min_spell_duration = 7
 )
 }
 \arguments{
 \item{data}{A data.table containing employment records}
 
-\item{survival_data}{Optional. Pre-computed survival analysis results for enhanced
-transition and risk analysis.}
+\item{survival_data}{Optional. Pre-computed survival analysis results for enhanced analysis.}
 
 \item{metrics}{Character vector. Metrics to calculate. Options:
-c("quality", "transitions", "risk", "stability", "complexity", "all"). Default: "all"}
+c("quality", "transitions", "stability", "complexity", "all"). Default: "all"}
 
 \item{id_column}{Character. Name of person identifier column. Default: "cf"}
 
@@ -32,7 +34,13 @@ c("quality", "transitions", "risk", "stability", "complexity", "all"). Default: 
 
 \item{contract_code_column}{Character. Column containing contract type codes. Default: "COD_TIPOLOGIA_CONTRATTUALE"}
 
+\item{employment_intensity_column}{Character. Column indicating employment intensity (prior). Default: "prior"}
+
+\item{complexity_variables}{Character vector. Variables used for complexity calculation. Default: c("over_id", "arco", "prior")}
+
 \item{salary_column}{Character. Column containing salary information. Default: NULL}
+
+\item{min_spell_duration}{Numeric. Minimum duration (days) to include in analysis. Default: 7}
 }
 \value{
 Based on output_format:
@@ -41,31 +49,44 @@ Based on output_format:
 \item{list}{Named list with separate data.tables for each metric type}
 }
 \description{
-Calculates all career evaluation metrics (quality, transitions, risk) in a single
-function call with consistent formatting and validation. Provides unified analysis
-of career trajectories with optional survival analysis integration.
+Calculates all career evaluation metrics (quality index, transitions, stability, complexity)
+in a single function call with consistent formatting and validation. The main metric is now the
+unified career quality index that replaces separate quality and risk metrics.
 }
 \examples{
 \dontrun{
-# Comprehensive career analysis
+# Load sample employment data
+employment_data <- readRDS("data/sample.rds")
+
+# Comprehensive career analysis with all metrics
 career_metrics <- calculate_comprehensive_career_metrics(
   data = employment_data,
   metrics = "all",
   salary_column = "monthly_wage"
 )
 
-# Quality, stability and risk analysis only
-quality_stability_risk <- calculate_comprehensive_career_metrics(
+# Quality index and stability analysis only
+index_stability <- calculate_comprehensive_career_metrics(
   data = employment_data,
-  metrics = c("quality", "stability", "risk"),
+  metrics = c("quality", "stability"),
   output_format = "list"
 )
 
-# Time-period analysis
+# Time-period analysis with enhanced survival data
+employment_data[, year := year(inizio)]
+survival_results <- estimate_contract_survival_optimized(
+  data = employment_data,
+  contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
+  duration_var = "durata",
+  censored_var = "censored"
+)
+
 yearly_metrics <- calculate_comprehensive_career_metrics(
   data = employment_data,
+  survival_data = survival_results,
   time_period_column = "year",
-  output_format = "wide"
+  complexity_variables = c("over_id", "arco", "prior", "COD_TIPOLOGIA_CONTRATTUALE"),
+  min_spell_duration = 14
 )
 }
 

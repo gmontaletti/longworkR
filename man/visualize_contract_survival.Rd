@@ -40,7 +40,9 @@ visualize_contract_survival(
 
 \item{y_label}{Character. Y-axis label (default: "Survival Probability")}
 
-\item{color_palette}{Character. Color palette name or custom colors}
+\item{color_palette}{Character or vector. RColorBrewer palette name (e.g., "Set2", "Dark2")
+or custom color vector. For large numbers of categories (>8), colors are automatically
+extended using interpolation}
 
 \item{theme_function}{Function. ggplot2 theme to apply}
 }

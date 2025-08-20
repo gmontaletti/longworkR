@@ -438,9 +438,39 @@ analyze_employment_transitions <- function(pipeline_result,
         if (show_progress) {
           message("Using standard (slower) consolidation method - consider updating vecshift package")
         }
-        dt <- merge_consecutive_employment(pipeline_result, consolidation_type = consolidation_type)
+        
+        # Pre-process data to ensure type consistency before consolidation
+        # This prevents data.table column type mismatch errors during aggregation
+        pipeline_copy <- copy(pipeline_result)
+        
+        # Ensure consistent column types to prevent aggregation errors
+        # Convert potentially mixed integer/numeric columns to numeric
+        for (col_name in names(pipeline_copy)) {
+          col_class <- class(pipeline_copy[[col_name]])[1]
+          if (col_class %in% c("integer", "numeric")) {
+            # Check if column has mixed types that could cause issues during aggregation
+            if (col_class == "integer") {
+              # Convert integers to numeric to avoid type conflicts during consolidation
+              # This is safer as numeric can handle both integer and decimal aggregations
+              set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
+            }
+          }
+        }
+        
+        dt <- merge_consecutive_employment(pipeline_copy, consolidation_type = consolidation_type)
       } else {
         stop("No consolidation function found. Ensure the vecshift package is properly loaded.")
+      }
+      
+      # Update statistics variables list to only include columns that still exist after consolidation
+      missing_after_consolidation <- setdiff(statistics_variables, names(dt))
+      if (length(missing_after_consolidation) > 0) {
+        if (show_progress) {
+          message(sprintf("Removing %d statistics variables that were dropped during consolidation: %s", 
+                         length(missing_after_consolidation),
+                         paste(missing_after_consolidation, collapse = ", ")))
+        }
+        statistics_variables <- intersect(statistics_variables, names(dt))
       }
       
       if (show_progress) {

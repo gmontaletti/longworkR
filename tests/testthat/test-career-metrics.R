@@ -31,15 +31,15 @@ test_that("calculate_career_quality_metrics works with basic data", {
   
   expect_s3_class(result, "data.table")
   expect_equal(nrow(result), 2)
-  expect_true(all(c("cf", "total_employment_days", "fulltime_employment_rate", 
-                    "composite_quality_index") %in% names(result)))
+  expect_true(all(c("cf", "total_employment_days", "contract_quality_score", 
+                    "career_quality_index") %in% names(result)))
   
   # Check that quality scores are between 0 and 1
-  expect_true(all(result$composite_quality_index >= 0 & result$composite_quality_index <= 1))
-  expect_true(all(result$fulltime_employment_rate >= 0 & result$fulltime_employment_rate <= 1))
+  expect_true(all(result$career_quality_index >= 0 & result$career_quality_index <= 1))
+  expect_true(all(result$contract_quality_score >= 0 & result$contract_quality_score <= 1))
   
-  # Check that high_quality_* columns exist (replaced permanent_*)
-  expect_true(all(c("high_quality_contract_days", "high_quality_fulltime_rate") %in% names(result)))
+  # Check that component scores exist
+  expect_true(all(c("employment_intensity_score", "career_stability_score", "growth_opportunity_score") %in% names(result)))
 })
 
 test_that("calculate_career_quality_metrics handles time periods", {
@@ -129,13 +129,14 @@ test_that("calculate_career_transition_metrics handles salary data", {
   expect_equal(result$salary_deteriorations, 0)
 })
 
-test_that("calculate_career_risk_metrics works with basic data", {
+test_that("calculate_career_quality_metrics works with comprehensive index", {
   # Create test data
   dt <- data.table(
     cf = rep(c("person1", "person2"), each = 3),
     durata = c(100, 200, 300, 150, 250, 180),
     over_id = rep(1:3, 2),
-    COD_TIPOLOGIA_CONTRATTUALE = c("A.01.00", "A.03.00", "A.07.00", "A.03.00", "A.01.00", "A.07.00")
+    COD_TIPOLOGIA_CONTRATTUALE = c("A.01.00", "A.03.00", "A.07.00", "A.03.00", "A.01.00", "A.07.00"),
+    prior = c(1, 0, 2, 1, 3, 0)
   )
   
   # Create mock survival data
@@ -143,20 +144,20 @@ test_that("calculate_career_risk_metrics works with basic data", {
     median_survival = c("A.01.00" = 365, "A.03.00" = 180, "A.07.00" = 120)
   )
   
-  result <- calculate_career_risk_metrics(
+  result <- calculate_career_quality_metrics(
     dt,
     survival_data = survival_data
   )
   
   expect_s3_class(result, "data.table")
   expect_equal(nrow(result), 2)
-  expect_true(all(c("cf", "average_termination_risk", "risk_adjusted_stability", 
-                    "career_risk_score") %in% names(result)))
+  expect_true(all(c("cf", "contract_quality_score", "career_stability_score", 
+                    "career_quality_index") %in% names(result)))
   
-  # Risk scores should be between 0 and 1
-  expect_true(all(result$average_termination_risk >= 0 & result$average_termination_risk <= 1))
-  expect_true(all(result$career_risk_score >= 0 & result$career_risk_score <= 1))
-  expect_true(all(result$risk_adjusted_stability >= 0 & result$risk_adjusted_stability <= 1))
+  # All scores should be between 0 and 1
+  expect_true(all(result$contract_quality_score >= 0 & result$contract_quality_score <= 1))
+  expect_true(all(result$career_quality_index >= 0 & result$career_quality_index <= 1))
+  expect_true(all(result$career_stability_score >= 0 & result$career_stability_score <= 1))
 })
 
 test_that("calculate_comprehensive_career_metrics integrates all metrics", {
@@ -191,13 +192,13 @@ test_that("calculate_comprehensive_career_metrics integrates all metrics", {
   expect_equal(nrow(result_wide), 2)
   
   # Should contain metrics from all categories
-  quality_cols <- grep("quality|fulltime|permanent", names(result_wide), value = TRUE)
+  quality_cols <- grep("career_quality_index|contract_quality|intensity|stability_score|growth_opportunity", names(result_wide), value = TRUE)
   transition_cols <- grep("transition|improvement", names(result_wide), value = TRUE)
-  risk_cols <- grep("risk|stability", names(result_wide), value = TRUE)
+  stability_cols <- grep("employment_rate|employment_spells|turnover|employment_stability", names(result_wide), value = TRUE)
   
   expect_true(length(quality_cols) > 0)
   expect_true(length(transition_cols) > 0)
-  expect_true(length(risk_cols) > 0)
+  expect_true(length(stability_cols) > 0)
   
   # Test list format
   result_list <- calculate_comprehensive_career_metrics(
@@ -217,13 +218,13 @@ test_that("calculate_comprehensive_career_metrics integrates all metrics", {
   result_long <- calculate_comprehensive_career_metrics(
     dt,
     survival_data = survival_data,
-    metrics = c("quality", "risk"),
+    metrics = c("quality", "stability"),
     output_format = "long"
   )
   
   expect_s3_class(result_long, "data.table")
   expect_true(all(c("cf", "metric_name", "metric_value", "metric_category") %in% names(result_long)))
-  expect_true(all(unique(result_long$metric_category) %in% c("quality", "risk", "other")))
+  expect_true(all(unique(result_long$metric_category) %in% c("quality", "stability", "other")))
 })
 
 test_that("career metrics handle edge cases", {
@@ -251,9 +252,9 @@ test_that("career metrics handle edge cases", {
   expect_s3_class(transition_result, "data.table")
   expect_equal(transition_result$total_transitions, 0)
   
-  risk_result <- calculate_career_risk_metrics(dt_single)
-  expect_s3_class(risk_result, "data.table")
-  expect_equal(nrow(risk_result), 1)
+  comprehensive_result <- calculate_career_quality_metrics(dt_single, survival_data = survival_data_single)
+  expect_s3_class(comprehensive_result, "data.table")
+  expect_equal(nrow(comprehensive_result), 1)
   
   # Test with no employment periods
   dt_empty <- data.table(
@@ -264,10 +265,10 @@ test_that("career metrics handle edge cases", {
     prior = 1
   )
   
-  # Test that function now requires survival_data
-  expect_error(
-    calculate_career_quality_metrics(dt_empty),
-    "survival_data is required"
+  # Test that function handles empty employment data
+  expect_warning(
+    result_empty <- calculate_career_quality_metrics(dt_empty),
+    "No valid employment observations found"
   )
 })
 
@@ -298,11 +299,9 @@ test_that("career metrics validate input parameters", {
     "Missing required columns"
   )
   
-  # Test missing survival_data
-  expect_error(
-    calculate_career_quality_metrics(dt),
-    "survival_data is required"
-  )
+  # Test function works without survival_data (uses fallback)
+  result_no_survival <- calculate_career_quality_metrics(dt)
+  expect_s3_class(result_no_survival, "data.table")
   
   # Test invalid output format
   expect_error(
@@ -339,7 +338,7 @@ test_that("career metrics handle contract code variations", {
   
   expect_s3_class(result, "data.table")
   expect_equal(nrow(result), 1)
-  expect_true(result$high_quality_contract_days > 0)  # Changed from permanent_contract_days
+  expect_true(result$growth_opportunity_score >= 0)  # Check growth opportunity component
 })
 
 test_that("career transition metrics compute improvements correctly", {

@@ -39,6 +39,10 @@ Calculates career complexity metrics for generalized career trajectory analysis,
 extending beyond pre/post event evaluation. Analyzes concurrent employment patterns,
 employment diversity measures, and complexity indices across any time period.
 }
+\details{
+The complexity score has been enhanced for better discriminatory power, using an
+improved formula that provides greater variability across different career patterns.
+}
 \examples{
 \dontrun{
 # Analyze overall career complexity

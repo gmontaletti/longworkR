@@ -54,8 +54,8 @@ calculate_employment_stability_metrics <- function(data,
                                                  employment_indicator = "over_id",
                                                  min_spell_duration = 7) {
   
-  # Performance optimization: Single-pass processing with vectorized operations
-  # Achieves 3-5x speed improvement and 60-70% memory reduction
+  # Refactored to use career stability metrics as basis engine
+  # This eliminates code duplication and ensures consistency
   
   if (!inherits(data, "data.table")) {
     stop("Input data must be a data.table")
@@ -67,107 +67,22 @@ calculate_employment_stability_metrics <- function(data,
     stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
   }
   
-  # Create working copy with standardized column names
-  dt <- copy(data)
-  setnames(dt, c(id_column, period_column), c("cf", "period"))
+  # Use career stability metrics as basis engine with period grouping
+  stability_metrics <- calculate_career_stability_metrics(
+    data = data,
+    id_column = id_column,
+    time_period_column = period_column,
+    date_column = date_column,
+    employment_indicator = employment_indicator,
+    min_spell_duration = min_spell_duration
+  )
   
-  # Optimization: Filter data
-  dt <- dt[!is.na(period) & durata >= min_spell_duration]
-  
-  if (nrow(dt) == 0) {
-    warning("No valid observations after filtering")
-    return(data.table())
+  # Rename period column to match expected output
+  if (period_column != "period" && "time_period" %in% names(stability_metrics)) {
+    setnames(stability_metrics, "time_period", "period")
   }
   
-  # Create employment indicator using efficient fifelse
-  dt[, employed := fifelse(get(employment_indicator) > 0, 1.0, 0.0)]
-  
-  # Single-pass comprehensive calculation using optimized data.table operations
-  result <- dt[order(cf, period, get(date_column)), {
-    
-    # Vectorized basic metrics
-    emp_mask <- employed == 1.0
-    unemp_mask <- employed == 0.0
-    
-    days_employed <- sum(durata[emp_mask], na.rm = TRUE)
-    days_unemployed <- sum(durata[unemp_mask], na.rm = TRUE)
-    total_days <- days_employed + days_unemployed
-    
-    # Efficient employment rate calculation
-    employment_rate <- fifelse(total_days > 0, days_employed / total_days, 0)
-    
-    # Optimized spell calculation using rleid for run-length encoding
-    if (.N <= 1) {
-      # Handle single observation case efficiently
-      list(
-        days_employed = as.double(days_employed),
-        days_unemployed = as.double(days_unemployed),
-        total_days = as.double(total_days),
-        total_observations = as.double(.N),
-        employment_rate = as.double(employment_rate),
-        employment_spells = as.double(fifelse(days_employed > 0, 1.0, 0.0)),
-        unemployment_spells = as.double(fifelse(days_unemployed > 0, 1.0, 0.0)),
-        avg_employment_spell = as.double(days_employed),
-        avg_unemployment_spell = as.double(days_unemployed),
-        max_employment_spell = as.double(days_employed),
-        max_unemployment_spell = as.double(days_unemployed),
-        job_turnover_rate = as.double(0.0),
-        employment_stability_index = as.double(employment_rate)
-      )
-    } else {
-      # Vectorized spell identification using efficient rleid
-      spell_groups <- rleid(employed)
-      
-      # Pre-aggregate spell statistics using data.table for safety
-      spell_dt <- data.table(spell_id = spell_groups, employed = employed, durata = durata)
-      spell_stats <- spell_dt[, .(spell_duration = sum(durata)), by = .(spell_id, employed)]
-      
-      # Extract employment and unemployment spell durations efficiently
-      emp_spell_durations <- spell_stats[employed == 1.0, spell_duration]
-      unemp_spell_durations <- spell_stats[employed == 0.0, spell_duration]
-      
-      # Use length() for counting - consistent scalar behavior
-      n_emp_spells <- length(emp_spell_durations)
-      n_unemp_spells <- length(unemp_spell_durations)
-      
-      # Robust statistics handling empty vectors
-      avg_emp_spell <- if (n_emp_spells > 0) as.double(fmean(emp_spell_durations)) else 0.0
-      avg_unemp_spell <- if (n_unemp_spells > 0) as.double(fmean(unemp_spell_durations)) else 0.0
-      max_emp_spell <- if (n_emp_spells > 0) as.double(fmax(emp_spell_durations)) else 0.0
-      max_unemp_spell <- if (n_unemp_spells > 0) as.double(fmax(unemp_spell_durations)) else 0.0
-      
-      # Efficient turnover and stability calculations
-      turnover_rate <- n_emp_spells / pmax(total_days / 365.25, 1/365.25)
-      
-      stability_index <- pmin(1, (
-        0.4 * employment_rate +
-        0.3 * pmin(1, max_emp_spell / 365) +
-        0.2 * pmax(0, 1 - pmin(1, n_emp_spells / 4)) +
-        0.1 * pmin(1, avg_emp_spell / 90)
-      ))
-      
-      list(
-        days_employed = as.double(days_employed),
-        days_unemployed = as.double(days_unemployed),
-        total_days = as.double(total_days),
-        total_observations = as.double(.N),
-        employment_rate = as.double(employment_rate),
-        employment_spells = as.double(n_emp_spells),
-        unemployment_spells = as.double(n_unemp_spells),
-        avg_employment_spell = as.double(avg_emp_spell),
-        avg_unemployment_spell = as.double(avg_unemp_spell),
-        max_employment_spell = as.double(max_emp_spell),
-        max_unemployment_spell = as.double(max_unemp_spell),
-        job_turnover_rate = as.double(turnover_rate),
-        employment_stability_index = as.double(stability_index)
-      )
-    }
-  }, by = .(cf, period)]
-  
-  # Clean up temporary column
-  dt[, employed := NULL]
-  
-  return(result[])
+  return(stability_metrics[])
 }
 
 #' Calculate Contract Quality Metrics
@@ -426,6 +341,9 @@ calculate_impact_career_complexity_metrics <- function(data,
                                               period_column = "event_period",
                                               complexity_variables = c("over_id", "arco", "prior")) {
   
+  # Refactored to use career complexity metrics as basis engine
+  # This eliminates code duplication and ensures use of IMPROVED complexity formula
+  
   if (!inherits(data, "data.table")) {
     stop("Input data must be a data.table")
   }
@@ -436,102 +354,18 @@ calculate_impact_career_complexity_metrics <- function(data,
     stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
   }
   
-  # Check for complexity variables
-  available_vars <- intersect(complexity_variables, names(data))
-  if (length(available_vars) == 0) {
-    stop("None of the specified complexity variables found in data")
+  # Use career complexity metrics as basis engine with period grouping
+  complexity_metrics <- calculate_career_complexity_metrics(
+    data = data,
+    id_column = id_column,
+    time_period_column = period_column,
+    complexity_variables = complexity_variables
+  )
+  
+  # Rename period column to match expected output
+  if (period_column != "period" && "time_period" %in% names(complexity_metrics)) {
+    setnames(complexity_metrics, "time_period", "period")
   }
-  
-  # Create working copy
-  dt <- copy(data)
-  setnames(dt, c(id_column, period_column), c("cf", "period"))
-  
-  # Filter for valid periods
-  dt <- dt[!is.na(period)]
-  
-  if (nrow(dt) == 0) {
-    warning("No valid observations after filtering")
-    return(data.table())
-  }
-  
-  # Calculate concurrent job metrics (if arco available)
-  concurrent_metrics <- if ("arco" %in% available_vars) {
-    dt[, {
-      emp_data <- .SD[over_id > 0]
-      max_conc <- if (nrow(emp_data) > 0) as.numeric(fmax(emp_data$arco, na.rm = TRUE)) else 0.0
-      avg_conc <- if (nrow(emp_data) > 0) as.numeric(fmean(emp_data$arco, na.rm = TRUE)) else 0.0
-      conc_days <- if (nrow(emp_data) > 0) as.double(sum(emp_data$durata[emp_data$arco > 1], na.rm = TRUE)) else 0.0
-      total_days <- if (nrow(emp_data) > 0) as.double(sum(emp_data$durata, na.rm = TRUE)) else 0.0
-      
-      list(
-        max_concurrent_jobs = as.double(max_conc),
-        avg_concurrent_jobs = as.double(avg_conc),
-        concurrent_employment_days = as.double(conc_days),
-        total_employment_days = as.double(total_days)
-      )
-    }, by = .(cf, period)]
-  } else {
-    # Default values if arco not available
-    dt[, .(
-      max_concurrent_jobs = 1.0,
-      avg_concurrent_jobs = 1.0,
-      concurrent_employment_days = 0.0,
-      total_employment_days = as.double(sum(durata[over_id > 0], na.rm = TRUE))
-    ), by = .(cf, period)]
-  }
-  
-  concurrent_metrics[, concurrent_employment_rate := 
-    as.double(concurrent_employment_days) / pmax(1.0, as.double(total_employment_days))]
-  
-  # Calculate diversity metrics
-  diversity_metrics <- dt[, {
-    diversity_components <- list()
-    
-    # Employment type diversity (if prior available)
-    if ("prior" %in% available_vars && any(over_id > 0)) {
-      emp_types <- get("prior")[over_id > 0]
-      if (length(emp_types) > 0) {
-        type_props <- table(emp_types) / length(emp_types)
-        employment_diversity <- as.double(-sum(type_props * log(type_props + 1e-10)))
-        diversity_components$employment_diversity_index <- employment_diversity
-      }
-    }
-    
-    if (length(diversity_components) == 0) {
-      diversity_components$employment_diversity_index <- 0.0
-    }
-    
-    diversity_components
-  }, by = .(cf, period)]
-  
-  # Calculate fragmentation index
-  fragmentation_metrics <- dt[order(cf, period, inizio), {
-    if (.N <= 1) {
-      list(career_fragmentation_index = 0.0)
-    } else {
-      # Count employment/unemployment transitions
-      employment_status <- over_id > 0
-      transitions <- as.double(sum(diff(as.integer(employment_status)) != 0, na.rm = TRUE))
-      
-      # Normalize by period length (in years)
-      period_length_years <- as.double(sum(durata, na.rm = TRUE)) / 365.25
-      fragmentation_rate <- transitions / pmax(1.0, period_length_years)
-      
-      list(career_fragmentation_index = as.double(pmin(1.0, fragmentation_rate / 4.0))) # Scale to 0-1
-    }
-  }, by = .(cf, period)]
-  
-  # Merge all metrics
-  complexity_metrics <- Reduce(function(x, y) merge(x, y, by = c("cf", "period"), all = TRUE),
-                               list(concurrent_metrics, diversity_metrics, fragmentation_metrics))
-  
-  # Calculate overall complexity score
-  complexity_metrics[, job_complexity_score := as.double(pmin(1.0, (
-    0.3 * pmin(1.0, max_concurrent_jobs / 3.0) +
-    0.3 * pmin(1.0, concurrent_employment_rate) +
-    0.2 * pmin(1.0, employment_diversity_index / 2.0) +
-    0.2 * career_fragmentation_index
-  )))]
   
   return(complexity_metrics[])
 }
