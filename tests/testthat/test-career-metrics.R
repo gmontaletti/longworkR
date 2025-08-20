@@ -3,7 +3,7 @@ library(data.table)
 # Load the package functions
 devtools::load_all()
 
-test_that("calculate_career_quality_metrics works with basic data", {
+test_that("calculate_career_success_metrics works with basic data", {
   # Create test data
   dt <- data.table(
     cf = rep(c("person1", "person2"), each = 6),
@@ -24,7 +24,7 @@ test_that("calculate_career_quality_metrics works with basic data", {
   )
   
   # Test basic functionality
-  result <- calculate_career_quality_metrics(
+  result <- calculate_career_success_metrics(
     dt,
     survival_data = survival_data
   )
@@ -32,17 +32,18 @@ test_that("calculate_career_quality_metrics works with basic data", {
   expect_s3_class(result, "data.table")
   expect_equal(nrow(result), 2)
   expect_true(all(c("cf", "total_employment_days", "contract_quality_score", 
-                    "career_quality_index") %in% names(result)))
+                    "career_success_index", "career_advancement_index") %in% names(result)))
   
-  # Check that quality scores are between 0 and 1
-  expect_true(all(result$career_quality_index >= 0 & result$career_quality_index <= 1))
+  # Check that success scores are between 0 and 1
+  expect_true(all(result$career_success_index >= 0 & result$career_success_index <= 1))
+  expect_true(all(result$career_advancement_index >= 0 & result$career_advancement_index <= 1))
   expect_true(all(result$contract_quality_score >= 0 & result$contract_quality_score <= 1))
   
   # Check that component scores exist
   expect_true(all(c("employment_intensity_score", "career_stability_score", "growth_opportunity_score") %in% names(result)))
 })
 
-test_that("calculate_career_quality_metrics handles time periods", {
+test_that("calculate_career_success_metrics handles time periods", {
   # Create test data with time periods
   dt <- data.table(
     cf = rep("person1", 4),
@@ -59,7 +60,7 @@ test_that("calculate_career_quality_metrics handles time periods", {
     median_survival = c("A.01.00" = 365, "A.03.00" = 180)
   )
   
-  result <- calculate_career_quality_metrics(
+  result <- calculate_career_success_metrics(
     dt,
     survival_data = survival_data,
     time_period_column = "year"
@@ -67,8 +68,8 @@ test_that("calculate_career_quality_metrics handles time periods", {
   
   expect_s3_class(result, "data.table")
   expect_equal(nrow(result), 2)  # 1 person × 2 years
-  expect_true("time_period" %in% names(result))
-  expect_equal(sort(unique(result$time_period)), c(2020, 2021))
+  expect_true("year" %in% names(result))
+  expect_equal(sort(unique(result$year)), c(2020, 2021))
 })
 
 test_that("calculate_career_transition_metrics works with basic data", {
@@ -129,7 +130,7 @@ test_that("calculate_career_transition_metrics handles salary data", {
   expect_equal(result$salary_deteriorations, 0)
 })
 
-test_that("calculate_career_quality_metrics works with comprehensive index", {
+test_that("calculate_career_success_metrics works with comprehensive index", {
   # Create test data
   dt <- data.table(
     cf = rep(c("person1", "person2"), each = 3),
@@ -144,7 +145,7 @@ test_that("calculate_career_quality_metrics works with comprehensive index", {
     median_survival = c("A.01.00" = 365, "A.03.00" = 180, "A.07.00" = 120)
   )
   
-  result <- calculate_career_quality_metrics(
+  result <- calculate_career_success_metrics(
     dt,
     survival_data = survival_data
   )
@@ -152,11 +153,12 @@ test_that("calculate_career_quality_metrics works with comprehensive index", {
   expect_s3_class(result, "data.table")
   expect_equal(nrow(result), 2)
   expect_true(all(c("cf", "contract_quality_score", "career_stability_score", 
-                    "career_quality_index") %in% names(result)))
+                    "career_success_index", "career_advancement_index") %in% names(result)))
   
   # All scores should be between 0 and 1
   expect_true(all(result$contract_quality_score >= 0 & result$contract_quality_score <= 1))
-  expect_true(all(result$career_quality_index >= 0 & result$career_quality_index <= 1))
+  expect_true(all(result$career_success_index >= 0 & result$career_success_index <= 1))
+  expect_true(all(result$career_advancement_index >= 0 & result$career_advancement_index <= 1))
   expect_true(all(result$career_stability_score >= 0 & result$career_stability_score <= 1))
 })
 
@@ -192,8 +194,8 @@ test_that("calculate_comprehensive_career_metrics integrates all metrics", {
   expect_equal(nrow(result_wide), 2)
   
   # Should contain metrics from all categories
-  quality_cols <- grep("career_quality_index|contract_quality|intensity|stability_score|growth_opportunity", names(result_wide), value = TRUE)
-  transition_cols <- grep("transition|improvement", names(result_wide), value = TRUE)
+  quality_cols <- grep("career_success_index|career_advancement_index|contract_quality|intensity|stability_score|growth_opportunity", names(result_wide), value = TRUE)
+  transition_cols <- grep("transition|improvement|advancement", names(result_wide), value = TRUE)
   stability_cols <- grep("employment_rate|employment_spells|turnover|employment_stability", names(result_wide), value = TRUE)
   
   expect_true(length(quality_cols) > 0)
@@ -244,7 +246,7 @@ test_that("career metrics handle edge cases", {
     median_survival = c("A.01.00" = 365)
   )
   
-  quality_result <- calculate_career_quality_metrics(dt_single, survival_data = survival_data_single)
+  quality_result <- calculate_career_success_metrics(dt_single, survival_data = survival_data_single)
   expect_s3_class(quality_result, "data.table")
   expect_equal(nrow(quality_result), 1)
   
@@ -252,7 +254,7 @@ test_that("career metrics handle edge cases", {
   expect_s3_class(transition_result, "data.table")
   expect_equal(transition_result$total_transitions, 0)
   
-  comprehensive_result <- calculate_career_quality_metrics(dt_single, survival_data = survival_data_single)
+  comprehensive_result <- calculate_career_success_metrics(dt_single, survival_data = survival_data_single)
   expect_s3_class(comprehensive_result, "data.table")
   expect_equal(nrow(comprehensive_result), 1)
   
@@ -267,7 +269,7 @@ test_that("career metrics handle edge cases", {
   
   # Test that function handles empty employment data
   expect_warning(
-    result_empty <- calculate_career_quality_metrics(dt_empty),
+    result_empty <- calculate_career_success_metrics(dt_empty),
     "No valid employment observations found"
   )
 })
@@ -288,19 +290,19 @@ test_that("career metrics validate input parameters", {
   
   # Test invalid data type
   expect_error(
-    calculate_career_quality_metrics(as.data.frame(dt), survival_data = survival_data_basic),
+    calculate_career_success_metrics(as.data.frame(dt), survival_data = survival_data_basic),
     "Input data must be a data.table"
   )
   
   # Test missing required columns
   dt_missing <- dt[, -"durata"]
   expect_error(
-    calculate_career_quality_metrics(dt_missing, survival_data = survival_data_basic),
+    calculate_career_success_metrics(dt_missing, survival_data = survival_data_basic),
     "Missing required columns"
   )
   
   # Test function works without survival_data (uses fallback)
-  result_no_survival <- calculate_career_quality_metrics(dt)
+  result_no_survival <- calculate_career_success_metrics(dt)
   expect_s3_class(result_no_survival, "data.table")
   
   # Test invalid output format
@@ -331,7 +333,7 @@ test_that("career metrics handle contract code variations", {
     median_survival = c("PERMANENT" = 500, "TEMPORARY" = 150, "INTERNSHIP" = 100)
   )
   
-  result <- calculate_career_quality_metrics(
+  result <- calculate_career_success_metrics(
     dt,
     survival_data = survival_data_custom
   )
@@ -368,7 +370,7 @@ test_that("career transition metrics compute improvements correctly", {
   expect_true(result$duration_improvements > 0)
   expect_true(result$fulltime_improvements > 0)
   expect_true(result$salary_improvements > 0)
-  expect_true(result$career_progression_index > 0.5)  # Should be high with all improvements
+  expect_true(result$career_advancement_index > 0.5)  # Should be high with all improvements
 })
 
 test_that("employment diversity index handles zero diversity correctly", {

@@ -55,6 +55,7 @@ NULL
 #'   \item{career_stability_score}{Stability based on duration consistency (0-1)}
 #'   \item{growth_opportunity_score}{Access to diverse, high-quality contracts (0-1)}
 #'   \item{career_success_index}{Unified career success index (0-1)}
+#'   \item{career_advancement_index}{Career progression and transition success score (0-1)}
 #'
 #' @examples
 #' \dontrun{
@@ -121,8 +122,9 @@ calculate_career_success_metrics <- function(data,
   contract_col <- contract_code_column
   intensity_col <- employment_intensity_column
   
-  # OPTIMIZATION 2: Single filter operation with vectorized conditions
-  valid_rows <- data[["over_id"]] > 0 & data[["durata"]] >= min_spell_duration
+  # OPTIMIZATION 2: Single filter operation with vectorized conditions (handle missing values)
+  valid_rows <- !is.na(data[["over_id"]]) & !is.na(data[["durata"]]) & 
+                data[["over_id"]] > 0 & data[["durata"]] >= min_spell_duration
   
   if (sum(valid_rows) == 0) {
     warning("No valid employment observations found")
@@ -171,8 +173,8 @@ calculate_career_success_metrics <- function(data,
   contract_quality_lookup <- quality_scores[data[[contract_col]]]
   contract_quality_lookup[is.na(contract_quality_lookup)] <- 0.5
   
-  # OPTIMIZATION 6: Pre-compute intensity scores (vectorized, no intermediate column creation)
-  intensity_scores <- pmax(0, pmin(1, data[[intensity_col]] / 3))
+  # OPTIMIZATION 6: Pre-compute intensity scores (vectorized, handle missing values)
+  intensity_scores <- ifelse(is.na(data[[intensity_col]]), 0.5, pmax(0, pmin(1, data[[intensity_col]] / 3)))
   
   # OPTIMIZATION 7: Determine grouping structure efficiently
   if (!is.null(time_period_column) && time_period_column %in% names(data)) {
@@ -231,6 +233,32 @@ calculate_career_success_metrics <- function(data,
       
       growth_opportunity_score <- pmax(0, pmin(1, 0.6 * high_quality_exposure + 0.4 * diversity_component))
       
+      # Career advancement index calculation (transition-based progression)
+      if (length(durata_vals) <= 1) {
+        # Single observation - no transitions possible
+        career_advancement_index <- 0.0
+      } else {
+        # Calculate career advancement based on transitions between contract qualities and employment intensity
+        n_transitions <- length(durata_vals) - 1
+        
+        # Get transition vectors efficiently
+        from_quality <- contract_quality_vals[1:n_transitions]
+        to_quality <- contract_quality_vals[2:(n_transitions + 1)]
+        from_intensity <- intensity_vals[1:n_transitions] 
+        to_intensity <- intensity_vals[2:(n_transitions + 1)]
+        
+        # Calculate improvement rates
+        quality_improvements <- sum(to_quality > from_quality * 1.05, na.rm = TRUE)
+        intensity_improvements <- sum(to_intensity > from_intensity * 1.05, na.rm = TRUE)
+        
+        # Calculate advancement rate (proportion of transitions showing improvement)
+        total_improvements <- quality_improvements + intensity_improvements
+        advancement_rate <- total_improvements / (n_transitions * 2)  # 2 dimensions (quality + intensity)
+        
+        # Scale to 0-1 range with smooth sigmoid transformation for better discrimination
+        career_advancement_index <- 1 / (1 + exp(-6 * (advancement_rate - 0.3)))
+      }
+      
       # Performance index calculation with optimized transformations
       if (enhance_variability) {
         # Optimized enhanced transformations
@@ -254,7 +282,8 @@ calculate_career_success_metrics <- function(data,
         employment_intensity_score = avg_intensity_score,
         career_stability_score = stability_score,
         growth_opportunity_score = growth_opportunity_score,
-        career_success_index = career_success_index)
+        career_success_index = career_success_index,
+        career_advancement_index = career_advancement_index)
     }, by = cf_col]
     
     return(career_index)
@@ -292,6 +321,32 @@ calculate_career_success_metrics <- function(data,
       
       growth_opportunity_score <- pmax(0, pmin(1, 0.6 * high_quality_exposure + 0.4 * diversity_component))
       
+      # Career advancement index calculation (transition-based progression)
+      if (length(durata_vals) <= 1) {
+        # Single observation - no transitions possible
+        career_advancement_index <- 0.0
+      } else {
+        # Calculate career advancement based on transitions between contract qualities and employment intensity
+        n_transitions <- length(durata_vals) - 1
+        
+        # Get transition vectors efficiently
+        from_quality <- contract_quality_vals[.I[1:n_transitions]]
+        to_quality <- contract_quality_vals[.I[2:(n_transitions + 1)]]
+        from_intensity <- intensity_vals[.I[1:n_transitions]] 
+        to_intensity <- intensity_vals[.I[2:(n_transitions + 1)]]
+        
+        # Calculate improvement rates
+        quality_improvements <- sum(to_quality > from_quality * 1.05, na.rm = TRUE)
+        intensity_improvements <- sum(to_intensity > from_intensity * 1.05, na.rm = TRUE)
+        
+        # Calculate advancement rate (proportion of transitions showing improvement)
+        total_improvements <- quality_improvements + intensity_improvements
+        advancement_rate <- total_improvements / (n_transitions * 2)  # 2 dimensions (quality + intensity)
+        
+        # Scale to 0-1 range with smooth sigmoid transformation for better discrimination
+        career_advancement_index <- 1 / (1 + exp(-6 * (advancement_rate - 0.3)))
+      }
+      
       if (enhance_variability) {
         career_success_index <- sqrt(pmin(1, 
           (sqrt(avg_contract_quality)^0.35) * ((avg_intensity_score^1.5)^0.25) * 
@@ -309,7 +364,8 @@ calculate_career_success_metrics <- function(data,
         employment_intensity_score = avg_intensity_score,
         career_stability_score = stability_score,
         growth_opportunity_score = growth_opportunity_score,
-        career_success_index = career_success_index)
+        career_success_index = career_success_index,
+        career_advancement_index = career_advancement_index)
     }, by = group_cols]
     
     return(career_index)
@@ -377,8 +433,8 @@ calculate_career_transition_metrics <- function(data,
     stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
   }
   
-  # OPTIMIZATION 1: Avoid copy - work with filtered view and direct column references
-  valid_rows <- data$over_id > 0
+  # OPTIMIZATION 1: Avoid copy - work with filtered view and direct column references (handle missing values)
+  valid_rows <- !is.na(data$over_id) & data$over_id > 0
   if (sum(valid_rows) == 0) {
     warning("No valid employment observations found")
     return(data.table())
@@ -884,8 +940,8 @@ calculate_career_complexity_metrics <- function(data,
   # OPTIMIZATION 1: Avoid copy - work directly with data using column references
   cf_col <- id_column
   
-  # OPTIMIZATION 2: Pre-filter for employment data efficiently
-  emp_mask <- data$over_id > 0
+  # OPTIMIZATION 2: Pre-filter for employment data efficiently (handle missing values)  
+  emp_mask <- !is.na(data$over_id) & data$over_id > 0
   has_arco <- "arco" %in% available_vars
   has_inizio <- "inizio" %in% names(data)
   
@@ -1221,7 +1277,7 @@ calculate_comprehensive_career_metrics <- function(data,
       metric_results <- list()
       
       quality_cols <- c("total_employment_days", "contract_quality_score", "employment_intensity_score",
-                       "career_stability_score", "growth_opportunity_score", "career_success_index")
+                       "career_stability_score", "growth_opportunity_score", "career_success_index", "career_advancement_index")
       stability_cols <- c("days_employed", "days_unemployed", "employment_rate", "employment_spells",
                          "unemployment_spells", "avg_employment_spell", "avg_unemployment_spell",
                          "max_employment_spell", "max_unemployment_spell", "job_turnover_rate", "employment_security_index")
@@ -1393,8 +1449,9 @@ calculate_unified_career_metrics_optimized <- function(data,
                                                       enhance_variability = TRUE,
                                                       include_transitions = FALSE) {
   
-  # Pre-process data filters and lookups once
-  valid_rows <- data$over_id > 0 & data$durata >= min_spell_duration
+  # Pre-process data filters and lookups once (handle missing values)
+  valid_rows <- !is.na(data$over_id) & !is.na(data$durata) & 
+                data$over_id > 0 & data$durata >= min_spell_duration
   
   if (sum(valid_rows) == 0) {
     warning("No valid employment observations found")
@@ -1483,6 +1540,32 @@ calculate_unified_career_metrics_optimized <- function(data,
       }
       
       growth_opportunity_score <- pmax(0, pmin(1, 0.6 * high_quality_exposure + 0.4 * diversity_component))
+      
+      # Career advancement index calculation (transition-based progression)
+      if (n_obs <= 1) {
+        # Single observation - no transitions possible
+        career_advancement_index <- 0.0
+      } else {
+        # Calculate career advancement based on transitions between contract qualities and employment intensity
+        n_transitions <- n_obs - 1
+        
+        # Get transition vectors efficiently
+        from_quality <- quality_vals[1:n_transitions]
+        to_quality <- quality_vals[2:(n_transitions + 1)]
+        from_intensity <- intensity_vals[1:n_transitions] 
+        to_intensity <- intensity_vals[2:(n_transitions + 1)]
+        
+        # Calculate improvement rates
+        quality_improvements <- sum(to_quality > from_quality * 1.05, na.rm = TRUE)
+        intensity_improvements <- sum(to_intensity > from_intensity * 1.05, na.rm = TRUE)
+        
+        # Calculate advancement rate (proportion of transitions showing improvement)
+        total_improvements <- quality_improvements + intensity_improvements
+        advancement_rate <- total_improvements / (n_transitions * 2)  # 2 dimensions (quality + intensity)
+        
+        # Scale to 0-1 range with smooth sigmoid transformation for better discrimination
+        career_advancement_index <- 1 / (1 + exp(-6 * (advancement_rate - 0.3)))
+      }
       
       # Performance index
       if (enhance_variability) {
@@ -1593,6 +1676,7 @@ calculate_unified_career_metrics_optimized <- function(data,
         career_stability_score = stability_score,
         growth_opportunity_score = growth_opportunity_score,
         career_success_index = career_success_index,
+        career_advancement_index = career_advancement_index,
         days_employed = emp_days,
         days_unemployed = unemp_days,
         employment_rate = employment_rate,
