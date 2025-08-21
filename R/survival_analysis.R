@@ -799,10 +799,47 @@ compare_contract_survival <- function(
     stop("Package 'survival' is required for this function.")
   }
   
-  # Create survival object
+  # Input validation
+  if (!inherits(data, "data.table")) {
+    data <- as.data.table(data)
+  }
+  
+  # Check required columns exist
+  required_cols <- c(contract_type_var, duration_var, censored_var)
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0) {
+    stop(sprintf("Required columns missing: %s", paste(missing_cols, collapse = ", ")))
+  }
+  
+  # Filter out rows with missing values in key variables
+  complete_data <- data[
+    !is.na(get(contract_type_var)) & 
+    !is.na(get(duration_var)) & 
+    !is.na(get(censored_var)) &
+    get(duration_var) > 0
+  ]
+  
+  if (nrow(complete_data) == 0) {
+    stop("No complete data available after filtering missing values")
+  }
+  
+  # Check number of unique contract types
+  contract_types <- complete_data[, unique(get(contract_type_var))]
+  n_groups <- length(contract_types)
+  
+  if (n_groups < 2) {
+    stop(sprintf("Need at least 2 groups for comparison. Found %d groups: %s", 
+                 n_groups, paste(contract_types, collapse = ", ")))
+  }
+  
+  cat(sprintf("Comparing survival across %d contract types with %d observations:\n", 
+              n_groups, nrow(complete_data)))
+  cat(sprintf("Contract types: %s\n", paste(contract_types, collapse = ", ")))
+  
+  # Create survival object using filtered data
   surv_obj <- survival::Surv(
-    time = data[[duration_var]],
-    event = 1 - data[[censored_var]]
+    time = complete_data[[duration_var]],
+    event = 1 - complete_data[[censored_var]]
   )
   
   # Overall comparison
@@ -814,7 +851,7 @@ compare_contract_survival <- function(
   if (test_type %in% c("logrank", "both")) {
     test_results$logrank <- survival::survdiff(
       formula,
-      data = data,
+      data = complete_data,
       rho = 0  # Log-rank test
     )
   }
@@ -823,13 +860,12 @@ compare_contract_survival <- function(
   if (test_type %in% c("wilcoxon", "both")) {
     test_results$wilcoxon <- survival::survdiff(
       formula,
-      data = data,
+      data = complete_data,
       rho = 1  # Wilcoxon test
     )
   }
   
   # Pairwise comparisons
-  contract_types <- unique(data[[contract_type_var]])
   n_types <- length(contract_types)
   
   if (n_types > 2) {
@@ -838,19 +874,33 @@ compare_contract_survival <- function(
     
     for (i in 1:(n_types-1)) {
       for (j in (i+1):n_types) {
-        pair_data <- data[get(contract_type_var) %in% c(contract_types[i], contract_types[j])]
+        pair_data <- complete_data[get(contract_type_var) %in% c(contract_types[i], contract_types[j])]
+        
+        if (nrow(pair_data) == 0) {
+          warning(sprintf("No data available for pairwise comparison between %s and %s", 
+                         contract_types[i], contract_types[j]))
+          next
+        }
         
         pair_surv <- survival::Surv(
           time = pair_data[[duration_var]],
           event = 1 - pair_data[[censored_var]]
         )
         
-        pair_test <- survival::survdiff(
-          pair_surv ~ get(contract_type_var),
-          data = pair_data
-        )
+        pair_test <- tryCatch({
+          survival::survdiff(
+            pair_surv ~ get(contract_type_var),
+            data = pair_data
+          )
+        }, error = function(e) {
+          warning(sprintf("Failed pairwise comparison between %s and %s: %s", 
+                         contract_types[i], contract_types[j], e$message))
+          return(NULL)
+        })
         
-        pairwise_p[i, j] <- pairwise_p[j, i] <- 1 - pchisq(pair_test$chisq, 1)
+        if (!is.null(pair_test)) {
+          pairwise_p[i, j] <- pairwise_p[j, i] <- 1 - pchisq(pair_test$chisq, 1)
+        }
       }
     }
   } else {

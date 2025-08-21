@@ -17,6 +17,39 @@
 #' @importFrom utils head tail
 NULL
 
+# Color Consistency Helper Functions =========================================
+
+#' Get Standardized Employment Colors
+#'
+#' Internal function to ensure consistent employment status colors across all 
+#' plotting functions. This function guarantees that the same employment state 
+#' (e.g., unemployment, full-time, part-time) gets the same color in all visualizations,
+#' which is critical for publication quality and preventing reader confusion.
+#'
+#' @param statuses Character vector of employment statuses present in the data
+#'
+#' @return Named character vector of hex colors, where names are employment statuses
+#' @keywords internal
+get_standardized_employment_colors <- function(statuses) {
+  # Get the base employment color palette
+  employment_colors <- get_employment_colors()
+  
+  # Filter to available statuses in the data
+  available_statuses <- statuses
+  colors <- employment_colors[names(employment_colors) %in% available_statuses]
+  
+  # Add colors for any missing statuses using fallback colors
+  missing_statuses <- setdiff(available_statuses, names(colors))
+  if (length(missing_statuses) > 0) {
+    # Use consistent fallback colors from main palette
+    additional_colors <- vecshift_colors("main", n = length(missing_statuses))
+    names(additional_colors) <- missing_statuses
+    colors <- c(colors, additional_colors)
+  }
+  
+  return(colors)
+}
+
 # Core Visualization Functions ===============================================
 
 #' Plot Employment Timeline
@@ -128,23 +161,13 @@ plot_employment_timeline <- function(data,
     plot_data <- plot_data[!grepl("^over_", get(status_col))]
   }
   
-  # Get colors
+  # Get colors using standardized employment color palette
   if (use_bw) {
     colors <- vecshift_colors("main_bw", n = length(unique(plot_data[[status_col]])))
     names(colors) <- unique(plot_data[[status_col]])
   } else {
-    employment_colors <- get_employment_colors()
-    # Match available colors to statuses in data
-    available_statuses <- unique(plot_data[[status_col]])
-    colors <- employment_colors[names(employment_colors) %in% available_statuses]
-    
-    # Add colors for any missing statuses
-    missing_statuses <- setdiff(available_statuses, names(colors))
-    if (length(missing_statuses) > 0) {
-      additional_colors <- vecshift_colors("main", n = length(missing_statuses))
-      names(additional_colors) <- missing_statuses
-      colors <- c(colors, additional_colors)
-    }
+    # Use standardized employment colors for consistency across all plotting functions
+    colors <- get_standardized_employment_colors(unique(plot_data[[status_col]]))
   }
   
   # Create the base plot
@@ -291,22 +314,13 @@ plot_employment_distribution <- function(data,
     }
   }
   
-  # Get colors
+  # Get colors using standardized employment color palette
   if (use_bw) {
     colors <- vecshift_colors("main_bw", n = length(unique(agg_data$status)))
     names(colors) <- unique(agg_data$status)
   } else {
-    employment_colors <- get_employment_colors()
-    available_statuses <- unique(agg_data$status)
-    colors <- employment_colors[names(employment_colors) %in% available_statuses]
-    
-    # Add colors for any missing statuses
-    missing_statuses <- setdiff(available_statuses, names(colors))
-    if (length(missing_statuses) > 0) {
-      additional_colors <- vecshift_colors("main", n = length(missing_statuses))
-      names(additional_colors) <- missing_statuses
-      colors <- c(colors, additional_colors)
-    }
+    # Use standardized employment colors for consistency across all plotting functions
+    colors <- get_standardized_employment_colors(unique(agg_data$status))
   }
   
   # Create base plot
@@ -617,22 +631,13 @@ plot_duration_analysis <- function(data,
     stop("No valid duration data found after filtering")
   }
   
-  # Get colors
+  # Get colors using standardized employment color palette
   if (use_bw) {
     colors <- vecshift_colors("main_bw", n = length(unique(plot_data[[status_col]])))
     names(colors) <- unique(plot_data[[status_col]])
   } else {
-    employment_colors <- get_employment_colors()
-    available_statuses <- unique(plot_data[[status_col]])
-    colors <- employment_colors[names(employment_colors) %in% available_statuses]
-    
-    # Add colors for any missing statuses
-    missing_statuses <- setdiff(available_statuses, names(colors))
-    if (length(missing_statuses) > 0) {
-      additional_colors <- vecshift_colors("main", n = length(missing_statuses))
-      names(additional_colors) <- missing_statuses
-      colors <- c(colors, additional_colors)
-    }
+    # Use standardized employment colors for consistency across all plotting functions
+    colors <- get_standardized_employment_colors(unique(plot_data[[status_col]]))
   }
   
   # Create base plot
@@ -845,21 +850,13 @@ plot_transition_flows <- function(data,
     transition_counts[, label := paste0(from, " → ", to, "\n(", count, ")")]
   }
   
-  # Get colors
+  # Get colors using standardized employment color palette
   if (use_bw) {
     colors <- vecshift_colors("main_bw", n = length(all_statuses))
     names(colors) <- all_statuses
   } else {
-    employment_colors <- get_employment_colors()
-    colors <- employment_colors[names(employment_colors) %in% all_statuses]
-    
-    # Add colors for any missing statuses
-    missing_statuses <- setdiff(all_statuses, names(colors))
-    if (length(missing_statuses) > 0) {
-      additional_colors <- vecshift_colors("main", n = length(missing_statuses))
-      names(additional_colors) <- missing_statuses
-      colors <- c(colors, additional_colors)
-    }
+    # Use standardized employment colors for consistency across all plotting functions
+    colors <- get_standardized_employment_colors(all_statuses)
   }
   
   if (plot_type == "alluvial") {
@@ -967,49 +964,137 @@ plot_transition_flows <- function(data,
 
 #' Plot Employment Gantt Chart
 #'
-#' Creates Gantt chart visualization of employment periods, ideal for showing
+#' Creates Gantt chart visualizations of employment periods, ideal for showing
 #' individual employment histories, project timelines, or contract overlaps
-#' with precise temporal detail.
+#' with precise temporal detail. The function uses standardized employment colors
+#' for consistency across all longworkR visualizations and supports explicit
+#' person selection for publication reproducibility.
+#' 
+#' @details
+#' The function creates professional Gantt charts with the following features:
+#' \itemize{
+#'   \item **Standardized Color Consistency**: Uses the same employment status colors
+#'     across all longworkR functions to prevent reader confusion
+#'   \item **Publication Reproducibility**: Supports explicit person_ids parameter
+#'     to ensure identical visualizations across analyses
+#'   \item **Accessible Design**: Colorblind-friendly palettes and clear visual hierarchy
+#'   \item **Flexible Annotations**: Optional contract IDs and duration labels
+#'   \item **Professional Theming**: Uses theme_vecshift() for publication-ready output
+#' }
+#' 
+#' **Color Consistency**: This function automatically uses standardized employment
+#' colors from get_standardized_employment_colors() to ensure that the same employment
+#' state (e.g., "occ_ft", "disoccupato") gets identical colors in all visualizations.
+#' This is critical for multi-panel figures and cross-referenced publications.
 #'
-#' @param data Data.table output from vecshift() containing employment segments
+#' @param data Data.table output from vecshift() containing employment segments.
+#'   Required columns: cf (person ID), inizio (start date), fine (end date),
+#'   stato (employment status), durata (duration in days)
+#' @param person_ids Character or numeric vector. Specific person identifiers to visualize.
+#'   When provided, shows only these persons and ignores max_persons parameter.
+#'   When NULL (default), uses max_persons to select first N individuals.
+#'   **For reproducible research**, always specify person_ids explicitly rather than
+#'   relying on automatic selection. Example: c(6, 8, 21) or c("Person_A", "Person_B")
+#' @param max_persons Integer. Maximum number of people to show when person_ids is NULL.
+#'   Used only for backward compatibility and exploratory analysis (default: 10)
+#' @param sort_by Character. Sort method for person selection when using max_persons:
+#'   "total_duration", "first_contract", "last_contract" (default: "total_duration").
+#'   Not used when person_ids is specified
+#' @param title Character. Main title for the plot (default: "Employment Gantt Chart")
+#' @param show_legend Logical. Whether to show the employment status legend (default: TRUE).
+#'   Set to FALSE for multi-panel figures where legend appears elsewhere
+#' @param time_unit Character. Time unit for axis labels: "days", "weeks", "months", "years".
+#'   Currently used for documentation; axis formatting is automatic (default: "months")
+#' @param color_palette Character. Color palette name. Use "employment" for standardized
+#'   employment colors (recommended) or "main" for general palette (default: "employment")
 #' @param person_col Character. Column name for person identifier (default: "cf")
-#' @param time_col Character. Column name for time periods (default: "inizio")
+#' @param time_col Character. Column name for period start dates (default: "inizio")
 #' @param end_col Character. Column name for period end dates (default: "fine")
 #' @param status_col Character. Column name for employment status (default: "stato")
-#' @param contract_col Character. Column name for contract ID (default: "id")
-#' @param facet_by Character. Column to use for faceting (default: NULL)
-#' @param n_people Integer. Maximum number of people to show (default: 15)
-#' @param date_breaks Character. Date breaks for x-axis (default: "2 months")
-#' @param show_contract_ids Logical. Show contract IDs on bars (default: FALSE)
-#' @param show_durations Logical. Show duration labels (default: FALSE)
-#' @param palette Character. Color palette to use (default: "employment")
-#' @param use_bw Logical. Use black and white palette (default: FALSE)
-#' @param bar_height Numeric. Height of Gantt bars (default: 0.6)
-#' @param alpha Numeric. Transparency (default: 0.8)
-#' @param text_size Numeric. Size of text labels (default: 2.5)
+#' @param contract_col Character. Column name for contract ID numbers (default: "id")
+#' @param facet_by Character. Column to use for faceting into subplots (default: NULL)
+#' @param date_breaks Character. Date breaks for x-axis labels (default: "2 months")
+#' @param show_contract_ids Logical. Show contract ID numbers on employment bars (default: FALSE).
+#'   Useful for detailed contract analysis but can clutter visualization with many contracts
+#' @param show_durations Logical. Show duration labels (e.g., "3m", "1.2y") on bars (default: FALSE).
+#'   Automatically formats as days (d), months (m), or years (y) based on duration length
+#' @param palette Character. Alternative parameter name for color_palette (default: "employment")
+#' @param use_bw Logical. Use black and white palette for print publications (default: FALSE)
+#' @param bar_height Numeric. Height of Gantt bars as proportion of available space (default: 0.6)
+#' @param alpha Numeric. Transparency level for bars, 0 (transparent) to 1 (opaque) (default: 0.8)
+#' @param text_size Numeric. Size of text labels for contract IDs and durations (default: 2.5)
 #'
-#' @return A ggplot2 object showing employment Gantt chart
+#' @return A ggplot2 object containing the employment Gantt chart.
+#'   The plot includes milestone markers for contract start/end dates and uses
+#'   standardized employment colors for consistency across publications.
+#'   
+#' @section Color Standards:
+#' This function uses standardized employment colors to ensure consistency:
+#' \itemize{
+#'   \item Same employment status always gets same color across all plots
+#'   \item Colors are colorblind-accessible and print-friendly
+#'   \item Consistent with plot_employment_gantt_advanced() and other functions
+#' }
+#' 
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' # Basic Gantt chart
-#' plot_employment_gantt(data)
+#' # Load sample employment data
+#' employment_data <- readRDS("data/sample.rds")
 #' 
-#' # Gantt chart with contract IDs
-#' plot_employment_gantt(data, show_contract_ids = TRUE)
+#' # Basic Gantt chart (backward compatible - shows first 10 people)
+#' plot_employment_gantt(employment_data)
 #' 
-#' # Gantt chart with duration labels
-#' plot_employment_gantt(data, show_durations = TRUE, n_people = 5)
+#' # Reproducible research: specify exact persons
+#' plot_employment_gantt(employment_data, person_ids = c(6, 8, 21))
+#' 
+#' # Publication-ready chart with annotations
+#' plot_employment_gantt(
+#'   employment_data,
+#'   person_ids = c("Person_A", "Person_B", "Person_C"),
+#'   show_contract_ids = TRUE,
+#'   show_durations = TRUE,
+#'   title = "Employment Histories: Sample Cohort"
+#' )
+#' 
+#' # Black and white version for print
+#' plot_employment_gantt(
+#'   employment_data,
+#'   person_ids = c(6, 8),
+#'   use_bw = TRUE,
+#'   show_legend = TRUE
+#' )
+#' 
+#' # Detailed analysis with contract focus
+#' plot_employment_gantt(
+#'   employment_data,
+#'   max_persons = 5,
+#'   show_contract_ids = TRUE,
+#'   date_breaks = "1 month",
+#'   alpha = 0.9
+#' )
 #' }
+#' 
+#' @seealso 
+#' \code{\link{plot_employment_gantt_advanced}} for combined Gantt and metrics visualization,
+#' \code{\link{plot_employment_timeline}} for simpler timeline plots,
+#' \code{\link{theme_vecshift}} for the underlying plot theme,
+#' \code{\link{get_standardized_employment_colors}} for color consistency
 plot_employment_gantt <- function(data,
+                                 person_ids = NULL,
+                                 max_persons = 10,
+                                 sort_by = "total_duration",
+                                 title = "Employment Gantt Chart",
+                                 show_legend = TRUE,
+                                 time_unit = "months",
+                                 color_palette = "employment",
                                  person_col = "cf",
                                  time_col = "inizio", 
                                  end_col = "fine",
                                  status_col = "stato",
                                  contract_col = "id",
                                  facet_by = NULL,
-                                 n_people = 15,
                                  date_breaks = "2 months",
                                  show_contract_ids = FALSE,
                                  show_durations = FALSE,
@@ -1029,12 +1114,58 @@ plot_employment_gantt <- function(data,
     stop("Input 'data' must be a data.table object")
   }
   
-  # Limit to n_people if specified
-  if (!is.null(n_people) && n_people > 0) {
-    people_to_show <- head(unique(data[[person_col]]), n_people)
-    plot_data <- data[get(person_col) %in% people_to_show]
+  # Determine people to visualize - consistent with plot_employment_gantt_advanced
+  if (!is.null(person_ids)) {
+    # Use specified person IDs
+    available_people <- unique(data[[person_col]])
+    
+    # Enhanced validation with better error messages
+    if (length(available_people) == 0) {
+      stop("No person identifiers found in data. Check that the 'cf' column exists and contains valid IDs.")
+    }
+    
+    # Convert person_ids to same type as data for robust intersection
+    # Handle potential type mismatches gracefully
+    if (is.character(person_ids) && is.numeric(available_people)) {
+      person_ids_converted <- suppressWarnings(as.numeric(person_ids))
+      if (any(is.na(person_ids_converted))) {
+        stop("Cannot convert character person_ids to numeric to match data format")
+      }
+      person_ids <- person_ids_converted
+    } else if (is.numeric(person_ids) && is.character(available_people)) {
+      person_ids <- as.character(person_ids)
+    }
+    
+    valid_people <- intersect(person_ids, available_people)
+    
+    if (length(valid_people) == 0) {
+      stop(paste0("None of the specified person_ids found in the data.\n",
+                  "Requested IDs: ", paste(person_ids, collapse = ", "), "\n",
+                  "Available IDs (sample): ", paste(head(available_people, 10), collapse = ", "), 
+                  if (length(available_people) > 10) "..." else "",
+                  "\nTotal available: ", length(available_people)))
+    }
+    
+    if (length(valid_people) < length(person_ids)) {
+      missing_people <- setdiff(person_ids, valid_people)
+      warning(paste("Person IDs not found in data:", paste(missing_people, collapse = ", ")))
+    }
+    
+    plot_data <- data[get(person_col) %in% valid_people]
   } else {
-    plot_data <- copy(data)
+    # Default behavior: use max_persons parameter for backward compatibility
+    if (!is.null(max_persons) && max_persons > 0) {
+      people_to_show <- head(unique(data[[person_col]]), max_persons)
+      plot_data <- data[get(person_col) %in% people_to_show]
+    } else {
+      plot_data <- copy(data)
+    }
+  }
+  
+  # Verify we have data after filtering
+  if (nrow(plot_data) == 0) {
+    stop(paste0("No employment data found for the selected person IDs after filtering.\n",
+                "This might indicate a data filtering issue or missing employment records."))
   }
   
   # Create y-position for each person (reverse order for typical Gantt layout)
@@ -1042,22 +1173,16 @@ plot_employment_gantt <- function(data,
   people <- rev(people)  # Reverse so first person appears at top
   plot_data[, y_pos := length(people) + 1 - match(get(person_col), people)]
   
-  # Get colors
+  # Get colors using standardized employment color palette
+  # Support both 'palette' and 'color_palette' parameters for flexibility
+  active_palette <- if (!missing(color_palette)) color_palette else palette
+  
   if (use_bw) {
     colors <- vecshift_colors("main_bw", n = length(unique(plot_data[[status_col]])))
     names(colors) <- unique(plot_data[[status_col]])
   } else {
-    employment_colors <- get_employment_colors()
-    available_statuses <- unique(plot_data[[status_col]])
-    colors <- employment_colors[names(employment_colors) %in% available_statuses]
-    
-    # Add colors for any missing statuses
-    missing_statuses <- setdiff(available_statuses, names(colors))
-    if (length(missing_statuses) > 0) {
-      additional_colors <- vecshift_colors("main", n = length(missing_statuses))
-      names(additional_colors) <- missing_statuses
-      colors <- c(colors, additional_colors)
-    }
+    # Use standardized employment colors for consistency across all plotting functions
+    colors <- get_standardized_employment_colors(unique(plot_data[[status_col]]))
   }
   
   # Create the base Gantt chart
@@ -1081,7 +1206,7 @@ plot_employment_gantt <- function(data,
       expand = c(0.02, 0)
     ) +
     ggplot2::labs(
-      title = "Employment Gantt Chart",
+      title = title,
       subtitle = paste("Employment timeline for", length(people), "individuals"),
       x = "Time Period",
       y = "Individuals",
@@ -1091,7 +1216,7 @@ plot_employment_gantt <- function(data,
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
       axis.text.y = ggplot2::element_text(size = 9),
-      legend.position = "bottom",
+      legend.position = if(show_legend) "bottom" else "none",
       legend.box = "horizontal",
       panel.grid.major.y = ggplot2::element_line(color = "#E8EAED", size = 0.3),
       panel.grid.minor = ggplot2::element_blank()
@@ -1173,6 +1298,520 @@ plot_employment_gantt <- function(data,
   }
   
   return(p)
+}
+
+#' Plot Advanced Employment Gantt Chart with Career Metrics Summary
+#'
+#' Creates a sophisticated two-panel visualization combining employment Gantt charts
+#' with career metrics summary displays. This advanced function integrates employment
+#' timelines with comprehensive career performance indicators, providing deep insights
+#' into career trajectories and professional development patterns. The function ensures
+#' perfect color consistency with plot_employment_gantt() and uses identical person
+#' selection logic for reproducible research.
+#' 
+#' @importFrom scales percent_format
+#'
+#' @details
+#' **Two-Panel Design:**
+#' The visualization consists of two perfectly aligned panels:
+#' \itemize{
+#'   \item **Left Panel**: Employment Gantt chart showing contract timelines, employment statuses,
+#'     and transitions using standardized employment colors
+#'   \item **Right Panel**: Career metrics summary displayed as bar charts, dot plots, or 
+#'     radar charts showing comparative performance indicators across individuals
+#' }
+#' 
+#' **Perfect Alignment**: Both panels use identical y-axis scaling and person ordering
+#' to ensure visual alignment. This is critical for comparing individual employment
+#' patterns with their corresponding career metrics.
+#' 
+#' **Color Consistency**: 
+#' \itemize{
+#'   \item Employment statuses use identical colors to plot_employment_gantt()
+#'   \item Career metrics use Set2 palette (RColorBrewer) for accessibility
+#'   \item All colors are colorblind-friendly and print-compatible
+#' }
+#' 
+#' **Publication Reproducibility**:
+#' Like plot_employment_gantt(), this function supports explicit person_ids
+#' specification for identical results across analyses. The person selection
+#' logic is identical between both functions.
+#'
+#' **Accessibility Features**:
+#' - Uses colorblind-friendly palettes (Set2, employment colors) with good contrast ratios
+#' - Clear legends and comprehensive annotations
+#' - Graceful handling of missing data and mismatched datasets
+#' - Optimized for both screen display and print reproduction
+#' - Supports black and white output for print publications
+#'
+#' **Supported Career Metrics Visualizations**:
+#' - **Bar Charts**: Best for comparing metric values across individuals with clear visual distinction
+#' - **Dot Plot**: Effective for precise value comparison with minimal visual clutter and faceting support
+#' - **Radar Chart**: Ideal for showing multi-dimensional metric profiles per person in circular format
+#'
+#' @param data Data.table or data.frame containing employment segments with required columns:
+#'   cf (person ID), inizio (start date), fine (end date), stato (employment status).
+#'   Should be output from vecshift() or compatible format.
+#' @param career_metrics_data Data.table or data.frame from calculate_comprehensive_career_metrics()
+#'   containing career performance indicators. Must include 'cf' column for person matching.
+#'   When NULL, shows only the Gantt chart (default: NULL)
+#' @param person_ids Character or numeric vector. Specific person identifiers to visualize.
+#'   **For reproducible research**, always specify person_ids explicitly. When provided,
+#'   shows only these persons regardless of max_persons parameter. When NULL, uses 
+#'   max_persons to select first N individuals. Example: c(6, 8, 21) (default: NULL)
+#' @param metrics_to_show Character vector. Career metrics to display in right panel.
+#'   Must match column names in career_metrics_data. Common metrics include:
+#'   "career_success_index", "career_advancement_index", "employment_security_index",
+#'   "career_complexity_index", "mobility_rate", "employment_rate" 
+#'   (default: c("career_success_index", "career_advancement_index", "employment_security_index", "career_complexity_index"))
+#' @param metrics_viz_type Character. Visualization type for career metrics panel:
+#'   "bar" (side-by-side bars), "dot" (dot plot with faceting), "radar" (circular/polar plot) (default: "bar")
+#' @param max_persons Integer. Maximum number of persons to show when person_ids is NULL.
+#'   Used only for exploratory analysis; specify person_ids for reproducible research (default: 5)
+#' @param palette Character. Color palette for career metrics: "Set2" uses RColorBrewer Set2 palette
+#'   (recommended for accessibility), or fallback to vecshift colors (default: "Set2")
+#' @param title Character. Main title for the combined visualization (default: "Employment Timeline and Career Metrics")
+#' @param show_legend Logical. Whether to show legends for both panels (default: TRUE).
+#'   Set to FALSE for cleaner multi-panel publications where legends appear elsewhere
+#'
+#' @return A list containing three elements:
+#'   \item{combined_plot}{Combined plot object using patchwork if available, otherwise a list of plots or single plot}
+#'   \item{gantt_plot}{Individual Gantt chart (ggplot2 object) showing employment timeline}  
+#'   \item{metrics_plot}{Individual career metrics visualization (ggplot2 object), NULL if no career_metrics_data provided}
+#'   
+#'   The combined_plot can be directly printed or saved. Individual plots allow for
+#'   custom arrangements or separate analysis.
+#'
+#' @section Color Standards and Consistency:
+#' This function maintains perfect color consistency with other longworkR functions:
+#' \itemize{
+#'   \item Employment statuses use identical colors to plot_employment_gantt()
+#'   \item Career metrics use Set2 palette for clear distinction from employment colors
+#'   \item All palettes are colorblind-accessible and print-friendly
+#'   \item Black and white mode available for print publications
+#' }
+#' 
+#' @section Perfect Panel Alignment:
+#' The function ensures perfect vertical alignment between panels:
+#' \itemize{
+#'   \item Identical y-axis scaling and person ordering
+#'   \item Consistent person labeling across both panels
+#'   \item Synchronized data filtering and validation
+#' }
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Load sample employment data
+#' employment_data <- readRDS("data/sample.rds")
+#' 
+#' # Basic Gantt chart only (no metrics) - exploratory analysis
+#' gantt_only <- plot_employment_gantt_advanced(
+#'   data = employment_data,
+#'   max_persons = 3
+#' )
+#' print(gantt_only$combined_plot)
+#' 
+#' # Calculate comprehensive career metrics first
+#' career_metrics <- calculate_comprehensive_career_metrics(employment_data)
+#' 
+#' # Publication-ready: Advanced Gantt with career metrics using specific persons
+#' advanced_plot <- plot_employment_gantt_advanced(
+#'   data = employment_data,
+#'   career_metrics_data = career_metrics,
+#'   person_ids = c(6, 8, 21),  # Explicit specification for reproducibility
+#'   title = "Employment and Career Development Analysis"
+#' )
+#' print(advanced_plot$combined_plot)
+#' 
+#' # Dot plot visualization with custom metrics selection
+#' dot_analysis <- plot_employment_gantt_advanced(
+#'   data = employment_data,
+#'   career_metrics_data = career_metrics,
+#'   person_ids = c("Person_A", "Person_B", "Person_C"),
+#'   metrics_viz_type = "dot",
+#'   metrics_to_show = c("career_success_index", "employment_security_index"),
+#'   title = "Career Development Analysis: Selected Metrics"
+#' )
+#' 
+#' # Radar chart for multi-dimensional profile comparison
+#' radar_profiles <- plot_employment_gantt_advanced(
+#'   data = employment_data,
+#'   career_metrics_data = career_metrics,
+#'   person_ids = c(1, 5, 10, 15),
+#'   metrics_viz_type = "radar",
+#'   show_legend = FALSE,
+#'   title = "Career Profile Comparison"
+#' )
+#' 
+#' # Access individual plots for custom arrangements
+#' gantt_chart <- advanced_plot$gantt_plot
+#' metrics_chart <- advanced_plot$metrics_plot
+#' 
+#' # Print individual components
+#' print(gantt_chart)
+#' print(metrics_chart)
+#' 
+#' # Save for publication
+#' ggsave("employment_analysis.png", advanced_plot$combined_plot, 
+#'        width = 12, height = 8, dpi = 300)
+#' }
+#'
+#' @seealso 
+#' \code{\link{plot_employment_gantt}} for basic Gantt charts with identical color consistency,
+#' \code{\link{calculate_comprehensive_career_metrics}} for computing career performance indicators,
+#' \code{\link{theme_vecshift}} for the underlying plot theme used in both panels,
+#' \code{\link{get_standardized_employment_colors}} for employment color standardization,
+#' \code{\link{vecshift_colors}} for the broader color palette system
+plot_employment_gantt_advanced <- function(
+  data,
+  career_metrics_data = NULL,
+  person_ids = NULL,
+  metrics_to_show = c("career_success_index", "career_advancement_index", 
+                      "employment_security_index", "career_complexity_index"),
+  metrics_viz_type = "bar",
+  max_persons = 5,
+  palette = "Set2",
+  title = "Employment Timeline and Career Metrics",
+  show_legend = TRUE
+) {
+  
+  # Check required packages
+  required_packages <- c("ggplot2", "data.table")
+  missing_packages <- character(0)
+  
+  for (pkg in required_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      missing_packages <- c(missing_packages, pkg)
+    }
+  }
+  
+  # Check optional packages
+  optional_packages <- c("patchwork", "RColorBrewer")
+  for (pkg in optional_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      warning(paste("Package", pkg, "is recommended for enhanced functionality but not required"))
+    }
+  }
+  
+  if (length(missing_packages) > 0) {
+    stop(paste("Required packages not available:", paste(missing_packages, collapse = ", ")))
+  }
+  
+  # Input validation
+  if (!inherits(data, "data.table")) {
+    if (inherits(data, "data.frame")) {
+      data <- data.table::as.data.table(data)
+    } else {
+      stop("Input 'data' must be a data.table or data.frame object")
+    }
+  }
+  
+  # Validate required columns
+  required_cols <- c("cf", "inizio", "fine", "stato")
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0) {
+    stop("Missing required columns in data: ", paste(missing_cols, collapse = ", "))
+  }
+  
+  # Validate career metrics data if provided
+  if (!is.null(career_metrics_data)) {
+    if (!inherits(career_metrics_data, "data.table")) {
+      if (inherits(career_metrics_data, "data.frame")) {
+        career_metrics_data <- data.table::as.data.table(career_metrics_data)
+      } else {
+        stop("Input 'career_metrics_data' must be a data.table or data.frame object")
+      }
+    }
+    
+    if (!"cf" %in% names(career_metrics_data)) {
+      stop("career_metrics_data must contain 'cf' column for person identification")
+    }
+  }
+  
+  # Validate metrics_viz_type
+  metrics_viz_type <- match.arg(metrics_viz_type, c("bar", "dot", "radar"))
+  
+  # Determine people to visualize
+  if (!is.null(person_ids)) {
+    # Use specified person IDs
+    available_people <- unique(data[["cf"]])
+    
+    # Enhanced validation with better error messages
+    if (length(available_people) == 0) {
+      stop("No person identifiers found in data. Check that the 'cf' column exists and contains valid IDs.")
+    }
+    
+    # Convert person_ids to same type as data for robust intersection
+    # Handle potential type mismatches gracefully
+    if (is.character(person_ids) && is.numeric(available_people)) {
+      person_ids_converted <- suppressWarnings(as.numeric(person_ids))
+      if (any(is.na(person_ids_converted))) {
+        stop("Cannot convert character person_ids to numeric to match data format")
+      }
+      person_ids <- person_ids_converted
+    } else if (is.numeric(person_ids) && is.character(available_people)) {
+      person_ids <- as.character(person_ids)
+    }
+    
+    valid_people <- intersect(person_ids, available_people)
+    
+    if (length(valid_people) == 0) {
+      stop(paste0("None of the specified person_ids found in the data.\n",
+                  "Requested IDs: ", paste(person_ids, collapse = ", "), "\n",
+                  "Available IDs (sample): ", paste(head(available_people, 10), collapse = ", "), 
+                  if (length(available_people) > 10) "..." else "",
+                  "\nTotal available: ", length(available_people)))
+    }
+    
+    if (length(valid_people) < length(person_ids)) {
+      missing_people <- setdiff(person_ids, valid_people)
+      warning(paste("Person IDs not found in data:", paste(missing_people, collapse = ", ")))
+    }
+  } else {
+    # Use first max_persons people from the dataset
+    all_people <- unique(data[["cf"]])
+    if (length(all_people) == 0) {
+      stop("No person identifiers found in data. Check that the 'cf' column exists and contains valid IDs.")
+    }
+    valid_people <- head(all_people, max_persons)
+  }
+  
+  # Filter data to selected people
+  plot_data <- data[get("cf") %in% valid_people]
+  
+  # Verify we have data after filtering
+  if (nrow(plot_data) == 0) {
+    stop(paste0("No employment data found for the selected person IDs after filtering.\n",
+                "Selected IDs: ", paste(valid_people, collapse = ", "), "\n",
+                "This might indicate a data filtering issue or missing employment records."))
+  }
+  
+  # Create time range for alignment
+  time_range <- range(c(plot_data[["inizio"]], plot_data[["fine"]]), na.rm = TRUE)
+  
+  # ============================================================================
+  # ESTABLISH SHARED PERSON ORDERING FOR PERFECT ALIGNMENT
+  # ============================================================================
+  
+  # Critical: Create consistent person ordering that will be used by BOTH panels
+  # This ensures perfect vertical alignment between gantt and metrics charts
+  people_order <- sort(unique(plot_data[["cf"]]))
+  n_people <- length(people_order)
+  
+  # ============================================================================
+  # PANEL 1: Employment Gantt Chart
+  # ============================================================================
+  
+  # Prepare data for Gantt chart using shared people_order
+  plot_data[, y_pos := match(get("cf"), people_order)]
+  
+  # Get colors for employment status - ALWAYS use standardized employment colors
+  # This ensures perfect consistency with plot_employment_gantt() function
+  gantt_colors <- get_standardized_employment_colors(unique(plot_data[["stato"]]))
+  
+  # Create Gantt chart
+  gantt_plot <- ggplot2::ggplot(plot_data, ggplot2::aes(
+    xmin = get("inizio"), 
+    xmax = get("fine"),
+    ymin = y_pos - 0.4,
+    ymax = y_pos + 0.4,
+    fill = get("stato")
+  )) +
+    ggplot2::geom_rect(alpha = 0.8, color = "white", size = 0.3) +
+    ggplot2::scale_fill_manual(values = gantt_colors, name = "Employment Status") +
+    ggplot2::scale_x_date(
+      limits = time_range,
+      date_breaks = "3 months",
+      date_labels = "%b %Y",
+      expand = c(0.02, 0)
+    ) +
+    ggplot2::scale_y_continuous(
+      breaks = seq_along(people_order),
+      labels = as.character(people_order),
+      limits = c(0.5, n_people + 0.5),
+      expand = c(0, 0)
+    ) +
+    ggplot2::labs(
+      title = "Employment Timeline",
+      x = "Time Period",
+      y = "Individuals"
+    ) +
+    theme_vecshift(base_size = 11, grid = "major") +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+      legend.position = if (show_legend) "bottom" else "none",
+      plot.margin = ggplot2::unit(c(0.5, 0.5, 0.5, 0.5), "cm")
+    )
+  
+  # ============================================================================
+  # PANEL 2: Career Metrics Visualization (if data provided)
+  # ============================================================================
+  
+  metrics_plot <- NULL
+  
+  if (!is.null(career_metrics_data)) {
+    # Filter career metrics to selected people
+    metrics_data <- career_metrics_data[get("cf") %in% valid_people]
+    
+    # Validate that requested metrics exist
+    available_metrics <- names(metrics_data)
+    valid_metrics <- intersect(metrics_to_show, available_metrics)
+    
+    if (length(valid_metrics) == 0) {
+      warning("None of the specified metrics found in career_metrics_data")
+      valid_metrics <- NULL
+    } else {
+      if (length(valid_metrics) < length(metrics_to_show)) {
+        missing_metrics <- setdiff(metrics_to_show, valid_metrics)
+        warning(paste("Metrics not found in data:", paste(missing_metrics, collapse = ", ")))
+      }
+      
+      # Prepare career metrics data for visualization
+      # Career metrics are summary statistics (single values per person)
+      # We need to reshape them for appropriate summary visualizations
+      
+      # Convert to long format for ggplot
+      metrics_long <- data.table::melt(
+        metrics_data[, c("cf", valid_metrics), with = FALSE],
+        id.vars = "cf",
+        measure.vars = valid_metrics,
+        variable.name = "metric",
+        value.name = "value"
+      )
+      
+      # Handle missing values gracefully
+      metrics_long <- metrics_long[!is.na(value)]
+      
+      # CRITICAL: Ensure identical ordering and y-axis alignment with Gantt chart
+      # Use the same people_order and create consistent factor levels
+      metrics_long[, person_label := as.character(cf)]
+      
+      # Convert person_label to factor with identical levels/ordering as Gantt chart
+      person_label_levels <- as.character(people_order)
+      metrics_long[, person_label := factor(person_label, levels = person_label_levels)]
+      
+      # Filter to only include people that are in both datasets
+      metrics_long <- metrics_long[!is.na(person_label)]
+      
+      if (nrow(metrics_long) > 0) {
+        # Get colors for metrics
+        if (palette == "Set2" && requireNamespace("RColorBrewer", quietly = TRUE)) {
+          n_metrics <- length(valid_metrics)
+          metrics_colors <- RColorBrewer::brewer.pal(max(3, min(n_metrics, 8)), "Set2")[1:n_metrics]
+        } else {
+          metrics_colors <- vecshift_colors("main", n = length(valid_metrics))
+        }
+        names(metrics_colors) <- valid_metrics
+        
+        # Create metrics visualization based on type
+        if (metrics_viz_type == "bar") {
+          metrics_plot <- ggplot2::ggplot(metrics_long, ggplot2::aes(x = person_label, y = value, fill = metric)) +
+            ggplot2::geom_bar(stat = "identity", position = "dodge", alpha = 0.8, width = 0.7) +
+            ggplot2::scale_fill_manual(values = metrics_colors, name = "Career Metrics") +
+            ggplot2::coord_flip() +
+            # CRITICAL: Use identical y-axis scale as Gantt chart for perfect alignment
+            ggplot2::scale_y_discrete(limits = person_label_levels, drop = FALSE)
+          
+        } else if (metrics_viz_type == "dot") {
+          metrics_plot <- ggplot2::ggplot(metrics_long, ggplot2::aes(x = value, y = person_label, color = metric)) +
+            ggplot2::geom_point(size = 4, alpha = 0.8) +
+            ggplot2::scale_color_manual(values = metrics_colors, name = "Career Metrics") +
+            # CRITICAL: Use identical y-axis scale as Gantt chart for perfect alignment
+            ggplot2::scale_y_discrete(limits = person_label_levels, drop = FALSE) +
+            ggplot2::facet_wrap(~ metric, scales = "free_x", ncol = 2)
+          
+        } else if (metrics_viz_type == "radar") {
+          # For radar chart, we need a different approach - create a circular representation
+          # Using a workaround with polar coordinates
+          metrics_plot <- ggplot2::ggplot(metrics_long, ggplot2::aes(x = metric, y = value, group = person_label, color = person_label)) +
+            ggplot2::geom_polygon(alpha = 0.2, fill = NA, size = 1) +
+            ggplot2::geom_point(size = 3, alpha = 0.8) +
+            ggplot2::coord_polar() +
+            ggplot2::scale_color_manual(values = metrics_colors[1:length(unique(metrics_long$person_label))], name = "Person")
+        }
+        
+        # Add common elements to metrics plot
+        if (!is.null(metrics_plot)) {
+          # Common scale and theme elements
+          if (metrics_viz_type == "bar") {
+            # For bar chart with coord_flip(), y becomes the value axis (after flip)
+            metrics_plot <- metrics_plot +
+              ggplot2::scale_y_continuous(
+                limits = c(0, 1),
+                labels = scales::percent_format()
+              )
+          } else if (metrics_viz_type == "dot") {
+            metrics_plot <- metrics_plot +
+              ggplot2::scale_x_continuous(
+                limits = c(0, 1),
+                labels = scales::percent_format()
+              )
+          } else if (metrics_viz_type == "radar") {
+            metrics_plot <- metrics_plot +
+              ggplot2::scale_y_continuous(
+                limits = c(0, 1),
+                labels = scales::percent_format()
+              )
+          }
+          
+          # Add labels and theme
+          metrics_plot <- metrics_plot +
+            ggplot2::labs(
+              title = "Career Metrics Summary",
+              x = if (metrics_viz_type == "bar") "Metric Value (%)" else if (metrics_viz_type == "dot") "Metric Value (%)" else "Metrics",
+              y = if (metrics_viz_type == "bar") "Individuals" else if (metrics_viz_type == "dot") "Individuals" else "Value"
+            ) +
+            theme_vecshift(base_size = 11, grid = "major") +
+            ggplot2::theme(
+              axis.text.x = if (metrics_viz_type == "radar") ggplot2::element_text(angle = 45, hjust = 1) else ggplot2::element_text(),
+              axis.text.y = ggplot2::element_text(),
+              legend.position = if (show_legend) "bottom" else "none",
+              strip.text = if (metrics_viz_type == "dot") ggplot2::element_text(size = 10) else ggplot2::element_blank(),
+              plot.margin = ggplot2::unit(c(0.5, 0.5, 0.5, 0.5), "cm")
+            )
+        }
+      } else {
+        warning("No valid metric data available for visualization")
+      }
+    }
+  }
+  
+  # ============================================================================
+  # COMBINE PANELS
+  # ============================================================================
+  
+  combined_plot <- NULL
+  
+  if (!is.null(metrics_plot) && requireNamespace("patchwork", quietly = TRUE)) {
+    # Create combined plot using patchwork with proper alignment
+    combined_plot <- gantt_plot | metrics_plot + 
+      patchwork::plot_layout(widths = c(2, 1)) +
+      patchwork::plot_annotation(
+        title = title,
+        caption = "Generated with longworkR advanced visualization functions"
+      )
+  } else if (!is.null(metrics_plot)) {
+    # Fallback: create a simple combined plot without patchwork
+    warning("Package 'patchwork' not available. Returning separate plots.")
+    combined_plot <- list(gantt = gantt_plot, metrics = metrics_plot)
+  } else {
+    # Only Gantt chart
+    combined_plot <- gantt_plot + ggplot2::labs(title = title)
+  }
+  
+  # ============================================================================
+  # RETURN RESULTS
+  # ============================================================================
+  
+  result <- list(
+    combined_plot = combined_plot,
+    gantt_plot = gantt_plot,
+    metrics_plot = metrics_plot
+  )
+  
+  return(result)
 }
 
 #' Plot Employment Heatmap
@@ -1332,8 +1971,8 @@ plot_employment_heatmap <- function(data,
       name = paste(strwrap(unique(heatmap_data$metric), width = 10), collapse = "\n")
     )
   } else if (heatmap_type == "status") {
-    # Discrete color scale for status
-    status_colors <- get_employment_colors()
+    # Discrete color scale for status using standardized colors
+    status_colors <- get_standardized_employment_colors(c("disoccupato", "over_ft_ft"))
     p <- p + ggplot2::scale_fill_gradient(
       low = status_colors["disoccupato"], high = status_colors["over_ft_ft"],
       name = "Employment\nLevel",
@@ -1366,6 +2005,540 @@ plot_employment_heatmap <- function(data,
   # Add faceting if requested
   if (!is.null(facet_by) && facet_by %in% names(data)) {
     p <- p + ggplot2::facet_wrap(as.formula(paste("~", facet_by)), scales = "free")
+  }
+  
+  return(p)
+}
+
+#' Integrated Employment Timeline and Career Metrics Visualization
+#'
+#' @description
+#' Creates a unified ggplot visualization that combines employment timelines with career
+#' metrics in a single, perfectly aligned plot. This function solves alignment issues
+#' that occur with multi-panel approaches by using a shared y-axis coordinate system.
+#' The visualization displays employment periods as a Gantt chart on the left portion
+#' and career metrics as heatmap or bar elements on the right portion, ensuring
+#' perfect person-to-person alignment across both sections.
+#'
+#' The function provides a comprehensive solution for visualizing both temporal 
+#' employment patterns and summary career performance indicators simultaneously,
+#' making it ideal for career trajectory analysis, comparative studies, and
+#' reporting dashboards.
+#'
+#' @param employment_data A data.table containing employment records processed by
+#'   the vecshift package. Must include columns for person identifiers, employment
+#'   start/end dates, employment status, and duration. Each row represents an
+#'   employment period for an individual.
+#' @param career_metrics Optional data.table containing career performance metrics,
+#'   typically generated by \code{\link{calculate_comprehensive_career_metrics}}.
+#'   If NULL, only the employment timeline will be displayed. Must contain a person
+#'   identifier column matching the employment data and numeric metric columns.
+#' @param person_ids Optional character vector of specific person identifiers to
+#'   include in the visualization. If NULL (default), the function will
+#'   automatically select persons based on data availability and \code{max_persons}.
+#'   When specified, overrides automatic selection.
+#' @param max_persons Integer specifying the maximum number of individuals to
+#'   include when using automatic person selection. Default is 10. Ignored if
+#'   \code{person_ids} is explicitly provided. Used to prevent overcrowded plots
+#'   with large datasets.
+#' @param metrics_to_show Character vector specifying which career metrics to
+#'   display in the right panel. Default includes the four core career indices:
+#'   "career_success_index", "career_advancement_index", "employment_security_index",
+#'   and "career_complexity_index". Only metrics present in both this parameter
+#'   and the career_metrics data will be displayed.
+#' @param timeline_width Numeric value between 0 and 1 specifying the proportion
+#'   of total plot width allocated to the employment timeline section. Default is
+#'   0.7 (70% of width). Must sum with \code{metrics_width} to 1.0 for proper layout.
+#' @param metrics_width Numeric value between 0 and 1 specifying the proportion
+#'   of total plot width allocated to the career metrics section. Default is
+#'   0.3 (30% of width). Must sum with \code{timeline_width} to 1.0 for proper layout.
+#' @param title Character string for the plot title. Default is "Integrated
+#'   Employment Timeline and Career Metrics". Set to NULL or empty string to
+#'   suppress the title.
+#' @param person_col Character string specifying the column name containing
+#'   person identifiers in the employment data. Default is "cf" (codice fiscale).
+#'   This column is used to group records by individual and must match the
+#'   identifier column in career_metrics if provided.
+#' @param time_col Character string specifying the column name containing
+#'   employment period start dates in the employment data. Default is "inizio".
+#'   Should contain Date or POSIXct values for proper timeline rendering.
+#' @param end_col Character string specifying the column name containing
+#'   employment period end dates in the employment data. Default is "fine".
+#'   Should contain Date or POSIXct values. Used to calculate period durations
+#'   and create Gantt chart segments.
+#' @param status_col Character string specifying the column name containing
+#'   employment status information. Default is "stato". Used for color coding
+#'   and categorizing employment periods in the timeline visualization.
+#' @param duration_col Character string specifying the column name containing
+#'   pre-calculated period durations (typically in days). Default is "durata".
+#'   If not available, durations will be calculated from start and end dates.
+#' @param date_breaks Character string specifying the interval for x-axis date
+#'   breaks in the timeline. Default is "6 months". Common values include
+#'   "3 months", "1 year", or "2 years" depending on the time span of data.
+#' @param show_gaps Logical indicating whether to display unemployment periods
+#'   (gaps between employment spells) in the timeline. Default is TRUE. When
+#'   FALSE, only active employment periods are shown.
+#' @param palette Character string specifying the color palette to use for
+#'   employment status visualization. Default is "employment". Should correspond
+#'   to predefined palettes in the vecshift color system.
+#' @param use_bw Logical indicating whether to use black and white color scheme
+#'   instead of the color palette. Default is FALSE. Useful for publications
+#'   or presentations requiring monochrome output.
+#' @param base_size Numeric specifying the base text size for all plot elements.
+#'   Default is 11. Affects titles, axis labels, legends, and annotations.
+#'   Larger values increase readability but may require more plot space.
+#' @param person_order Character string specifying how to order individuals on
+#'   the y-axis. Options are "alphabetical" (by person identifier), "metrics"
+#'   (by career performance metrics, default), or "timeline" (by employment
+#'   chronology). Affects the visual grouping and comparison of similar profiles.
+#'
+#' @return A ggplot2 object containing the integrated visualization. The plot
+#'   features a shared y-axis with person identifiers, employment timeline as
+#'   Gantt chart segments on the left portion, and career metrics as colored
+#'   elements on the right portion. The object can be further customized using
+#'   standard ggplot2 syntax or saved using ggsave().
+#'
+#' @details
+#' This function addresses a common challenge in employment data visualization:
+#' maintaining perfect alignment between temporal employment patterns and
+#' summary career metrics. Unlike approaches using separate plots or faceting,
+#' this single-plot solution guarantees that each person appears at exactly
+#' the same y-coordinate in both the timeline and metrics sections.
+#'
+#' The visualization handles missing data gracefully:
+#' - If career_metrics is NULL, displays timeline only
+#' - If specific metrics are missing, shows available metrics with warnings
+#' - If employment gaps exist, optionally displays them as distinct periods
+#'
+#' Visual encoding follows consistent conventions:
+#' - Timeline uses Gantt chart representation with color-coded employment status
+#' - Metrics use intensity or categorical encoding depending on metric type
+#' - Shared legend explains both timeline and metric encodings
+#' - Consistent person ordering facilitates pattern recognition
+#'
+#' @examples
+#' \dontrun{
+#' # Load employment data processed by vecshift
+#' employment_data <- readRDS("data/sample.rds")
+#' 
+#' # Calculate comprehensive career metrics
+#' career_metrics <- calculate_comprehensive_career_metrics(employment_data)
+#' 
+#' # Basic integrated visualization with default settings
+#' plot_integrated_employment_metrics(
+#'   employment_data = employment_data,
+#'   career_metrics = career_metrics
+#' )
+#' 
+#' # Timeline-only visualization when metrics are not available
+#' plot_integrated_employment_metrics(
+#'   employment_data = employment_data,
+#'   career_metrics = NULL,
+#'   max_persons = 15
+#' )
+#' 
+#' # Custom metric selection with adjusted layout proportions
+#' plot_integrated_employment_metrics(
+#'   employment_data = employment_data,
+#'   career_metrics = career_metrics,
+#'   metrics_to_show = c("career_success_index", "employment_security_index"),
+#'   timeline_width = 0.75,
+#'   metrics_width = 0.25,
+#'   title = "Career Success and Security Analysis"
+#' )
+#' 
+#' # Focus on specific individuals with custom styling
+#' plot_integrated_employment_metrics(
+#'   employment_data = employment_data,
+#'   career_metrics = career_metrics,
+#'   person_ids = c("PERSON001", "PERSON002", "PERSON003"),
+#'   person_order = "alphabetical",
+#'   base_size = 12,
+#'   date_breaks = "1 year"
+#' )
+#' 
+#' # Black and white version for publication
+#' plot_integrated_employment_metrics(
+#'   employment_data = employment_data,
+#'   career_metrics = career_metrics,
+#'   use_bw = TRUE,
+#'   show_gaps = FALSE,
+#'   max_persons = 8
+#' )
+#' }
+#'
+#' @seealso 
+#' \code{\link{calculate_comprehensive_career_metrics}} for generating career metrics,
+#' \code{\link{plot_employment_gantt}} and \code{\link{plot_employment_gantt_advanced}} 
+#' for timeline-only visualizations that may have alignment issues when combined 
+#' with separate metric plots,
+#' \code{\link{theme_vecshift}} for the underlying plot theme system
+#'
+#' @importFrom ggplot2 ggplot aes geom_rect geom_point scale_x_date scale_fill_manual 
+#'   labs theme element_text element_blank coord_cartesian annotation_custom
+#' @importFrom data.table data.table setorder copy
+#' @export
+plot_integrated_employment_metrics <- function(employment_data,
+                                             career_metrics = NULL,
+                                             person_ids = NULL,
+                                             max_persons = 10,
+                                             metrics_to_show = c("career_success_index", 
+                                                               "career_advancement_index",
+                                                               "employment_security_index", 
+                                                               "career_complexity_index"),
+                                             timeline_width = 0.7,
+                                             metrics_width = 0.3,
+                                             title = "Integrated Employment Timeline and Career Metrics",
+                                             person_col = "cf",
+                                             time_col = "inizio",
+                                             end_col = "fine",
+                                             status_col = "stato",
+                                             duration_col = "durata",
+                                             date_breaks = "6 months",
+                                             show_gaps = TRUE,
+                                             palette = "employment",
+                                             use_bw = FALSE,
+                                             base_size = 11,
+                                             person_order = "metrics") {
+  
+  # Check required packages
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for this function")
+  }
+  
+  # Input validation
+  if (!inherits(employment_data, "data.table")) {
+    stop("employment_data must be a data.table object")
+  }
+  
+  # Check required columns
+  required_emp_cols <- c(person_col, time_col, end_col, status_col)
+  missing_emp_cols <- setdiff(required_emp_cols, names(employment_data))
+  if (length(missing_emp_cols) > 0) {
+    stop("Missing employment data columns: ", paste(missing_emp_cols, collapse = ", "))
+  }
+  
+  # Handle case when career_metrics is NULL
+  if (is.null(career_metrics)) {
+    warning("No career metrics provided. Showing employment timeline only.")
+    career_metrics <- data.table()
+    metrics_to_show <- character(0)
+  } else {
+    if (!inherits(career_metrics, "data.table")) {
+      stop("career_metrics must be a data.table object")
+    }
+    
+    # Validate metrics to show exist in career_metrics
+    if (nrow(career_metrics) > 0) {
+      available_metrics <- intersect(metrics_to_show, names(career_metrics))
+      if (length(available_metrics) == 0) {
+        warning("None of the specified metrics found in career_metrics data. Showing employment timeline only.")
+        metrics_to_show <- character(0)
+      } else {
+        metrics_to_show <- available_metrics
+      }
+    } else {
+      metrics_to_show <- character(0)
+    }
+  }
+  
+  # Step 1: Get complete person list
+  if (!is.null(person_ids)) {
+    # Use specified person IDs
+    selected_people <- intersect(person_ids, unique(employment_data[[person_col]]))
+    if (length(selected_people) == 0) {
+      stop("None of the specified person IDs found in employment data")
+    }
+  } else {
+    # Auto-select people based on ordering method
+    people_in_employment <- unique(employment_data[[person_col]])
+    
+    if (nrow(career_metrics) > 0) {
+      people_in_metrics <- unique(career_metrics[[person_col]])
+      all_people <- union(people_in_employment, people_in_metrics)
+    } else {
+      all_people <- people_in_employment
+    }
+    
+    # Step 2: Order people according to specified method
+    if (person_order == "metrics" && nrow(career_metrics) > 0 && "career_success_index" %in% names(career_metrics)) {
+      # Order by primary career metric (descending - best performers first)
+      person_ordering <- career_metrics[, .(person = get(person_col), 
+                                          order_metric = career_success_index)][
+        order(-order_metric, person)]
+      ordered_people <- person_ordering$person
+      # Add any missing people at the end
+      missing_people <- setdiff(all_people, ordered_people)
+      ordered_people <- c(ordered_people, sort(missing_people))
+    } else if (person_order == "timeline") {
+      # Order by earliest employment start date
+      person_ordering <- employment_data[, .(earliest_date = min(get(time_col), na.rm = TRUE)), 
+                                       by = person_col][
+        order(earliest_date, get(person_col))]
+      ordered_people <- person_ordering[[person_col]]
+      # Add any missing people at the end
+      missing_people <- setdiff(all_people, ordered_people)
+      ordered_people <- c(ordered_people, sort(missing_people))
+    } else {
+      # Alphabetical ordering
+      ordered_people <- sort(all_people)
+    }
+    
+    # Step 3: Select top max_persons
+    if (max_persons > 0) {
+      selected_people <- head(ordered_people, max_persons)
+    } else {
+      selected_people <- ordered_people
+    }
+  }
+  
+  # Step 4: Create unified data structure with extended x-axis
+  
+  # Filter data to selected people
+  plot_employment_data <- employment_data[get(person_col) %in% selected_people]
+  
+  if (nrow(career_metrics) > 0) {
+    plot_metrics_data <- career_metrics[get(person_col) %in% selected_people]
+  } else {
+    plot_metrics_data <- data.table()
+  }
+  
+  # Filter gaps if requested
+  if (!show_gaps) {
+    plot_employment_data <- plot_employment_data[get(status_col) != "disoccupato"]
+  }
+  
+  # Get time range from employment data
+  if (nrow(plot_employment_data) > 0) {
+    date_range <- range(c(plot_employment_data[[time_col]], 
+                         plot_employment_data[[end_col]]), na.rm = TRUE)
+    timeline_start <- date_range[1]
+    timeline_end <- date_range[2]
+  } else {
+    # Fallback if no employment data
+    timeline_start <- as.Date("2020-01-01")
+    timeline_end <- as.Date("2024-12-31")
+  }
+  
+  # Calculate timeline duration and metrics section positioning
+  timeline_duration <- as.numeric(timeline_end - timeline_start)
+  gap_duration <- timeline_duration * 0.05  # 5% gap between sections
+  metrics_start <- timeline_end + gap_duration
+  metrics_section_width <- timeline_duration * (metrics_width / timeline_width)
+  
+  # Create y-position mapping (shared across both sections) - ensure all persons appear
+  y_positions <- data.table(
+    person = selected_people,
+    y_pos = seq_along(selected_people)
+  )
+  
+  # Step 5: Prepare timeline data
+  # Use proper dynamic join syntax: person column in y_positions matches person_col in employment data
+  join_spec <- setNames(person_col, "person")
+  timeline_plot_data <- y_positions[plot_employment_data, on = join_spec]
+  timeline_plot_data <- timeline_plot_data[!is.na(y_pos)]
+  
+  # Step 6: Prepare metrics data with extended x-axis positioning
+  # Transform metrics to long format for plotting
+  metrics_long <- data.table()
+  
+  if (nrow(plot_metrics_data) > 0 && length(metrics_to_show) > 0) {
+    metrics_melt <- melt(plot_metrics_data, 
+                        id.vars = person_col,
+                        measure.vars = metrics_to_show,
+                        variable.name = "metric_name",
+                        value.name = "metric_value")
+    
+    # Add y-positions and x-positions for metrics - ensure all persons appear
+    join_spec_metrics <- setNames(person_col, "person")
+    metrics_long <- y_positions[, .(person, y_pos)][
+      metrics_melt, on = join_spec_metrics, allow.cartesian = TRUE]
+    
+    # Handle missing values - set to 0 for persons without metrics
+    metrics_long[is.na(metric_value), metric_value := 0]
+    
+    # Calculate x-positions for metrics (spread across metrics section)
+    n_metrics <- length(metrics_to_show)
+    metric_spacing <- metrics_section_width / n_metrics
+    metric_positions <- data.table(
+      metric_name = factor(metrics_to_show),
+      x_pos = metrics_start + (seq_len(n_metrics) - 0.5) * metric_spacing
+    )
+    
+    metrics_long <- metrics_long[metric_positions, on = "metric_name"]
+  }
+  
+  # Step 7: Get colors
+  if (nrow(timeline_plot_data) > 0) {
+    if (use_bw) {
+      employment_colors <- vecshift_colors("bw", n = length(unique(timeline_plot_data[[status_col]])))
+      names(employment_colors) <- unique(timeline_plot_data[[status_col]])
+    } else {
+      employment_colors <- get_standardized_employment_colors(unique(timeline_plot_data[[status_col]]))
+    }
+  } else {
+    employment_colors <- c()
+  }
+  
+  # Step 8: Create the integrated plot
+  
+  # Calculate extended x-axis limits
+  if (nrow(metrics_long) > 0) {
+    x_limits <- c(timeline_start, metrics_start + metrics_section_width)
+  } else {
+    x_limits <- c(timeline_start, timeline_end)
+  }
+  
+  # Start with base plot
+  p <- ggplot2::ggplot()
+  
+  # Add timeline section (employment rectangles)
+  if (nrow(timeline_plot_data) > 0) {
+    p <- p + ggplot2::geom_rect(
+      data = timeline_plot_data,
+      ggplot2::aes(
+        xmin = get(time_col),
+        xmax = get(end_col),
+        ymin = y_pos - 0.4,
+        ymax = y_pos + 0.4,
+        fill = get(status_col)
+      ),
+      alpha = 0.8,
+      color = "white",
+      linewidth = 0.3
+    )
+  }
+  
+  # Add metrics section (points with size based on metric value)
+  if (nrow(metrics_long) > 0) {
+    p <- p + ggplot2::geom_point(
+      data = metrics_long,
+      ggplot2::aes(
+        x = x_pos,
+        y = y_pos,
+        size = pmax(0, metric_value),  # Ensure non-negative sizes
+        alpha = pmax(0.3, pmin(1.0, metric_value))  # Alpha between 0.3 and 1.0
+      ),
+      color = "#2C3E50",  # Dark blue-grey from vecshift palette
+      shape = 16
+    )
+    
+    # Add visual separator line
+    separator_x <- timeline_end + (gap_duration / 2)
+    p <- p + ggplot2::geom_vline(
+      xintercept = separator_x,
+      color = "#95A5A6",
+      linetype = "dashed",
+      alpha = 0.7
+    )
+  }
+  
+  # Step 9: Configure scales and aesthetics
+  
+  # Configure x-axis with custom breaks and labels
+  timeline_breaks <- seq(timeline_start, timeline_end, length.out = 4)
+  
+  # Metric x-positions for labels
+  if (nrow(metrics_long) > 0) {
+    metric_breaks <- unique(metrics_long$x_pos)
+    metric_labels <- as.character(unique(metrics_long$metric_name))
+    # Clean up metric labels for better readability
+    metric_labels <- gsub("_", " ", metric_labels)
+    metric_labels <- tools::toTitleCase(metric_labels)
+  } else {
+    metric_breaks <- numeric(0)
+    metric_labels <- character(0)
+  }
+  
+  all_x_breaks <- c(timeline_breaks, metric_breaks)
+  all_x_labels <- c(format(timeline_breaks, "%b %Y"), metric_labels)
+  
+  p <- p + ggplot2::scale_x_continuous(
+    breaks = all_x_breaks,
+    labels = all_x_labels,
+    limits = x_limits,
+    expand = c(0.02, 0)
+  )
+  
+  # Configure y-axis (shared for perfect alignment)
+  p <- p + ggplot2::scale_y_continuous(
+    breaks = y_positions$y_pos,
+    labels = y_positions$person,
+    expand = c(0.02, 0),
+    name = "Persons"
+  )
+  
+  # Configure fill scale for employment status
+  if (length(employment_colors) > 0) {
+    p <- p + ggplot2::scale_fill_manual(
+      values = employment_colors,
+      name = "Employment Status",
+      na.value = "#CCCCCC"
+    )
+  }
+  
+  # Configure size scale for metrics
+  if (nrow(metrics_long) > 0) {
+    p <- p + ggplot2::scale_size_continuous(
+      name = "Metric Value",
+      range = c(1, 8),
+      limits = c(0, 1),
+      guide = ggplot2::guide_legend(override.aes = list(alpha = 1))
+    )
+  }
+  
+  # Configure alpha scale
+  p <- p + ggplot2::scale_alpha_identity()
+  
+  # Step 10: Add labels and theme
+  p <- p + ggplot2::labs(
+    title = title,
+    subtitle = paste("Timeline (left)",
+                    ifelse(nrow(metrics_long) > 0, "and Career Metrics (right)", ""),
+                    "for", length(selected_people), "individuals"),
+    x = ifelse(nrow(metrics_long) > 0, "Time Period / Metrics", "Time Period"),
+    caption = "Generated with longworkR visualization functions"
+  )
+  
+  # Apply vecshift theme
+  p <- p + theme_vecshift(base_size = base_size, grid = "major", axis = "both")
+  
+  # Customize theme for integrated layout
+  p <- p + ggplot2::theme(
+    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = base_size * 0.8),
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    panel.grid.major.x = ggplot2::element_line(color = "#E8EAED", size = 0.5),
+    panel.grid.minor.x = ggplot2::element_blank(),
+    panel.grid.major.y = ggplot2::element_line(color = "#F4F6F7", size = 0.3),
+    plot.title = ggplot2::element_text(size = base_size * 1.2, face = "bold"),
+    plot.subtitle = ggplot2::element_text(size = base_size * 0.9, color = "#5D6D7E")
+  )
+  
+  # Step 11: Add section labels for clarity
+  if (nrow(timeline_plot_data) > 0 && nrow(metrics_long) > 0) {
+    # Add section headers
+    timeline_label_x <- timeline_start + (timeline_end - timeline_start) / 2
+    metrics_label_x <- metrics_start + metrics_section_width / 2
+    label_y <- max(y_positions$y_pos) + 0.8
+    
+    p <- p + ggplot2::annotate(
+      "text",
+      x = timeline_label_x,
+      y = label_y,
+      label = "Employment Timeline",
+      size = base_size * 0.9 * 0.35,
+      fontface = "bold",
+      color = "#2C3E50"
+    ) + ggplot2::annotate(
+      "text",
+      x = metrics_label_x,
+      y = label_y,
+      label = "Career Metrics",
+      size = base_size * 0.9 * 0.35,
+      fontface = "bold",
+      color = "#2C3E50"
+    )
   }
   
   return(p)

@@ -31,7 +31,7 @@ A data.table with career complexity metrics:
 \item{concurrent_employment_days}{Days with multiple concurrent jobs}
 \item{concurrent_employment_rate}{Proportion of employment with multiple jobs}
 \item{employment_diversity_index}{Shannon diversity index of employment types}
-\item{job_complexity_score}{Overall job complexity score}
+\item{career_complexity_index}{Overall job complexity score}
 \item{career_fragmentation_index}{Measure of career fragmentation}
 }
 \description{

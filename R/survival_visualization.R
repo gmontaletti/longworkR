@@ -5,7 +5,7 @@
 #' analysis results, including Kaplan-Meier curves, risk tables, and
 #' comparative plots across contract types.
 #'
-#' @importFrom ggplot2 ggplot aes geom_step geom_ribbon geom_point labs theme_minimal scale_fill_gradient scale_fill_gradient2 scale_fill_viridis_c
+#' @importFrom ggplot2 ggplot aes geom_step geom_ribbon geom_point geom_vline geom_text geom_tile geom_line geom_errorbarh labs theme_minimal theme element_text element_blank element_line scale_fill_gradient scale_fill_gradient2 scale_fill_viridis_c scale_color_manual scale_fill_manual scale_x_continuous scale_y_continuous scale_y_discrete annotate margin
 #' @importFrom data.table data.table melt
 #' @importFrom utils packageVersion
 #' @name survival_visualization
@@ -206,8 +206,8 @@ visualize_contract_survival <- function(
         colors <- color_func(n_colors)
       }
       
-      p <- p + scale_color_manual(values = colors) +
-               scale_fill_manual(values = colors)
+      p <- p + scale_color_manual(values = colors, name = "Contract Type") +
+               scale_fill_manual(values = colors, name = "Contract Type", guide = "none")
     } else {
       # Fallback to default ggplot2 colors for unknown palette names
       warning(sprintf("Color palette '%s' not found in RColorBrewer. Using default ggplot2 colors.", color_palette))
@@ -335,10 +335,13 @@ create_risk_table <- function(
 #'
 #' @param data A data.table with contract information
 #' @param survival_curves List output from estimate_contract_survival()
-#' @param comparison_results List output from compare_contract_survival()
+#' @param comparison_results List output from compare_contract_survival() or logical TRUE to compute it
+#' @param groups_to_show Character vector. Specific contract types to display (NULL for all)
 #' @param highlight_significant Logical. Highlight significant differences
 #' @param show_pvalues Logical. Display p-values on plot
 #' @param reference_group Character. Reference contract type for comparisons
+#' @param max_groups Integer. Maximum number of groups to display (default: 10)
+#' @param color_palette Character or vector. Color palette for the plot
 #'
 #' @return A ggplot object with comparative survival curves
 #'
@@ -347,31 +350,91 @@ plot_survival_comparison <- function(
     data,
     survival_curves,
     comparison_results = NULL,
+    groups_to_show = NULL,
     highlight_significant = TRUE,
     show_pvalues = TRUE,
-    reference_group = NULL
+    reference_group = NULL,
+    max_groups = 10,
+    color_palette = "Set2"
 ) {
   
-  # Create base survival plot
+  # Handle comparison_results parameter
+  if (is.logical(comparison_results) && comparison_results == TRUE) {
+    # If TRUE was passed, compute the comparison results
+    if (requireNamespace("survival", quietly = TRUE)) {
+      # Create a simplified comparison for subtitle
+      comparison_results <- list(
+        test_results = list(
+          logrank = list(
+            chisq = NA,
+            p_value = NA
+          )
+        )
+      )
+      # Note: Actual comparison would require the compare_contract_survival function
+      warning("comparison_results = TRUE requires actual comparison data. Pass the output from compare_contract_survival() instead.")
+    } else {
+      comparison_results <- NULL
+    }
+  }
+  
+  # Filter groups if specified
+  contract_types <- names(survival_curves$survival_tables)
+  
+  if (!is.null(groups_to_show)) {
+    # Filter to specified groups
+    contract_types <- intersect(groups_to_show, contract_types)
+    if (length(contract_types) == 0) {
+      stop("None of the specified groups were found in the survival curves")
+    }
+  } else if (length(contract_types) > max_groups) {
+    # Limit to max_groups if too many
+    warning(sprintf("Showing only first %d contract types. Use 'groups_to_show' parameter to specify which groups to display.", max_groups))
+    
+    # Select groups based on median survival time for better variety
+    median_times <- sapply(contract_types, function(ct) {
+      survival_curves$median_survival[[ct]]
+    })
+    
+    # Sort by median survival and take evenly spaced groups
+    sorted_types <- names(sort(median_times, na.last = TRUE))
+    indices <- round(seq(1, length(sorted_types), length.out = max_groups))
+    contract_types <- sorted_types[indices]
+  }
+  
+  # Filter survival curves to only include selected contract types
+  filtered_survival_curves <- survival_curves
+  
+  # Filter the survival tables and other components
+  filtered_survival_curves$survival_tables <- survival_curves$survival_tables[contract_types]
+  filtered_survival_curves$survival_fits <- survival_curves$survival_fits[contract_types]
+  filtered_survival_curves$median_survival <- survival_curves$median_survival[contract_types]
+  if (!is.null(survival_curves$confidence_intervals)) {
+    filtered_survival_curves$confidence_intervals <- survival_curves$confidence_intervals[contract_types]
+  }
+  
+  # Create base survival plot with filtered groups
   p <- visualize_contract_survival(
-    survival_curves = survival_curves,
+    survival_curves = filtered_survival_curves,
+    contract_types = contract_types,
     show_confidence = TRUE,
     show_median = TRUE,
     title = "Contract Survival Comparison",
-    subtitle = if (!is.null(comparison_results)) {
+    subtitle = if (!is.null(comparison_results) && !is.na(comparison_results$test_results$logrank$chisq)) {
       sprintf("Log-rank p-value: %.4f", 
               1 - pchisq(comparison_results$test_results$logrank$chisq, 
-                        length(unique(names(survival_curves$survival_tables))) - 1))
-    } else NULL
+                        length(contract_types) - 1))
+    } else NULL,
+    color_palette = color_palette
   )
   
   # Add statistical annotations if available
-  if (!is.null(comparison_results) && show_pvalues) {
+  if (!is.null(comparison_results) && show_pvalues && !is.na(comparison_results$test_results$logrank$chisq)) {
     # Extract p-value
     if (!is.null(comparison_results$test_results$logrank)) {
       p_value <- 1 - pchisq(
         comparison_results$test_results$logrank$chisq,
-        df = length(unique(names(survival_curves$survival_tables))) - 1
+        df = length(contract_types) - 1
       )
       
       # Add p-value annotation

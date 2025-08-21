@@ -45,7 +45,7 @@ A data.table with transition metrics:
 \item{fulltime_improvements}{Transitions to full-time from part-time}
 \item{fulltime_deteriorations}{Transitions from full-time to part-time}
 \item{composite_improvement_rate}{Overall rate of positive career transitions}
-\item{career_progression_index}{Comprehensive career progression score}
+\item{career_advancement_index}{Comprehensive career progression score}
 }
 \description{
 Analyzes career transitions incorporating contract duration expectations from survival
