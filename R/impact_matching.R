@@ -6,6 +6,8 @@
 #'
 #' @name impact_matching
 #' @author vecshift package
+#' @importFrom dplyr first last
+#' @importFrom data.table as.data.table
 NULL
 
 #' Aggregate Event-Level Data to Person-Level for Matching
@@ -138,7 +140,7 @@ aggregate_to_person_level <- function(data, person_id_var, variables,
 #' @param verbose Logical. Print detailed missing data diagnostics? Default: TRUE
 #'
 #' @return A list containing:
-#'   \item{matched_data}{Data.table with ALL events for matched individuals (both treated and control)}
+#'   \item{matched_data}{Data.table with ALL events for matched individuals (both treated and control). Includes event_time column with values: "pre" (pre-treatment), "post" (post-treatment), "control" (control group), or NA}
 #'   \item{matched_persons}{Data.table with person-level characteristics used for matching}
 #'   \item{match_matrix}{Matrix showing which persons were matched}
 #'   \item{propensity_scores}{Propensity scores for all persons}
@@ -660,6 +662,28 @@ propensity_score_matching <- function(data,
   # Extract all original events for these matched persons
   all_events_for_matched_persons <- original_data[get(person_id_var) %in% matched_person_ids]
   
+  # Add event_time column for compatibility with calculate_comprehensive_impact_metrics()
+  if ("pre_event_period" %in% names(all_events_for_matched_persons) && 
+      "post_event_period" %in% names(all_events_for_matched_persons) &&
+      "is_treated" %in% names(all_events_for_matched_persons)) {
+    
+    all_events_for_matched_persons[, event_time := ifelse(
+      is_treated == FALSE, "control",
+      ifelse(is_treated == TRUE & pre_event_period == TRUE, "pre",
+        ifelse(is_treated == TRUE & post_event_period == TRUE, "post", 
+          NA_character_))
+    )]
+    
+    if (verbose) {
+      cat("Added event_time column with distribution:\n")
+      print(table(all_events_for_matched_persons$event_time, useNA = "ifany"))
+    }
+  } else {
+    if (verbose) {
+      cat("Warning: Cannot create event_time column - missing required columns (pre_event_period, post_event_period, is_treated)\n")
+    }
+  }
+  
   if (verbose) {
     cat("Matched persons:", length(matched_person_ids), "\n")
     cat("Total events for matched persons:", nrow(all_events_for_matched_persons), "\n")
@@ -705,7 +729,7 @@ propensity_score_matching <- function(data,
 #' @param verbose Logical. Print detailed information? Default: TRUE
 #'
 #' @return A list containing:
-#'   \item{matched_data}{Data.table with ALL events for matched individuals (both treated and control)}
+#'   \item{matched_data}{Data.table with ALL events for matched individuals (both treated and control). Includes event_time column with values: "pre" (pre-treatment), "post" (post-treatment), "control" (control group), or NA}
 #'   \item{matched_persons}{Data.table with person-level characteristics used for matching}
 #'   \item{match_summary}{Summary of CEM procedure}
 #'   \item{imbalance_measures}{L1 and other imbalance statistics}
@@ -956,6 +980,28 @@ cem_native_implementation <- function(data, treatment_var, person_id_var, matchi
   matched_person_ids <- matched_persons[[person_id_var]]
   matched_data <- original_data[get(person_id_var) %in% matched_person_ids]
   
+  # Add event_time column for compatibility with calculate_comprehensive_impact_metrics()
+  if ("pre_event_period" %in% names(matched_data) && 
+      "post_event_period" %in% names(matched_data) &&
+      "is_treated" %in% names(matched_data)) {
+    
+    matched_data[, event_time := ifelse(
+      is_treated == FALSE, "control",
+      ifelse(is_treated == TRUE & pre_event_period == TRUE, "pre",
+        ifelse(is_treated == TRUE & post_event_period == TRUE, "post", 
+          NA_character_))
+    )]
+    
+    if (verbose) {
+      cat("Added event_time column with distribution:\n")
+      print(table(matched_data$event_time, useNA = "ifany"))
+    }
+  } else {
+    if (verbose) {
+      cat("Warning: Cannot create event_time column - missing required columns (pre_event_period, post_event_period, is_treated)\n")
+    }
+  }
+  
   # Add weights and strata info to matched data
   person_info <- matched_persons[, c(person_id_var, "cem_weight", "cem_strata"), with = FALSE]
   matched_data <- merge(matched_data, person_info, by = person_id_var)
@@ -1106,8 +1152,8 @@ cem_fallback_implementation <- function(data, treatment_var, person_id_var, matc
     cat("Strata with both treated and control:", length(matched_strata), "\n")
   }
   
-  # Apply k2k matching if requested OR control_ratio > 1
-  if (k2k || control_ratio > 1) {
+  # Apply proper matching within strata (always do this - don't fall back to broken keep_all)
+  if (k2k || control_ratio >= 1) {
     if (k2k) {
       if (verbose) cat("Applying k-to-k (1:1) matching within strata...\n")
       actual_ratio <- 1
@@ -1195,6 +1241,28 @@ cem_fallback_implementation <- function(data, treatment_var, person_id_var, matc
   matched_person_ids <- matched_persons[[person_id_var]]
   matched_data <- original_data[get(person_id_var) %in% matched_person_ids]
   
+  # Add event_time column for compatibility with calculate_comprehensive_impact_metrics()
+  if ("pre_event_period" %in% names(matched_data) && 
+      "post_event_period" %in% names(matched_data) &&
+      "is_treated" %in% names(matched_data)) {
+    
+    matched_data[, event_time := ifelse(
+      is_treated == FALSE, "control",
+      ifelse(is_treated == TRUE & pre_event_period == TRUE, "pre",
+        ifelse(is_treated == TRUE & post_event_period == TRUE, "post", 
+          NA_character_))
+    )]
+    
+    if (verbose) {
+      cat("Added event_time column with distribution:\n")
+      print(table(matched_data$event_time, useNA = "ifany"))
+    }
+  } else {
+    if (verbose) {
+      cat("Warning: Cannot create event_time column - missing required columns (pre_event_period, post_event_period, is_treated)\n")
+    }
+  }
+  
   # Add weights and strata info to matched data
   person_info <- matched_persons[, c(person_id_var, "cem_weight", "cem_strata"), with = FALSE]
   matched_data <- merge(matched_data, person_info, by = person_id_var)
@@ -1206,8 +1274,8 @@ cem_fallback_implementation <- function(data, treatment_var, person_id_var, matc
   
   # Create final strata info
   strata_info <- matched_persons[, .(
-    n_treated = sum(get(treatment_var) * cem_weight),
-    n_control = sum((1 - get(treatment_var)) * cem_weight)
+    n_treated = sum(get(treatment_var)),
+    n_control = sum(1 - get(treatment_var))
   ), by = cem_strata]
   strata_info[, total_n := n_treated + n_control]
   setnames(strata_info, "cem_strata", "strata")
@@ -1218,8 +1286,8 @@ cem_fallback_implementation <- function(data, treatment_var, person_id_var, matc
     implementation = "fallback",
     total_treated = sum(working_data[[treatment_var]]),
     total_control = sum(1 - working_data[[treatment_var]]),
-    matched_treated = sum(matched_persons[[treatment_var]] * matched_persons$cem_weight),
-    matched_control = sum((1 - matched_persons[[treatment_var]]) * matched_persons$cem_weight),
+    matched_treated = sum(matched_persons[[treatment_var]]),
+    matched_control = sum(1 - matched_persons[[treatment_var]]),
     n_strata = length(matched_strata),
     automatic_binning = automatic_binning,
     k2k_matching = k2k,
@@ -1244,8 +1312,8 @@ cem_fallback_implementation <- function(data, treatment_var, person_id_var, matc
     cat("Matched persons:", nrow(matched_persons), "\n")
     cat("Total events for matched persons:", nrow(matched_data), "\n")
     cat("Events per matched person (avg):", round(nrow(matched_data) / nrow(matched_persons), 1), "\n")
-    cat("Effective treated:", round(sum(matched_persons[[treatment_var]] * matched_persons$cem_weight)), "\n")
-    cat("Effective control:", round(sum((1 - matched_persons[[treatment_var]]) * matched_persons$cem_weight)), "\n")
+    cat("Matched treated:", sum(matched_persons[[treatment_var]]), "\n")
+    cat("Matched control:", sum(1 - matched_persons[[treatment_var]]), "\n")
     cat("L1 imbalance reduction:", sprintf("%.1f%%", l1_reduction * 100), "\n")
   }
   
@@ -1521,9 +1589,23 @@ assess_match_quality <- function(matching_result,
     stop("matching_result must be a list object from matching functions")
   }
   
+  # Check required components exist
+  required_components <- c("matched_data", "match_summary")
+  missing_components <- setdiff(required_components, names(matching_result))
+  if (length(missing_components) > 0) {
+    stop(paste("Required components missing from matching_result:", paste(missing_components, collapse = ", ")))
+  }
+  
   # Extract components
   matched_data <- matching_result$matched_data
   match_summary <- matching_result$match_summary
+  
+  # Validate match_summary has required fields
+  required_summary_fields <- c("method", "total_treated", "total_control", "matched_treated", "matched_control")
+  missing_summary_fields <- setdiff(required_summary_fields, names(match_summary))
+  if (length(missing_summary_fields) > 0) {
+    stop(paste("Required fields missing from match_summary:", paste(missing_summary_fields, collapse = ", ")))
+  }
   
   # Quality metrics
   quality_metrics <- list(
