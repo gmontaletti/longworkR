@@ -11,10 +11,13 @@ setup_matching_test_data <- function() {
   
   # Create more realistic data for matching tests
   n <- 200
+  # Create age first
+  age_values <- round(rnorm(n, 35, 8))
+  
   test_data <- data.table(
     id = 1:n,
     is_treated = c(rep(TRUE, n/4), rep(FALSE, 3*n/4)),  # 25% treatment rate
-    age = round(rnorm(n, 35, 8)),
+    age = age_values,
     education = sample(c("High School", "Bachelor", "Master"), n, 
                       prob = c(0.5, 0.35, 0.15), replace = TRUE),
     sector = sample(c("Manufacturing", "Services", "Construction", "Trade"), n,
@@ -22,7 +25,7 @@ setup_matching_test_data <- function() {
     region = sample(c("North", "Center", "South"), n, replace = TRUE),
     gender = sample(c("Male", "Female"), n, replace = TRUE),
     prior_wage = exp(rnorm(n, log(2000), 0.3)),  # Log-normal wage distribution
-    experience = pmax(0, age - 22 + rnorm(n, 0, 2)),
+    experience = pmax(0, age_values - 22 + rnorm(n, 0, 2)),
     baseline_employment_rate = pmin(1, pmax(0, rnorm(n, 0.7, 0.2)))
   )
   

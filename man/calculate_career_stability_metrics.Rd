@@ -40,7 +40,8 @@ A data.table with employment stability metrics:
 \item{avg_unemployment_spell}{Average duration of unemployment spells}
 \item{max_employment_spell}{Longest employment spell in period}
 \item{job_turnover_rate}{Employment spells per year in period}
-\item{employment_security_index}{Composite stability measure (0-1)}
+\item{employment_stability_index}{Composite stability measure (0-1)}
+\item{employment_security_index}{Backward compatibility alias for employment_stability_index}
 }
 \description{
 Calculates employment stability metrics for generalized career trajectory analysis,

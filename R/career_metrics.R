@@ -657,7 +657,8 @@ calculate_career_transition_metrics <- function(data,
 #'   \item{avg_unemployment_spell}{Average duration of unemployment spells}
 #'   \item{max_employment_spell}{Longest employment spell in period}
 #'   \item{job_turnover_rate}{Employment spells per year in period}
-#'   \item{employment_security_index}{Composite stability measure (0-1)}
+#'   \item{employment_stability_index}{Composite stability measure (0-1)}
+#'   \item{employment_security_index}{Backward compatibility alias for employment_stability_index}
 #'
 #' @examples
 #' \dontrun{
@@ -745,7 +746,7 @@ calculate_career_stability_metrics <- function(data,
           max_employment_spell = emp_days,
           max_unemployment_spell = unemp_days,
           job_turnover_rate = 0.0,
-          employment_security_index = employment_rate)
+          employment_stability_index = employment_rate)
       } else {
         # OPTIMIZATION 5: Ultra-fast spell identification using rleid
         spell_ids <- rleid(employed_vals)
@@ -798,7 +799,7 @@ calculate_career_stability_metrics <- function(data,
           max_employment_spell = max_emp_spell,
           max_unemployment_spell = max_unemp_spell,
           job_turnover_rate = turnover_rate,
-          employment_security_index = stability_index)
+          employment_stability_index = stability_index)
       }
     }, by = c(id_column, "time_period")]
     
@@ -824,7 +825,7 @@ calculate_career_stability_metrics <- function(data,
           unemployment_spells = if (unemp_days > 0) 1.0 else 0.0,
           avg_employment_spell = emp_days, avg_unemployment_spell = unemp_days,
           max_employment_spell = emp_days, max_unemployment_spell = unemp_days,
-          job_turnover_rate = 0.0, employment_security_index = employment_rate)
+          job_turnover_rate = 0.0, employment_stability_index = employment_rate)
       } else {
         spell_ids <- rleid(employed_vals)
         unique_spells <- unique(spell_ids)
@@ -859,7 +860,7 @@ calculate_career_stability_metrics <- function(data,
           employment_spells = as.double(n_emp_spells), unemployment_spells = as.double(n_unemp_spells),
           avg_employment_spell = avg_emp_spell, avg_unemployment_spell = avg_unemp_spell,
           max_employment_spell = max_emp_spell, max_unemployment_spell = max_unemp_spell,
-          job_turnover_rate = turnover_rate, employment_security_index = stability_index)
+          job_turnover_rate = turnover_rate, employment_stability_index = stability_index)
       }
     }, by = group_cols]
     
@@ -1280,7 +1281,7 @@ calculate_comprehensive_career_metrics <- function(data,
                        "career_stability_score", "growth_opportunity_score", "career_success_index", "career_advancement_index")
       stability_cols <- c("days_employed", "days_unemployed", "employment_rate", "employment_spells",
                          "unemployment_spells", "avg_employment_spell", "avg_unemployment_spell",
-                         "max_employment_spell", "max_unemployment_spell", "job_turnover_rate", "employment_security_index")
+                         "max_employment_spell", "max_unemployment_spell", "job_turnover_rate", "employment_stability_index")
       complexity_cols <- c("max_concurrent_jobs", "avg_concurrent_jobs", "concurrent_employment_days",
                           "concurrent_employment_rate", "employment_diversity_index", "career_fragmentation_index", "career_complexity_index")
       
@@ -1687,7 +1688,8 @@ calculate_unified_career_metrics_optimized <- function(data,
         max_employment_spell = max_employment_spell,
         max_unemployment_spell = max_unemployment_spell,
         job_turnover_rate = job_turnover_rate,
-        employment_security_index = employment_security_index,
+        employment_stability_index = employment_security_index,
+        employment_security_index = employment_security_index,  # Backward compatibility alias
         max_concurrent_jobs = max_concurrent_jobs,
         avg_concurrent_jobs = avg_concurrent_jobs,
         concurrent_employment_days = concurrent_employment_days,

@@ -17,7 +17,8 @@ difference_in_differences(
   parallel_trends_test = TRUE,
   placebo_test = TRUE,
   bootstrap_se = FALSE,
-  n_bootstrap = 1000
+  n_bootstrap = 1000,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -46,6 +47,8 @@ difference_in_differences(
 \item{bootstrap_se}{Logical. Use bootstrap standard errors? Default: FALSE}
 
 \item{n_bootstrap}{Integer. Number of bootstrap replications. Default: 1000}
+
+\item{verbose}{Logical. Print diagnostic information? Default: TRUE}
 }
 \value{
 A list containing:
@@ -62,15 +65,48 @@ using employment data with flexible model specifications and robust inference.
 }
 \examples{
 \dontrun{
-# Basic DiD estimation
+# ===== INTEGRATION WITH EMPLOYMENT METRICS =====
+# Complete workflow: metrics calculation → data preparation → DiD analysis
+
+# Step 1: Calculate employment metrics
+metrics_result <- calculate_comprehensive_impact_metrics(
+  data = employment_data,
+  metrics = c("stability", "quality", "complexity"),
+  output_format = "wide"
+)
+
+# Step 2: Define treatment assignment
+treatment_data <- data.table(
+  cf = unique(employment_data$cf),
+  is_treated = sample(c(0, 1), length(unique(employment_data$cf)), replace = TRUE)
+)
+
+# Step 3: Prepare for DiD analysis
+did_data <- prepare_metrics_for_impact_analysis(
+  metrics_output = metrics_result,
+  treatment_assignment = treatment_data,
+  impact_method = "did"
+)
+
+# Step 4: Run DiD on employment metrics
 did_results <- difference_in_differences(
+  data = did_data,
+  outcome_vars = c("employment_rate", "permanent_contract_rate", "career_stability_score"),
+  treatment_var = "is_treated",
+  time_var = "post",
+  id_var = "cf"
+)
+
+# ===== TRADITIONAL DiD EXAMPLES =====
+# Basic DiD estimation with pre-prepared panel data
+did_basic <- difference_in_differences(
   data = panel_data,
   outcome_vars = c("employment_rate", "avg_wage", "job_stability"),
   treatment_var = "training_program",
   control_vars = c("age", "education", "sector")
 )
 
-# Advanced DiD with clustering
+# Advanced DiD with clustering and robustness checks
 did_robust <- difference_in_differences(
   data = panel_data,
   outcome_vars = "employment_stability_index",
@@ -78,6 +114,27 @@ did_robust <- difference_in_differences(
   parallel_trends_test = TRUE,
   bootstrap_se = TRUE
 )
+
+# ===== MULTIPLE OUTCOMES ANALYSIS =====
+# Analyze multiple employment metrics simultaneously
+multi_outcome_did <- difference_in_differences(
+  data = did_data,
+  outcome_vars = c(
+    "employment_rate", "permanent_contract_rate",
+    "avg_contract_quality", "transition_success_rate",
+    "career_complexity_score", "employment_stability_index"
+  ),
+  treatment_var = "is_treated",
+  time_var = "post",
+  id_var = "cf",
+  fixed_effects = "both",
+  parallel_trends_test = TRUE
+)
 }
 
+}
+\seealso{
+\code{\link{calculate_comprehensive_impact_metrics}} for computing employment metrics,
+\code{\link{prepare_metrics_for_impact_analysis}} for preparing metrics data,
+\code{vignette("impact-metrics-integration", package = "longworkR")} for complete integration workflow
 }

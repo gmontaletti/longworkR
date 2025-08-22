@@ -26,6 +26,7 @@ NULL
 #' @param placebo_test Logical. Perform placebo tests? Default: TRUE
 #' @param bootstrap_se Logical. Use bootstrap standard errors? Default: FALSE
 #' @param n_bootstrap Integer. Number of bootstrap replications. Default: 1000
+#' @param verbose Logical. Print diagnostic information? Default: TRUE
 #'
 #' @return A list containing:
 #'   \item{estimates}{Treatment effect estimates for each outcome}
@@ -37,15 +38,48 @@ NULL
 #'
 #' @examples
 #' \dontrun{
-#' # Basic DiD estimation
+#' # ===== INTEGRATION WITH EMPLOYMENT METRICS =====
+#' # Complete workflow: metrics calculation → data preparation → DiD analysis
+#' 
+#' # Step 1: Calculate employment metrics
+#' metrics_result <- calculate_comprehensive_impact_metrics(
+#'   data = employment_data,
+#'   metrics = c("stability", "quality", "complexity"),
+#'   output_format = "wide"
+#' )
+#' 
+#' # Step 2: Define treatment assignment
+#' treatment_data <- data.table(
+#'   cf = unique(employment_data$cf),
+#'   is_treated = sample(c(0, 1), length(unique(employment_data$cf)), replace = TRUE)
+#' )
+#' 
+#' # Step 3: Prepare for DiD analysis
+#' did_data <- prepare_metrics_for_impact_analysis(
+#'   metrics_output = metrics_result,
+#'   treatment_assignment = treatment_data,
+#'   impact_method = "did"
+#' )
+#' 
+#' # Step 4: Run DiD on employment metrics
 #' did_results <- difference_in_differences(
+#'   data = did_data,
+#'   outcome_vars = c("employment_rate", "permanent_contract_rate", "career_stability_score"),
+#'   treatment_var = "is_treated",
+#'   time_var = "post",
+#'   id_var = "cf"
+#' )
+#' 
+#' # ===== TRADITIONAL DiD EXAMPLES =====
+#' # Basic DiD estimation with pre-prepared panel data
+#' did_basic <- difference_in_differences(
 #'   data = panel_data,
 #'   outcome_vars = c("employment_rate", "avg_wage", "job_stability"),
 #'   treatment_var = "training_program",
 #'   control_vars = c("age", "education", "sector")
 #' )
 #' 
-#' # Advanced DiD with clustering
+#' # Advanced DiD with clustering and robustness checks
 #' did_robust <- difference_in_differences(
 #'   data = panel_data,
 #'   outcome_vars = "employment_stability_index",
@@ -53,7 +87,28 @@ NULL
 #'   parallel_trends_test = TRUE,
 #'   bootstrap_se = TRUE
 #' )
+#' 
+#' # ===== MULTIPLE OUTCOMES ANALYSIS =====
+#' # Analyze multiple employment metrics simultaneously
+#' multi_outcome_did <- difference_in_differences(
+#'   data = did_data,
+#'   outcome_vars = c(
+#'     "employment_rate", "permanent_contract_rate",
+#'     "avg_contract_quality", "transition_success_rate",
+#'     "career_complexity_score", "employment_stability_index"
+#'   ),
+#'   treatment_var = "is_treated",
+#'   time_var = "post",
+#'   id_var = "cf",
+#'   fixed_effects = "both",
+#'   parallel_trends_test = TRUE
+#' )
 #' }
+#'
+#' @seealso 
+#' \code{\link{calculate_comprehensive_impact_metrics}} for computing employment metrics,
+#' \code{\link{prepare_metrics_for_impact_analysis}} for preparing metrics data,
+#' \code{vignette("impact-metrics-integration", package = "longworkR")} for complete integration workflow
 #'
 #' @export
 difference_in_differences <- function(data,
@@ -68,7 +123,8 @@ difference_in_differences <- function(data,
                                     parallel_trends_test = TRUE,
                                     placebo_test = TRUE,
                                     bootstrap_se = FALSE,
-                                    n_bootstrap = 1000) {
+                                    n_bootstrap = 1000,
+                                    verbose = TRUE) {
   
   # Check for required packages
   required_packages <- c("fixest")
@@ -92,11 +148,72 @@ difference_in_differences <- function(data,
   dt <- copy(data)
   setnames(dt, c(treatment_var, time_var, id_var), c("treatment", "period", "id"))
   
-  # Ensure period is binary for basic DiD
+  # Handle different time variable structures
   if (!all(dt$period %in% c(0, 1))) {
-    # Convert to binary (assuming pre/post structure)
-    dt[, period := as.numeric(period != min(period, na.rm = TRUE))]
-    warning("Time variable converted to binary (0=pre, 1=post) for DiD estimation")
+    # Check if this is matched data with event_time structure
+    unique_periods <- unique(dt$period)
+    
+    if (all(c("pre", "post", "control") %in% unique_periods)) {
+      # This is matched data from propensity_score_matching with event_time column
+      # For proper DiD, we need to create synthetic pre/post periods for control units
+      # Strategy: Use control group observations as both "pre" and "post" (constant counterfactual)
+      
+      if (verbose) {
+        cat("Detected matched data with event_time structure. Restructuring for DiD analysis...\n")
+        cat("Original data distribution:\n")
+        print(table(dt$period, dt$treatment, useNA = "ifany"))
+      }
+      
+      # Split data by treatment status
+      treated_data <- dt[treatment == 1 & period %in% c("pre", "post")]
+      control_data <- dt[treatment == 0 & period == "control"]
+      
+      if (nrow(treated_data) == 0) {
+        stop("No pre/post observations found for treated units. Cannot perform DiD analysis.")
+      }
+      
+      if (nrow(control_data) == 0) {
+        stop("No control observations found. Cannot perform DiD analysis.")
+      }
+      
+      # Create synthetic pre/post periods for control units
+      # Duplicate control observations to create both pre and post periods
+      control_pre <- copy(control_data)
+      control_pre[, period := "pre"]
+      
+      control_post <- copy(control_data)
+      control_post[, period := "post"]
+      
+      # Combine all data
+      dt <- rbind(treated_data, control_pre, control_post)
+      
+      # Convert to binary (0=pre, 1=post)
+      dt[, period := as.numeric(period == "post")]
+      
+      if (verbose) {
+        cat("Restructured data for DiD:\n")
+        print(table(dt$period, dt$treatment, useNA = "ifany"))
+      }
+      
+      warning("Restructured matched data for DiD: control observations duplicated for pre/post periods")
+      
+    } else {
+      # Standard conversion for other time structures
+      dt[, period := as.numeric(period != min(period, na.rm = TRUE))]
+      warning("Time variable converted to binary (0=pre, 1=post) for DiD estimation")
+    }
+  }
+  
+  # Remove rows with missing outcome variables to prevent estimation issues
+  initial_nrow <- nrow(dt)
+  for (outcome in outcome_vars) {
+    if (outcome %in% names(dt)) {
+      dt <- dt[!is.na(get(outcome))]
+    }
+  }
+  
+  if (nrow(dt) < initial_nrow && verbose) {
+    cat("Removed", initial_nrow - nrow(dt), "rows with missing outcome values\n")
   }
   
   # Results storage
@@ -120,13 +237,36 @@ difference_in_differences <- function(data,
       }
     }
     
-    # Add fixed effects
+    # Add fixed effects (but be careful with time FE in restructured matched data)
     fe_spec <- ""
     if ("individual" %in% fixed_effects || "both" %in% fixed_effects) {
       fe_spec <- paste(fe_spec, "id", sep = ifelse(fe_spec == "", "", " + "))
     }
     if ("time" %in% fixed_effects || "both" %in% fixed_effects) {
-      fe_spec <- paste(fe_spec, "period", sep = ifelse(fe_spec == "", "", " + "))
+      # Check if we have restructured matched data - if so, skip time FE as it may cause collinearity
+      unique_periods <- unique(dt$period)
+      n_treatment_groups <- length(unique(dt$treatment))
+      n_time_periods <- length(unique_periods)
+      
+      # Check for collinearity between treatment and time variables
+      # This is especially important for restructured matched data
+      period_treatment_cor <- tryCatch({
+        abs(cor(dt$treatment, dt$period, use = "complete.obs"))
+      }, error = function(e) {
+        # If correlation calculation fails, assume high correlation
+        0.95
+      })
+      
+      # Skip time FE if correlation is too high (indicating collinearity)
+      if (period_treatment_cor > 0.9 || n_time_periods <= 1) {
+        if (verbose) {
+          cat("Skipping time fixed effects due to high correlation with treatment (r =", 
+              round(period_treatment_cor, 3), ") or insufficient time variation\n")
+        }
+        warning("Time fixed effects skipped due to high correlation with treatment or insufficient time variation. Using individual FE only.")
+      } else {
+        fe_spec <- paste(fe_spec, "period", sep = ifelse(fe_spec == "", "", " + "))
+      }
     }
     
     full_formula <- if (fe_spec != "") {
@@ -168,6 +308,23 @@ difference_in_differences <- function(data,
         treatment_se <- sqrt(vcov(model)[interaction_coef[1], interaction_coef[1]])
         treatment_pvalue <- 2 * (1 - pnorm(abs(treatment_effect / treatment_se)))
         
+        # Extract R-squared safely
+        r_squared_value <- tryCatch({
+          r2_result <- r2(model)
+          if (is.numeric(r2_result) && length(r2_result) == 1) {
+            r2_result
+          } else if (is.list(r2_result) && "r2" %in% names(r2_result)) {
+            r2_result$r2
+          } else if (is.numeric(r2_result) && "r2" %in% names(r2_result)) {
+            r2_result["r2"]
+          } else {
+            # If r2 returns a named vector, take the first element
+            as.numeric(r2_result)[1]
+          }
+        }, error = function(e) {
+          NA_real_
+        })
+        
         did_results[[outcome]] <- data.table(
           outcome = outcome,
           treatment_effect = treatment_effect,
@@ -178,16 +335,28 @@ difference_in_differences <- function(data,
           conf_upper = treatment_effect + 1.96 * treatment_se,
           significant = treatment_pvalue < 0.05,
           n_obs = nobs(model),
-          r_squared = r2(model)
+          r_squared = r_squared_value
         )
       }
     }, error = function(e) {
-      warning(paste("DiD estimation failed for", outcome, ":", e$message))
+      error_msg <- e$message
+      if (verbose) {
+        cat("DiD estimation failed for", outcome, ":", error_msg, "\n")
+      }
+      warning(paste("DiD estimation failed for", outcome, ":", error_msg))
+      
       did_results[[outcome]] <- data.table(
         outcome = outcome,
         treatment_effect = NA_real_,
         std_error = NA_real_,
-        error = e$message
+        t_statistic = NA_real_,
+        p_value = NA_real_,
+        conf_lower = NA_real_,
+        conf_upper = NA_real_,
+        significant = FALSE,
+        n_obs = NA_integer_,
+        r_squared = NA_real_,
+        error = error_msg
       )
     })
   }

@@ -80,3 +80,8 @@ renv/staging/
 
 # Package specific temporary files
 inst/doc/
+
+# Data privacy protection
+data/sample.rds
+data/*_private.rds
+data/*_real.rds

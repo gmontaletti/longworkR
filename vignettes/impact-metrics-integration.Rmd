@@ -1,0 +1,609 @@
+---
+title: "Impact Evaluation with Employment Metrics: A Complete Workflow"
+author: "longworkR Package"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Impact Evaluation with Employment Metrics: A Complete Workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 6,
+  warning = FALSE,
+  message = FALSE
+)
+
+# Load required libraries
+library(longworkR)
+library(data.table)
+library(ggplot2)
+```
+
+## Overview
+
+This vignette demonstrates the complete workflow for integrating employment metrics calculation with causal inference methods. The `longworkR` package provides a seamless pipeline from raw employment data to impact evaluation results through three key stages:
+
+1. **Metrics Calculation**: Computing comprehensive employment metrics using `calculate_comprehensive_impact_metrics()`
+2. **Data Integration**: Preparing metrics for causal analysis using `prepare_metrics_for_impact_analysis()`
+3. **Impact Evaluation**: Running causal inference methods like `difference_in_differences()`
+
+This integrated approach allows researchers to use sophisticated employment metrics as outcomes in rigorous causal inference studies.
+
+## The Integration Architecture
+
+The integration between metrics calculation and impact evaluation follows a three-step process:
+
+```{r workflow-diagram, echo=FALSE, fig.cap="Integration Workflow", fig.align='center'}
+# Create a simple workflow diagram using base R
+plot(0, 0, type = "n", xlim = c(0, 10), ylim = c(0, 6), 
+     xlab = "", ylab = "", axes = FALSE)
+
+# Boxes
+rect(0.5, 4.5, 2.5, 5.5, col = "lightblue", border = "black")
+text(1.5, 5, "Raw Employment\nData", cex = 0.8, font = 2)
+
+rect(3.5, 4.5, 5.5, 5.5, col = "lightgreen", border = "black")
+text(4.5, 5, "Comprehensive\nMetrics", cex = 0.8, font = 2)
+
+rect(6.5, 4.5, 8.5, 5.5, col = "lightcoral", border = "black")
+text(7.5, 5, "Impact\nAnalysis", cex = 0.8, font = 2)
+
+# Arrows
+arrows(2.5, 5, 3.5, 5, length = 0.1, lwd = 2)
+arrows(5.5, 5, 6.5, 5, length = 0.1, lwd = 2)
+
+# Function names
+text(1.5, 3.5, "calculate_comprehensive_\nimpact_metrics()", cex = 0.7, col = "blue")
+text(4.5, 3.5, "prepare_metrics_for_\nimpact_analysis()", cex = 0.7, col = "blue")
+text(7.5, 3.5, "difference_in_\ndifferences()", cex = 0.7, col = "blue")
+
+# Bridge
+rect(3, 2, 6, 2.5, col = "lightyellow", border = "orange", lwd = 2)
+text(4.5, 2.25, "Integration Bridge", cex = 0.8, font = 2, col = "orange")
+```
+
+## Getting Started: Sample Data
+
+Let's begin with a practical example using the package's sample employment data:
+
+```{r load-data}
+# Load sample employment data
+sample_data <- readRDS(system.file("extdata", "sample.rds", package = "longworkR"))
+
+# For this vignette, we'll use the built-in sample if available, 
+# otherwise create a small example
+if (is.null(sample_data) || nrow(sample_data) == 0) {
+  # Create example data structure
+  sample_data <- data.table(
+    cf = rep(1:100, each = 4),
+    inizio = as.Date("2020-01-01") + sample(0:730, 400, replace = TRUE),
+    fine = as.Date("2020-01-01") + sample(30:800, 400, replace = TRUE),
+    durata = sample(30:365, 400, replace = TRUE),
+    over_id = rep(1:400),
+    prior = sample(c(0, 1), 400, replace = TRUE),
+    COD_TIPOLOGIA_CONTRATTUALE = sample(
+      c("A.03.00", "A.03.01", "C.01.00", "A.07.00"), 
+      400, replace = TRUE
+    ),
+    event_period = sample(c("pre", "post"), 400, replace = TRUE)
+  )
+}
+
+# Examine the data structure
+cat("Sample data dimensions:", nrow(sample_data), "rows,", ncol(sample_data), "columns\n")
+cat("Unique individuals:", length(unique(sample_data$cf)), "\n")
+cat("Available columns:", paste(names(sample_data), collapse = ", "), "\n")
+```
+
+## Step 1: Calculate Comprehensive Employment Metrics
+
+The first step involves calculating comprehensive employment metrics for all individuals across different time periods. These metrics capture various aspects of employment quality and career trajectories.
+
+### Basic Metrics Calculation
+
+```{r calculate-metrics}
+# Calculate comprehensive employment metrics
+metrics_result <- calculate_comprehensive_impact_metrics(
+  data = sample_data,
+  metrics = c("stability", "quality", "complexity"),
+  id_column = "cf",
+  period_column = "event_period",
+  output_format = "wide"
+)
+
+# Examine the output structure
+cat("Metrics result dimensions:", nrow(metrics_result), "rows,", ncol(metrics_result), "columns\n")
+cat("Available metrics:\n")
+metric_cols <- setdiff(names(metrics_result), c("cf", "period", "event_period"))
+for(col in metric_cols[1:min(10, length(metric_cols))]) {
+  cat(paste0("  - ", col, "\n"))
+}
+
+# Display first few rows
+head(metrics_result[, 1:6], 3)
+```
+
+### Understanding Metric Types
+
+The comprehensive metrics function calculates four main categories:
+
+1. **Employment Stability Metrics**: Employment rates, spell durations, turnover
+2. **Contract Quality Metrics**: Contract type distributions, quality improvements
+3. **Career Complexity Metrics**: Transition patterns, career entropy
+4. **Transition Pattern Metrics**: Success rates, duration patterns
+
+```{r metric-categories}
+# Group metrics by category for better understanding
+stability_metrics <- grep("employment|stability|spell|turnover", names(metrics_result), value = TRUE)
+quality_metrics <- grep("contract|permanent|temporary|quality", names(metrics_result), value = TRUE) 
+complexity_metrics <- grep("complexity|entropy|transition_count", names(metrics_result), value = TRUE)
+
+cat("Stability metrics (", length(stability_metrics), "):\n")
+cat(paste(stability_metrics, collapse = ", "), "\n\n")
+
+cat("Quality metrics (", length(quality_metrics), "):\n") 
+cat(paste(quality_metrics, collapse = ", "), "\n\n")
+
+cat("Complexity metrics (", length(complexity_metrics), "):\n")
+cat(paste(complexity_metrics, collapse = ", "), "\n")
+```
+
+## Step 2: Prepare Data for Impact Analysis
+
+The bridge function `prepare_metrics_for_impact_analysis()` transforms the metrics output into a format suitable for causal inference methods. This crucial step handles period structures, treatment assignments, and outcome variable selection.
+
+### Define Treatment Assignment
+
+First, we need to define which individuals are treated vs. control:
+
+```{r treatment-assignment}
+# Create treatment assignment
+# In real studies, this would come from your experimental design or policy assignment
+set.seed(123)  # For reproducibility
+unique_individuals <- unique(sample_data$cf)
+
+treatment_data <- data.table(
+  cf = unique_individuals,
+  is_treated = rbinom(length(unique_individuals), 1, 0.4)  # 40% treatment rate
+)
+
+# Add additional covariates that might affect assignment
+treatment_data[, `:=`(
+  age_group = sample(c("young", "middle", "senior"), .N, replace = TRUE),
+  region = sample(c("north", "center", "south"), .N, replace = TRUE),
+  baseline_employment = runif(.N, 0, 1)
+)]
+
+cat("Treatment assignment summary:\n")
+cat("Total individuals:", nrow(treatment_data), "\n")
+cat("Treated:", sum(treatment_data$is_treated), "(", 
+    round(100 * mean(treatment_data$is_treated), 1), "%)\n")
+cat("Control:", sum(1 - treatment_data$is_treated), "(", 
+    round(100 * mean(1 - treatment_data$is_treated), 1), "%)\n")
+```
+
+### Bridge to Impact Analysis Format
+
+```{r prepare-impact-data}
+# Prepare data for difference-in-differences analysis
+did_data <- prepare_metrics_for_impact_analysis(
+  metrics_output = metrics_result,
+  treatment_assignment = treatment_data,
+  impact_method = "did",
+  id_column = "cf",
+  period_column = "period",  # Note: metrics output uses "period" not "event_period"
+  verbose = TRUE
+)
+
+# Examine the prepared data structure
+cat("\nPrepared data structure:\n")
+cat("Dimensions:", nrow(did_data), "rows,", ncol(did_data), "columns\n")
+cat("Panel structure check:\n")
+
+# Check panel balance
+panel_check <- did_data[, .(
+  n_obs = .N,
+  n_pre = sum(post == 0),
+  n_post = sum(post == 1)
+), by = .(cf, is_treated)][, .(
+  complete_panels = sum(n_pre > 0 & n_post > 0),
+  total_individuals = .N,
+  avg_obs_per_person = mean(n_obs)
+), by = is_treated]
+
+print(panel_check)
+```
+
+### Outcome Variable Selection
+
+The bridge function automatically detects suitable outcome variables, but you can also specify them manually:
+
+```{r outcome-variables}
+# Get automatically detected outcome variables
+auto_outcomes <- attr(did_data, "outcome_vars")
+cat("Automatically detected outcomes (", length(auto_outcomes), "):\n")
+cat(paste(auto_outcomes, collapse = ", "), "\n\n")
+
+# Select key outcomes for analysis
+key_outcomes <- c(
+  "employment_rate",
+  "permanent_contract_rate", 
+  "avg_contract_quality",
+  "employment_stability_index",
+  "transition_success_rate"
+)
+
+# Check which are available
+available_outcomes <- intersect(key_outcomes, names(did_data))
+cat("Selected outcomes for analysis:\n")
+cat(paste(available_outcomes, collapse = ", "), "\n")
+
+# Show descriptive statistics for selected outcomes
+if (length(available_outcomes) > 0) {
+  outcome_stats <- did_data[, lapply(.SD, function(x) {
+    c(Mean = mean(x, na.rm = TRUE), 
+      SD = sd(x, na.rm = TRUE),
+      Min = min(x, na.rm = TRUE),
+      Max = max(x, na.rm = TRUE))
+  }), .SDcols = available_outcomes[1:min(3, length(available_outcomes))]]
+  
+  print(round(outcome_stats, 3))
+}
+```
+
+## Step 3: Run Impact Evaluation
+
+Now we can run difference-in-differences analysis using the prepared data:
+
+### Basic DiD Estimation
+
+```{r did-analysis}
+# Run difference-in-differences analysis
+if (length(available_outcomes) > 0) {
+  did_results <- difference_in_differences(
+    data = did_data,
+    outcome_vars = available_outcomes[1:min(2, length(available_outcomes))],
+    treatment_var = "is_treated",
+    time_var = "post",
+    id_var = "cf",
+    control_vars = NULL,  # Could include baseline_employment, age_group, etc.
+    fixed_effects = "both",
+    verbose = TRUE
+  )
+  
+  # Display results summary
+  if (!is.null(did_results$summary_table)) {
+    cat("DiD Results Summary:\n")
+    print(did_results$summary_table)
+  }
+} else {
+  cat("No suitable outcome variables found for DiD analysis\n")
+}
+```
+
+### Results Interpretation
+
+```{r results-interpretation}
+if (exists("did_results") && !is.null(did_results)) {
+  # Extract treatment effects
+  if (!is.null(did_results$estimates)) {
+    cat("Treatment Effect Estimates:\n")
+    for (outcome in names(did_results$estimates)) {
+      effect <- did_results$estimates[[outcome]]
+      if (!is.null(effect$coefficient)) {
+        cat(sprintf("  %s: %.4f (SE: %.4f)\n", 
+                   outcome, effect$coefficient, effect$std_error))
+      }
+    }
+  }
+  
+  # Check parallel trends if available
+  if (!is.null(did_results$parallel_trends_test)) {
+    cat("\nParallel Trends Test:\n")
+    pt_test <- did_results$parallel_trends_test
+    if (is.list(pt_test) && length(pt_test) > 0) {
+      cat("Test results available for", length(pt_test), "outcomes\n")
+    }
+  }
+}
+```
+
+## Advanced Scenarios
+
+### Scenario 1: Event Study Analysis
+
+For studying treatment effects over time, use event study design:
+
+```{r event-study}
+# Prepare data for event study (requires event_time variable)
+# First, create event time structure in the original metrics data
+if ("event_period" %in% names(sample_data)) {
+  # Create event time relative to treatment
+  sample_data_with_time <- copy(sample_data)
+  sample_data_with_time[, event_time := ifelse(event_period == "pre", -1, 1)]
+  
+  # Recalculate metrics with event time
+  metrics_event <- calculate_comprehensive_impact_metrics(
+    data = sample_data_with_time,
+    metrics = c("stability", "quality"),
+    id_column = "cf",
+    period_column = "event_time",
+    output_format = "wide"
+  )
+  
+  # Prepare for event study
+  event_data <- prepare_metrics_for_impact_analysis(
+    metrics_output = metrics_event,
+    treatment_assignment = treatment_data,
+    impact_method = "event_study",
+    period_column = "period",
+    verbose = TRUE
+  )
+  
+  cat("Event study data prepared with", nrow(event_data), "observations\n")
+}
+```
+
+### Scenario 2: Propensity Score Matching Integration
+
+Combine metrics with propensity score matching:
+
+```{r psm-integration}
+# Prepare data for matching (preserves original structure)
+matching_data <- prepare_metrics_for_impact_analysis(
+  metrics_output = metrics_result,
+  treatment_assignment = treatment_data,
+  impact_method = "matching",
+  verbose = TRUE
+)
+
+# The data is now ready for propensity score matching
+cat("Matching data prepared:\n")
+cat("Treatment group size:", sum(matching_data$is_treated), "\n")
+cat("Control group size:", sum(1 - matching_data$is_treated), "\n")
+
+# Example of how you would proceed with matching
+# (assuming propensity_score_matching function exists)
+# matched_results <- propensity_score_matching(
+#   data = matching_data,
+#   treatment_var = "is_treated",
+#   covariates = c("baseline_employment", "age_group"),
+#   outcome_vars = available_outcomes
+# )
+```
+
+### Scenario 3: Multiple Treatment Groups
+
+Handle complex treatment scenarios:
+
+```{r multiple-treatments}
+# Create multiple treatment groups
+treatment_multi <- copy(treatment_data)
+treatment_multi[, treatment_type := sample(c("none", "training", "subsidies", "both"), 
+                                         .N, replace = TRUE, 
+                                         prob = c(0.4, 0.3, 0.2, 0.1))]
+treatment_multi[, is_treated := as.numeric(treatment_type != "none")]
+
+cat("Multiple treatment groups:\n")
+print(table(treatment_multi$treatment_type))
+
+# Prepare data with additional treatment information
+multi_data <- prepare_metrics_for_impact_analysis(
+  metrics_output = metrics_result,
+  treatment_assignment = treatment_multi,
+  impact_method = "did",
+  verbose = TRUE
+)
+
+# The treatment_type variable is automatically included for sub-group analysis
+cat("Multi-treatment data includes treatment_type variable:", 
+    "treatment_type" %in% names(multi_data), "\n")
+```
+
+## Best Practices and Troubleshooting
+
+### Data Quality Checks
+
+Always validate your data before analysis:
+
+```{r data-validation}
+# Function to check data quality
+validate_integration_data <- function(data, metrics_output, treatment_assignment) {
+  issues <- character(0)
+  
+  # Check for missing values in key variables
+  if (any(is.na(data$is_treated))) {
+    issues <- c(issues, "Missing treatment assignments")
+  }
+  
+  if (any(is.na(data$post))) {
+    issues <- c(issues, "Missing time period information")
+  }
+  
+  # Check panel balance
+  panel_balance <- data[, .(n_periods = .N), by = .(cf, is_treated)]
+  unbalanced <- panel_balance[n_periods != 2]
+  if (nrow(unbalanced) > 0) {
+    issues <- c(issues, paste("Unbalanced panels for", nrow(unbalanced), "individuals"))
+  }
+  
+  # Check outcome variables
+  outcome_vars <- attr(data, "outcome_vars")
+  if (length(outcome_vars) == 0) {
+    issues <- c(issues, "No outcome variables detected")
+  }
+  
+  return(list(
+    is_valid = length(issues) == 0,
+    issues = issues
+  ))
+}
+
+# Validate our prepared data
+validation <- validate_integration_data(did_data, metrics_result, treatment_data)
+cat("Data validation results:\n")
+cat("Valid:", validation$is_valid, "\n")
+if (length(validation$issues) > 0) {
+  cat("Issues:\n")
+  for (issue in validation$issues) {
+    cat("  -", issue, "\n")
+  }
+}
+```
+
+### Common Pitfalls
+
+1. **Period Structure Mismatch**: Ensure period columns are consistent between metrics calculation and bridge function
+2. **Missing Treatment Assignments**: All individuals in metrics data should have treatment assignments
+3. **Insufficient Panel Structure**: DiD requires both pre/post observations for all units
+4. **Outcome Variable Selection**: Not all metrics may be suitable as causal outcomes
+
+### Performance Optimization
+
+For large datasets:
+
+```{r performance-tips, eval=FALSE}
+# Use wide format for better memory efficiency
+metrics_wide <- calculate_comprehensive_impact_metrics(
+  data = large_dataset,
+  metrics = c("stability", "quality"),  # Select only needed metrics
+  output_format = "wide"
+)
+
+# Prepare with specific outcome variables to reduce memory usage
+impact_data <- prepare_metrics_for_impact_analysis(
+  metrics_output = metrics_wide,
+  treatment_assignment = treatment_data,
+  outcome_vars = c("employment_rate", "contract_quality_score"),
+  auto_detect_outcomes = FALSE  # Disable auto-detection for speed
+)
+```
+
+## Visualization and Reporting
+
+### Treatment Effect Visualization
+
+```{r visualization}
+if (exists("did_results") && !is.null(did_results)) {
+  # Create a simple treatment effect plot
+  if (!is.null(did_results$estimates) && length(did_results$estimates) > 0) {
+    
+    # Extract estimates for plotting
+    plot_data <- data.table()
+    for (outcome in names(did_results$estimates)) {
+      est <- did_results$estimates[[outcome]]
+      if (!is.null(est$coefficient)) {
+        plot_data <- rbind(plot_data, data.table(
+          outcome = outcome,
+          estimate = est$coefficient,
+          std_error = est$std_error,
+          ci_lower = est$coefficient - 1.96 * est$std_error,
+          ci_upper = est$coefficient + 1.96 * est$std_error
+        ))
+      }
+    }
+    
+    if (nrow(plot_data) > 0) {
+      # Create coefficient plot
+      p <- ggplot(plot_data, aes(x = outcome, y = estimate)) +
+        geom_point(size = 3, color = "blue") +
+        geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), 
+                      width = 0.2, color = "blue") +
+        geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+        coord_flip() +
+        labs(
+          title = "Treatment Effects on Employment Metrics",
+          subtitle = "Point estimates with 95% confidence intervals",
+          x = "Outcome Variables",
+          y = "Treatment Effect Estimate"
+        ) +
+        theme_minimal()
+      
+      print(p)
+    }
+  }
+}
+```
+
+### Summary Report Generation
+
+```{r summary-report}
+# Generate a comprehensive summary
+generate_integration_summary <- function(metrics_result, did_data, did_results = NULL) {
+  
+  cat("=== EMPLOYMENT METRICS IMPACT EVALUATION SUMMARY ===\n\n")
+  
+  # Data Summary
+  cat("1. DATA OVERVIEW\n")
+  cat(sprintf("   - Total individuals: %d\n", length(unique(did_data$cf))))
+  cat(sprintf("   - Total observations: %d\n", nrow(did_data)))
+  cat(sprintf("   - Treatment rate: %.1f%%\n", 100 * mean(did_data$is_treated)))
+  cat(sprintf("   - Outcome variables: %d\n", length(attr(did_data, "outcome_vars"))))
+  
+  # Metrics Summary  
+  cat("\n2. EMPLOYMENT METRICS\n")
+  outcome_vars <- attr(did_data, "outcome_vars")
+  if (length(outcome_vars) > 0) {
+    outcome_summary <- did_data[, lapply(.SD, mean, na.rm = TRUE), 
+                               .SDcols = outcome_vars[1:min(5, length(outcome_vars))],
+                               by = .(is_treated, post)]
+    print(outcome_summary)
+  }
+  
+  # Impact Results
+  cat("\n3. IMPACT EVALUATION RESULTS\n")
+  if (!is.null(did_results) && !is.null(did_results$estimates)) {
+    for (outcome in names(did_results$estimates)) {
+      est <- did_results$estimates[[outcome]]
+      if (!is.null(est$coefficient)) {
+        significance <- if (!is.null(est$p_value) && est$p_value < 0.05) "***" else ""
+        cat(sprintf("   - %s: %.4f (%.4f) %s\n", 
+                   outcome, est$coefficient, est$std_error, significance))
+      }
+    }
+  } else {
+    cat("   - Impact results not available\n")
+  }
+  
+  cat("\n=== END SUMMARY ===\n")
+}
+
+# Generate the summary
+generate_integration_summary(metrics_result, did_data, 
+                           if(exists("did_results")) did_results else NULL)
+```
+
+## Conclusion
+
+This vignette has demonstrated the complete workflow for integrating employment metrics calculation with causal inference methods in the `longworkR` package. The key steps are:
+
+1. **Calculate comprehensive metrics** using `calculate_comprehensive_impact_metrics()`
+2. **Bridge to impact analysis** using `prepare_metrics_for_impact_analysis()`
+3. **Run causal inference** using methods like `difference_in_differences()`
+
+This integration enables researchers to:
+
+- Use sophisticated employment metrics as outcomes in causal studies
+- Maintain data consistency across analysis steps
+- Apply rigorous statistical methods to employment policy evaluation
+- Handle complex treatment scenarios and multiple outcome measures
+
+The bridge function handles the complexity of data transformation, allowing researchers to focus on the substantive questions of policy impact and causal identification.
+
+### Next Steps
+
+- Explore additional impact evaluation methods (matching, regression discontinuity)
+- Apply to your own employment data with appropriate treatment definitions
+- Consider heterogeneous treatment effects across subgroups
+- Validate results with robustness checks and sensitivity analyses
+
+For more information on specific functions, see their individual help pages and the package documentation.

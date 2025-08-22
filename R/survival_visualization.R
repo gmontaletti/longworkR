@@ -580,36 +580,123 @@ plot_median_survival_forest <- function(
     # Get survival fit for CI
     km_fit <- survival_curves$survival_fits[[ct]]
     
+    # Extract confidence intervals with proper error handling
+    lower_ci <- NA_real_
+    upper_ci <- NA_real_
+    
+    if (!is.null(km_fit)) {
+      # Try to get median confidence intervals from quantile function
+      tryCatch({
+        ci_result <- quantile(km_fit, probs = 0.5)
+        lower_ci <- ci_result$lower
+        upper_ci <- ci_result$upper
+        
+        # Ensure confidence intervals are finite and valid
+        if (is.na(lower_ci) || is.infinite(lower_ci) || lower_ci < 0) {
+          lower_ci <- NA_real_
+        }
+        if (is.na(upper_ci) || is.infinite(upper_ci) || upper_ci < 0) {
+          upper_ci <- NA_real_
+        }
+        
+        # Additional validation: CI should be reasonable relative to median
+        median_val <- survival_curves$median_survival[ct]
+        if (!is.na(median_val) && !is.na(lower_ci) && !is.na(upper_ci)) {
+          # Check if CI makes sense (lower <= median <= upper)
+          if (lower_ci > median_val || upper_ci < median_val) {
+            warning(sprintf("Contract type '%s': Invalid confidence intervals (lower: %.2f, median: %.2f, upper: %.2f). Setting to NA.", 
+                           ct, lower_ci, median_val, upper_ci))
+            lower_ci <- NA_real_
+            upper_ci <- NA_real_
+          }
+        }
+      }, error = function(e) {
+        warning(sprintf("Contract type '%s': Cannot extract confidence intervals: %s", ct, e$message))
+      })
+    }
+    
     forest_data <- rbind(forest_data, data.table(
       contract_type = ct,
       median = survival_curves$median_survival[ct],
-      lower_ci = if (!is.null(km_fit$lower)) km_fit$lower else NA,
-      upper_ci = if (!is.null(km_fit$upper)) km_fit$upper else NA,
-      n = km_fit$n
+      lower_ci = lower_ci,
+      upper_ci = upper_ci,
+      n = if (!is.null(km_fit)) km_fit$n else 0
     ))
+  }
+  
+  # Remove rows with missing median values for ordering
+  valid_data <- forest_data[!is.na(median)]
+  
+  if (nrow(valid_data) == 0) {
+    stop("No valid median survival times available for forest plot")
   }
   
   # Order data
   if (order_by == "median") {
-    forest_data <- forest_data[order(median)]
+    forest_data <- forest_data[order(median, na.last = TRUE)]
   } else if (order_by == "alphabetical") {
     forest_data <- forest_data[order(contract_type)]
   } else if (order_by == "custom" && !is.null(custom_order)) {
-    forest_data[, contract_type := factor(contract_type, levels = custom_order)]
+    # Create factor with custom order, preserving all levels
+    all_types <- unique(forest_data$contract_type)
+    ordered_levels <- c(intersect(custom_order, all_types), 
+                       setdiff(all_types, custom_order))
+    forest_data[, contract_type := factor(contract_type, levels = ordered_levels)]
     forest_data <- forest_data[order(contract_type)]
   }
   
-  # Create forest plot
-  p <- ggplot(forest_data, aes(y = reorder(contract_type, median))) +
-    geom_point(aes(x = median), size = 3) +
-    geom_errorbarh(
-      aes(xmin = lower_ci, xmax = upper_ci),
-      height = 0.2
-    ) +
+  # Create appropriate labels and Y-axis ordering
+  if (show_n) {
+    # Create labels with sample sizes
+    forest_data[, display_label := sprintf("%s (n=%d)", contract_type, n)]
+    
+    # Create the plot with proper factor ordering
+    # Use the median values for ordering but display the labels
+    y_order <- forest_data[order(median, na.last = TRUE)]$display_label
+    forest_data[, display_label := factor(display_label, levels = y_order)]
+    
+    # Create forest plot with sample size labels
+    p <- ggplot(forest_data, aes(y = display_label)) +
+      geom_point(aes(x = median), size = 3) +
+      labs(y = "Contract Type")
+    
+  } else {
+    # Create plot without sample sizes
+    # Order contract types by median for Y-axis
+    if (order_by == "median") {
+      y_order <- forest_data[order(median, na.last = TRUE)]$contract_type
+      forest_data[, contract_type := factor(contract_type, levels = y_order)]
+    }
+    
+    p <- ggplot(forest_data, aes(y = contract_type)) +
+      geom_point(aes(x = median), size = 3) +
+      labs(y = "Contract Type")
+  }
+  
+  # Add error bars only for non-missing confidence intervals
+  ci_data <- forest_data[!is.na(lower_ci) & !is.na(upper_ci)]
+  
+  if (nrow(ci_data) > 0) {
+    if (show_n) {
+      p <- p + geom_errorbarh(
+        data = ci_data,
+        aes(y = display_label, xmin = lower_ci, xmax = upper_ci),
+        height = 0.2
+      )
+    } else {
+      p <- p + geom_errorbarh(
+        data = ci_data,
+        aes(y = contract_type, xmin = lower_ci, xmax = upper_ci),
+        height = 0.2
+      )
+    }
+  }
+  
+  # Complete the plot
+  p <- p +
     labs(
       title = "Median Survival Times by Contract Type",
-      x = "Median Survival Time (days)",
-      y = "Contract Type"
+      x = "Median Survival Time (days)"
     ) +
     theme_minimal() +
     theme(
@@ -617,32 +704,88 @@ plot_median_survival_forest <- function(
       panel.grid.major.y = element_line(color = "gray90")
     )
   
-  # Add sample sizes if requested
-  if (show_n) {
-    forest_data[, label := sprintf("%s (n=%d)", contract_type, n)]
-    p <- p + scale_y_discrete(labels = forest_data$label)
-  }
-  
   # Add reference line at overall median
   overall_median <- median(forest_data$median, na.rm = TRUE)
-  p <- p + geom_vline(
-    xintercept = overall_median,
-    linetype = "dashed",
-    color = "red",
-    alpha = 0.5
-  )
+  if (!is.na(overall_median)) {
+    p <- p + geom_vline(
+      xintercept = overall_median,
+      linetype = "dashed",
+      color = "red",
+      alpha = 0.5
+    )
+  }
+  
+  # Add informative note if some CIs are missing
+  missing_ci_count <- sum(is.na(forest_data$lower_ci) | is.na(forest_data$upper_ci))
+  if (missing_ci_count > 0) {
+    p <- p + labs(
+      caption = sprintf("Note: Confidence intervals not available for %d contract type(s)", missing_ci_count)
+    )
+  }
   
   return(p)
+}
+
+#' Validate Animation Setup
+#'
+#' @description
+#' Internal function to validate that animation prerequisites are met
+#'
+#' @keywords internal
+validate_animation_setup <- function() {
+  # Check for essential graphics devices
+  if (!capabilities("png")) {
+    stop("PNG graphics device is not available. This is required for animations.")
+  }
+  
+  # Check temp directory accessibility
+  temp_dir <- tempdir()
+  if (!dir.exists(temp_dir)) {
+    stop("Temporary directory is not accessible: ", temp_dir)
+  }
+  
+  # Test write permissions in temp directory
+  test_file <- file.path(temp_dir, paste0("gganimate_test_", Sys.getpid(), ".txt"))
+  tryCatch({
+    writeLines("test", test_file)
+    file.remove(test_file)
+  }, error = function(e) {
+    stop("Cannot write to temporary directory: ", temp_dir, ". Error: ", e$message)
+  })
+  
+  # Check gganimate version compatibility
+  gganimate_version <- packageVersion("gganimate")
+  if (gganimate_version < "1.0.0") {
+    warning("gganimate version ", gganimate_version, " may have compatibility issues. Version >= 1.0.0 recommended.")
+  }
+  
+  # Check for at least one working renderer backend
+  has_working_renderer <- any(c(
+    requireNamespace("gifski", quietly = TRUE),
+    requireNamespace("magick", quietly = TRUE),
+    capabilities("png")
+  ))
+  
+  if (!has_working_renderer) {
+    stop("No suitable animation renderer found. Install 'gifski' or 'magick' package.")
+  }
+  
+  invisible(TRUE)
 }
 
 #' Create Animated Survival Curves
 #'
 #' @description
-#' Creates an animated visualization of survival curves over time using gganimate.
+#' Creates an memory-efficient animated visualization of survival curves over time using gganimate.
+#' Optimized to handle large datasets without memory overflow and robust against renderer failures.
 #'
 #' @param survival_curves List output from estimate_contract_survival()
-#' @param animation_speed Numeric. Speed of animation in fps
+#' @param animation_speed Numeric. Speed of animation in fps (default: 10)
 #' @param save_as Character. File path to save animation (NULL to display only)
+#' @param max_frames Integer. Maximum number of animation frames to reduce memory usage (default: 50)
+#' @param sample_every Integer. Sample every nth time point to reduce data density (default: 1)
+#' @param width Integer. Animation width in pixels (default: 800)
+#' @param height Integer. Animation height in pixels (default: 600)
 #'
 #' @return An animated ggplot object or saved file path
 #'
@@ -650,57 +793,333 @@ plot_median_survival_forest <- function(
 animate_survival_curves <- function(
     survival_curves,
     animation_speed = 10,
-    save_as = NULL
+    save_as = NULL,
+    max_frames = 50,  # Reduced default for stability
+    sample_every = 1,
+    width = 800,
+    height = 600
 ) {
+  
+  # Apply safety limits to prevent segfaults
+  width <- min(width, 1200)    # Limit maximum width
+  height <- min(height, 900)   # Limit maximum height
+  max_frames <- min(max_frames, 30)  # Limit maximum frames
+  animation_speed <- min(animation_speed, 12)  # Limit animation speed
   
   if (!requireNamespace("gganimate", quietly = TRUE)) {
     stop("Package 'gganimate' is required for animations")
   }
   
-  # Prepare animation data
+  if (!requireNamespace("data.table", quietly = TRUE)) {
+    stop("Package 'data.table' is required for efficient data processing")
+  }
+  
+  # Validate animation prerequisites
+  validate_animation_setup()
+  
+  # Validate input data
+  if (!is.list(survival_curves) || is.null(survival_curves$survival_tables)) {
+    stop("Invalid survival_curves input. Expected output from estimate_contract_survival()")
+  }
+  
+  if (length(survival_curves$survival_tables) == 0) {
+    stop("No survival tables found in survival_curves")
+  }
+  
+  # Pre-process to find optimal frame sampling
+  contract_types <- names(survival_curves$survival_tables)
+  
+  # Calculate total potential frames and determine sampling strategy
+  total_points <- sum(sapply(contract_types, function(ct) {
+    nrow(survival_curves$survival_tables[[ct]])
+  }))
+  
+  # Adaptive sampling to stay within memory limits
+  if (total_points > 5000) {  # More conservative threshold
+    sample_every <- max(sample_every, ceiling(total_points / 2000))
+    max_frames <- min(max_frames, 30)  # Further limit frames for large datasets
+    message(sprintf("Large dataset detected (%d points). Using adaptive sampling (every %d points, max %d frames).", 
+                   total_points, sample_every, max_frames))
+  }
+  
+  # Create animation data using a simpler, more robust approach
+  # This avoids complex path transitions that can cause segfaults
+  
+  # Find common time grid across all contract types
+  all_times <- unique(unlist(lapply(contract_types, function(ct) {
+    survival_curves$survival_tables[[ct]]$time
+  })))
+  all_times <- sort(all_times)
+  
+  # Sample time points to reduce frames
+  if (length(all_times) > max_frames) {
+    time_indices <- c(1, round(seq(2, length(all_times), length.out = max_frames - 1)))
+    time_indices <- unique(time_indices)
+    selected_times <- all_times[time_indices]
+  } else {
+    selected_times <- all_times
+  }
+  
+  # Further sampling if needed
+  if (sample_every > 1 && length(selected_times) > sample_every) {
+    keep_indices <- c(1, seq(sample_every, length(selected_times), by = sample_every), length(selected_times))
+    keep_indices <- unique(keep_indices)
+    selected_times <- selected_times[keep_indices]
+  }
+  
+  # Create animation data with consistent structure
   anim_data <- data.table()
   
-  for (ct in names(survival_curves$survival_tables)) {
-    surv_table <- survival_curves$survival_tables[[ct]]
+  for (frame_idx in seq_along(selected_times)) {
+    current_time <- selected_times[frame_idx]
     
-    # Create cumulative data for animation
-    for (i in 1:nrow(surv_table)) {
+    for (ct in contract_types) {
+      surv_table <- survival_curves$survival_tables[[ct]]
+      
+      # Find survival probability at current time (step function)
+      surv_prob <- if (current_time <= min(surv_table$time)) {
+        1.0  # Before first event
+      } else {
+        # Find latest time <= current_time
+        valid_times <- surv_table$time[surv_table$time <= current_time]
+        if (length(valid_times) > 0) {
+          latest_time <- max(valid_times)
+          surv_table$survival_prob[surv_table$time == latest_time][1]
+        } else {
+          1.0
+        }
+      }
+      
+      # Add to animation data
       anim_data <- rbind(anim_data, data.table(
         contract_type = ct,
-        time = surv_table$time[1:i],
-        survival_prob = surv_table$survival_prob[1:i],
-        frame = i
+        time = current_time,
+        survival_prob = surv_prob,
+        frame = frame_idx
       ))
     }
   }
   
-  # Create animated plot
-  p <- ggplot(anim_data, aes(x = time, y = survival_prob, color = contract_type)) +
-    geom_line(linewidth = 1.5) +
-    geom_point(size = 3) +
-    labs(
-      title = "Survival Curves Animation",
-      subtitle = "Time: {frame_time}",
-      x = "Time (days)",
-      y = "Survival Probability"
-    ) +
-    theme_minimal() +
-    scale_y_continuous(limits = c(0, 1)) +
-    gganimate::transition_reveal(frame)
+  # Clear intermediate objects to free memory
+  rm(all_times, selected_times)
+  gc()
   
-  # Animate
-  anim <- gganimate::animate(
-    p,
-    fps = animation_speed,
-    nframes = max(anim_data$frame),
-    width = 800,
-    height = 600
-  )
+  # Calculate actual frames before creating plot
+  actual_frames <- min(max(anim_data$frame), max_frames)
+  
+  message(sprintf("Creating animation with %d frames from %d data points", 
+                 actual_frames, nrow(anim_data)))
+  
+  # Ensure ggplot2 is properly loaded
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for animations")
+  }
+  
+  # Create animated plot with simpler approach to avoid segfaults
+  # Use transition_time instead of transition_states for more robust animation
+  p <- ggplot2::ggplot(anim_data, ggplot2::aes(x = time, y = survival_prob, color = contract_type)) +
+    ggplot2::geom_step(direction = "hv", linewidth = 1.2, alpha = 0.8) +
+    ggplot2::geom_point(size = 2, alpha = 0.7) +
+    ggplot2::labs(
+      title = "Contract Survival Curves",
+      subtitle = "Time: {closest_state}",
+      x = "Time (days)",
+      y = "Survival Probability",
+      color = "Contract Type"
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      legend.position = "bottom",
+      plot.title = ggplot2::element_text(face = "bold", size = 14),
+      axis.title = ggplot2::element_text(face = "bold")
+    ) +
+    ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+    ggplot2::scale_x_continuous(expand = c(0.02, 0)) +
+    gganimate::transition_states(
+      frame,
+      transition_length = 2,
+      state_length = 1,
+      wrap = FALSE
+    ) +
+    gganimate::ease_aes("linear")
+  
+  # Create a clean temporary directory for this animation
+  anim_temp_dir <- file.path(tempdir(), paste0("longworkR_anim_", Sys.getpid()))
+  
+  # Ensure clean temp directory creation
+  if (dir.exists(anim_temp_dir)) {
+    unlink(anim_temp_dir, recursive = TRUE, force = TRUE)
+  }
+  
+  tryCatch({
+    dir.create(anim_temp_dir, recursive = TRUE, showWarnings = FALSE)
+  }, error = function(e) {
+    anim_temp_dir <<- tempdir()  # Fallback to default temp dir
+    warning("Could not create dedicated temp directory, using default: ", e$message)
+  })
+  
+  # Create animation with robust error handling and multiple fallback strategies
+  anim <- NULL
+  
+  # Strategy 1: Try with gifski renderer (most reliable)
+  if (is.null(anim) && requireNamespace("gifski", quietly = TRUE)) {
+    tryCatch({
+      message("Attempting animation with gifski renderer...")
+      anim <- gganimate::animate(
+        p,
+        fps = animation_speed,
+        nframes = actual_frames,
+        width = width,
+        height = height,
+        res = 96,
+        renderer = gganimate::gifski_renderer(
+          loop = TRUE,
+          width = width,
+          height = height
+        )
+      )
+      message("Success with gifski renderer")
+    }, error = function(e) {
+      message("gifski renderer failed: ", e$message)
+      anim <<- NULL
+    })
+  }
+  
+  # Strategy 2: Try with magick renderer 
+  if (is.null(anim) && requireNamespace("magick", quietly = TRUE)) {
+    tryCatch({
+      message("Attempting animation with magick renderer...")
+      anim <- gganimate::animate(
+        p,
+        fps = animation_speed,
+        nframes = actual_frames,
+        width = width,
+        height = height,
+        res = 96,
+        renderer = gganimate::magick_renderer(
+          loop = TRUE
+        )
+      )
+      message("Success with magick renderer")
+    }, error = function(e) {
+      message("magick renderer failed: ", e$message)
+      anim <<- NULL
+    })
+  }
+  
+  # Strategy 3: Try with simple settings and no explicit renderer
+  if (is.null(anim)) {
+    tryCatch({
+      message("Attempting animation with default settings...")
+      # Temporarily set options for device handling
+      old_dev_option <- getOption("gganimate.dev_args")
+      options(gganimate.dev_args = list(type = "cairo-png"))
+      
+      anim <- gganimate::animate(
+        p,
+        fps = min(animation_speed, 8),  # Slower animation
+        nframes = min(actual_frames, 20),  # Fewer frames
+        width = min(width, 600),   # Smaller size
+        height = min(height, 450),
+        res = 72  # Lower resolution
+      )
+      
+      # Restore options
+      options(gganimate.dev_args = old_dev_option)
+      message("Success with default renderer")
+    }, error = function(e) {
+      message("Default renderer failed: ", e$message)
+      anim <<- NULL
+    })
+  }
+  
+  # Strategy 4: Last resort - very conservative settings
+  if (is.null(anim)) {
+    tryCatch({
+      message("Attempting animation with minimal settings...")
+      
+      # Create a much simpler plot with explicit namespace references
+      simple_p <- ggplot2::ggplot(anim_data[frame <= 10], ggplot2::aes(x = time, y = survival_prob, color = contract_type)) +
+        ggplot2::geom_line(size = 1) +
+        ggplot2::labs(
+          title = "Survival Curves",
+          x = "Time (days)",
+          y = "Survival Probability"
+        ) +
+        ggplot2::theme_minimal() +
+        gganimate::transition_states(frame, transition_length = 1, state_length = 2)
+      
+      anim <- gganimate::animate(
+        simple_p,
+        fps = 5,
+        nframes = min(10, actual_frames),
+        width = 400,
+        height = 300,
+        res = 72
+      )
+      message("Success with minimal settings")
+    }, error = function(e) {
+      message("All animation strategies failed: ", e$message)
+      stop("Unable to create animation. Please check gganimate installation and system graphics capabilities. Last error: ", e$message)
+    })
+  }
+  
+  # Clean up animation data to free memory
+  rm(anim_data, p)
+  gc()
+  
+  # Clean up temp directory
+  if (dir.exists(anim_temp_dir) && anim_temp_dir != tempdir()) {
+    unlink(anim_temp_dir, recursive = TRUE, force = TRUE)
+  }
   
   # Save if requested
-  if (!is.null(save_as)) {
-    gganimate::anim_save(save_as, animation = anim)
-    return(invisible(save_as))
+  if (!is.null(save_as) && !is.null(anim)) {
+    # Handle directory vs file path
+    if (dir.exists(save_as) || endsWith(save_as, "/")) {
+      # save_as is a directory, create filename
+      save_dir <- normalizePath(save_as, mustWork = FALSE)
+      save_file <- file.path(save_dir, "survival_animation.gif")
+    } else {
+      # save_as is a file path
+      save_file <- normalizePath(save_as, mustWork = FALSE)
+      save_dir <- dirname(save_file)
+    }
+    
+    # Ensure directory exists
+    if (!dir.exists(save_dir)) {
+      tryCatch({
+        dir.create(save_dir, recursive = TRUE, showWarnings = FALSE)
+      }, error = function(e) {
+        warning("Could not create directory: ", save_dir, ". Error: ", e$message)
+        save_file <- file.path(tempdir(), "survival_animation.gif")
+        save_dir <- tempdir()
+      })
+    }
+    
+    # Ensure file has .gif extension
+    if (!grepl("\\.(gif|png|mp4)$", save_file, ignore.case = TRUE)) {
+      save_file <- paste0(save_file, ".gif")
+    }
+    
+    # Save animation with error handling
+    tryCatch({
+      gganimate::anim_save(save_file, animation = anim)
+      message(sprintf("Animation saved to: %s", save_file))
+      return(invisible(save_file))
+    }, error = function(e) {
+      warning("Failed to save animation: ", e$message)
+      # Try saving to temp directory as fallback
+      temp_file <- file.path(tempdir(), "survival_animation_backup.gif")
+      tryCatch({
+        gganimate::anim_save(temp_file, animation = anim)
+        message(sprintf("Animation saved to temporary location: %s", temp_file))
+        return(invisible(temp_file))
+      }, error = function(e2) {
+        warning("Failed to save animation even to temp directory: ", e2$message)
+        return(anim)  # Return the animation object instead of failing completely
+      })
+    })
   }
   
   return(anim)

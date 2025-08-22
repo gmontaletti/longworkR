@@ -49,7 +49,7 @@ coarsened_exact_matching(
 }
 \value{
 A list containing:
-\item{matched_data}{Data.table with ALL events for matched individuals (both treated and control)}
+\item{matched_data}{Data.table with ALL events for matched individuals (both treated and control). Includes event_time column with values: "pre" (pre-treatment), "post" (post-treatment), "control" (control group), or NA}
 \item{matched_persons}{Data.table with person-level characteristics used for matching}
 \item{match_summary}{Summary of CEM procedure}
 \item{imbalance_measures}{L1 and other imbalance statistics}

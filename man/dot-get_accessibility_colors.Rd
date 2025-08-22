@@ -4,7 +4,7 @@
 \alias{.get_accessibility_colors}
 \title{Get Accessibility-Friendly Color Palettes}
 \usage{
-.get_accessibility_colors(palette_name, use_bw, accessibility_mode)
+.get_accessibility_colors(palette_name, use_bw, accessibility_mode, n = NULL)
 }
 \arguments{
 \item{palette_name}{Name of color palette}

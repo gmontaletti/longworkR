@@ -1,13 +1,15 @@
 Package: longworkR
 Title: Longitudinal Employment Analytics for vecshift Data
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: 
     person("Giampaolo", "Montaletti", , "giampaolo.montaletti@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0002-5327-1122"))
 Description: Analytics and visualization tools for longitudinal employment data
     processed by the vecshift package. Includes survival analysis, impact evaluation,
     difference-in-differences, network analysis, and advanced visualization capabilities
-    for employment transitions and career trajectories.
+    for employment transitions and career trajectories. Features comprehensive data
+    protection with synthetic data generation for public distribution while maintaining
+    privacy of real employment records.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -31,7 +33,8 @@ Imports:
     stats,
     grDevices,
     utils,
-    collapse
+    collapse,
+    ggalluvial
 Suggests:
     g6r,
     networkD3,

@@ -4,18 +4,35 @@
 \alias{animate_survival_curves}
 \title{Create Animated Survival Curves}
 \usage{
-animate_survival_curves(survival_curves, animation_speed = 10, save_as = NULL)
+animate_survival_curves(
+  survival_curves,
+  animation_speed = 10,
+  save_as = NULL,
+  max_frames = 50,
+  sample_every = 1,
+  width = 800,
+  height = 600
+)
 }
 \arguments{
 \item{survival_curves}{List output from estimate_contract_survival()}
 
-\item{animation_speed}{Numeric. Speed of animation in fps}
+\item{animation_speed}{Numeric. Speed of animation in fps (default: 10)}
 
 \item{save_as}{Character. File path to save animation (NULL to display only)}
+
+\item{max_frames}{Integer. Maximum number of animation frames to reduce memory usage (default: 50)}
+
+\item{sample_every}{Integer. Sample every nth time point to reduce data density (default: 1)}
+
+\item{width}{Integer. Animation width in pixels (default: 800)}
+
+\item{height}{Integer. Animation height in pixels (default: 600)}
 }
 \value{
 An animated ggplot object or saved file path
 }
 \description{
-Creates an animated visualization of survival curves over time using gganimate.
+Creates an memory-efficient animated visualization of survival curves over time using gganimate.
+Optimized to handle large datasets without memory overflow and robust against renderer failures.
 }

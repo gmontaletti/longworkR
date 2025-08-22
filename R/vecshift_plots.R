@@ -710,253 +710,256 @@ plot_duration_analysis <- function(data,
 
 #' Plot Employment Transition Flows
 #'
-#' Creates flow diagrams showing transitions between employment statuses,
-#' using Sankey-style or alluvial visualizations to show employment pathways.
+#' Creates alluvial flow diagrams showing how individuals transition between employment 
+#' statuses over time. Uses ggalluvial to create proper flow ribbons that connect 
+#' employment categories across multiple time periods, showing both the stacked 
+#' distribution at each time point and the flowing transitions between them.
 #'
 #' @param data Data.table output from vecshift() containing employment segments
 #' @param person_col Character. Column name for person identifier (default: "cf")
 #' @param time_col Character. Column name for time periods (default: "inizio")
 #' @param status_col Character. Column name for employment status (default: "stato")
-#' @param plot_type Character. Type of plot: "sankey", "alluvial", "chord" (default: "alluvial")
-#' @param min_transitions Integer. Minimum number of transitions to show (default: 5)
-#' @param max_categories Integer. Maximum categories to show (default: 8)
-#' @param time_window Character. Time window for transitions: "all", "year", "quarter" (default: "all")
-#' @param group_by Character. Column to group transitions by (default: NULL)
+#' @param plot_type Character. Type of plot: "alluvial", "flow", "sankey" (default: "alluvial")
+#' @param agg_period Character. Time aggregation: "year", "quarter", "month" (default: "year")
+#' @param min_freq Integer. Minimum frequency to include status-period combinations (default: 10)
+#' @param max_categories Integer. Maximum employment categories to show (default: 8)
 #' @param palette Character. Color palette to use (default: "employment")
 #' @param use_bw Logical. Use black and white palette (default: FALSE)
-#' @param alpha Numeric. Transparency (default: 0.7)
-#' @param show_percentages Logical. Show transition percentages (default: TRUE)
+#' @param alpha Numeric. Flow transparency (default: 0.7)
+#' @param show_percentages Logical. Show percentages in stratum labels (default: TRUE)
+#' @param stratum_width Numeric. Width of the stacked bars/strata (default: 0.3)
 #'
-#' @return A ggplot2 object showing transition flows
+#' @return A ggplot2 object showing transition flows with proper alluvial ribbons
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' # Basic alluvial diagram
-#' plot_transition_flows(data, plot_type = "alluvial")
+#' # Basic alluvial diagram showing flows across years
+#' plot_transition_flows(data, plot_type = "alluvial", agg_period = "year")
 #' 
-#' # Sankey diagram with minimum transitions
-#' plot_transition_flows(data, plot_type = "sankey", min_transitions = 10)
+#' # Flow-only visualization (no stacked bars)
+#' plot_transition_flows(data, plot_type = "flow", agg_period = "quarter")
 #' 
-#' # Transitions within a year window
-#' plot_transition_flows(data, time_window = "year")
+#' # Sankey summary (first to last status)
+#' plot_transition_flows(data, plot_type = "sankey")
 #' }
 plot_transition_flows <- function(data,
                                  person_col = "cf",
                                  time_col = "inizio", 
                                  status_col = "stato",
                                  plot_type = "alluvial",
-                                 min_transitions = 5,
+                                 agg_period = "year",
+                                 min_freq = 10,
                                  max_categories = 8,
-                                 time_window = "all",
-                                 group_by = NULL,
                                  palette = "employment",
                                  use_bw = FALSE,
                                  alpha = 0.7,
-                                 show_percentages = TRUE) {
+                                 show_percentages = TRUE,
+                                 stratum_width = 0.3) {
   
   # Check required packages
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting functions")
   }
+  if (!requireNamespace("ggalluvial", quietly = TRUE)) {
+    stop("Package 'ggalluvial' is required for alluvial plots")
+  }
   
   # Input validation
-  plot_type <- match.arg(plot_type, c("alluvial", "sankey", "chord"))
-  time_window <- match.arg(time_window, c("all", "year", "quarter"))
+  plot_type <- match.arg(plot_type, c("alluvial", "flow", "sankey"))
+  agg_period <- match.arg(agg_period, c("year", "quarter", "month"))
   
-  # Order data by person and time
-  setorderv(data, c(person_col, time_col))
+  # Create time periods for flow analysis
+  plot_data <- copy(data)
+  setorderv(plot_data, c(person_col, time_col))
   
-  # Create transitions data
-  transitions <- data[, {
-    if (.N > 1) {
-      from_status <- get(status_col)[1:(.N-1)]
-      to_status <- get(status_col)[2:.N]
-      time_from <- get(time_col)[1:(.N-1)]
-      time_to <- get(time_col)[2:.N]
-      
-      data.table(
-        from = from_status,
-        to = to_status,
-        time_from = time_from,
-        time_to = time_to
-      )
+  # Create time period grouping
+  if (agg_period == "year") {
+    plot_data[, time_period := format(as.Date(get(time_col)), "%Y")]
+  } else if (agg_period == "quarter") {
+    plot_data[, time_period := paste0(format(as.Date(get(time_col)), "%Y-Q"), 
+                                     ceiling(as.numeric(format(as.Date(get(time_col)), "%m"))/3))]
+  } else {
+    plot_data[, time_period := format(as.Date(get(time_col)), "%Y-%m")]
+  }
+  
+  # For each person, get their status in each time period
+  # Take the most frequent status per person per period
+  person_status_by_period <- plot_data[, {
+    if (.N > 0) {
+      status_counts <- table(get(status_col))
+      if (length(status_counts) > 0) {
+        most_frequent_status <- names(status_counts)[which.max(status_counts)]
+        .(status = most_frequent_status)
+      } else {
+        .(status = character(0))
+      }
     } else {
-      data.table(from = character(0), to = character(0), 
-                 time_from = as.Date(character(0)), time_to = as.Date(character(0)))
+      .(status = character(0))
     }
-  }, by = person_col]
+  }, by = c(person_col, "time_period")]
   
-  if (nrow(transitions) == 0) {
-    warning("No transitions found in the data")
+  # Remove any empty results
+  person_status_by_period <- person_status_by_period[status != ""]
+  
+  # Filter to keep only people with data across multiple periods
+  people_with_transitions <- person_status_by_period[, .N, by = person_col][N >= 2]
+  person_status_by_period <- person_status_by_period[get(person_col) %in% people_with_transitions[[person_col]]]
+  
+  if (nrow(person_status_by_period) == 0) {
+    warning("No individuals found with employment across multiple time periods")
     return(ggplot2::ggplot() + 
-           ggplot2::geom_text(ggplot2::aes(x = 0.5, y = 0.5, label = "No transitions found"),
+           ggplot2::geom_text(ggplot2::aes(x = 0.5, y = 0.5, 
+                                          label = "No longitudinal employment data found"),
                              size = 6) +
            ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1) +
            theme_vecshift() +
-           ggplot2::labs(title = "No Employment Transitions Found"))
+           ggplot2::labs(title = "Insufficient Longitudinal Data"))
   }
   
-  # Apply time window filtering
-  if (time_window != "all") {
-    # Add time period grouping and filter
-    if (time_window == "year") {
-      transitions[, time_period := format(time_from, "%Y")]
-      # Use the most recent year for simplicity
-      recent_year <- max(transitions$time_period, na.rm = TRUE)
-      transitions <- transitions[time_period == recent_year]
-    } else if (time_window == "quarter") {
-      transitions[, time_period := paste0(format(time_from, "%Y-Q"), 
-                                         ceiling(as.numeric(format(time_from, "%m"))/3))]
-      # Use the most recent quarter
-      recent_quarter <- max(transitions$time_period, na.rm = TRUE)
-      transitions <- transitions[time_period == recent_quarter]
-    }
-  }
-  
-  # Aggregate transitions
-  transition_counts <- transitions[, .N, by = .(from, to)]
-  setnames(transition_counts, "N", "count")
-  
-  # Filter by minimum transitions
-  transition_counts <- transition_counts[count >= min_transitions]
-  
-  # Limit categories if needed
-  all_statuses <- unique(c(transition_counts$from, transition_counts$to))
+  # Limit categories if needed - keep most common statuses
+  all_statuses <- unique(person_status_by_period$status)
   if (length(all_statuses) > max_categories) {
-    # Keep the most common statuses
-    status_counts <- data[, .N, by = .(status = get(status_col))]
-    setorderv(status_counts, "N", -1)
-    keep_statuses <- head(status_counts[[1]], max_categories)
-    transition_counts <- transition_counts[from %in% keep_statuses & to %in% keep_statuses]
+    status_freq <- person_status_by_period[, .N, by = status]
+    setorderv(status_freq, "N", -1)
+    keep_statuses <- head(status_freq$status, max_categories)
+    person_status_by_period <- person_status_by_period[status %in% keep_statuses]
   }
   
-  if (nrow(transition_counts) == 0) {
-    warning("No transitions meet the filtering criteria")
+  # Filter by minimum frequency
+  status_period_counts <- person_status_by_period[, .N, by = .(time_period, status)]
+  valid_combinations <- status_period_counts[N >= min_freq]
+  
+  if (nrow(valid_combinations) == 0) {
+    warning(paste("No time period-status combinations with >=", min_freq, "individuals"))
     return(ggplot2::ggplot() + 
            ggplot2::geom_text(ggplot2::aes(x = 0.5, y = 0.5, 
-                                          label = paste("No transitions with >=", min_transitions, "occurrences")),
+                                          label = paste("No combinations with >=", min_freq, "people")),
                              size = 5) +
            ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1) +
            theme_vecshift() +
-           ggplot2::labs(title = "Insufficient Transition Data"))
+           ggplot2::labs(title = "Insufficient Data for Flow Visualization"))
   }
   
-  # Add percentages
-  if (show_percentages) {
-    transition_counts[, percentage := round(100 * count / sum(count), 1)]
-    transition_counts[, label := paste0(from, " → ", to, "\n(", count, ", ", percentage, "%)")]
-  } else {
-    transition_counts[, label := paste0(from, " → ", to, "\n(", count, ")")]
+  # Ensure we have at least 2 time periods
+  unique_periods <- unique(person_status_by_period$time_period)
+  if (length(unique_periods) < 2) {
+    warning("Need at least 2 time periods for flow visualization")
+    return(ggplot2::ggplot() + 
+           ggplot2::geom_text(ggplot2::aes(x = 0.5, y = 0.5, 
+                                          label = "Need multiple time periods for flows"),
+                             size = 6) +
+           ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1) +
+           theme_vecshift() +
+           ggplot2::labs(title = "Insufficient Time Periods"))
   }
   
-  # Get colors using standardized employment color palette
+  # Sort time periods chronologically
+  person_status_by_period[, time_period := factor(time_period, levels = sort(unique(time_period)))]
+  
+  # Get standardized colors
   if (use_bw) {
-    colors <- vecshift_colors("main_bw", n = length(all_statuses))
-    names(colors) <- all_statuses
+    colors <- vecshift_colors("main_bw", n = length(unique(person_status_by_period$status)))
+    names(colors) <- unique(person_status_by_period$status)
   } else {
-    # Use standardized employment colors for consistency across all plotting functions
-    colors <- get_standardized_employment_colors(all_statuses)
+    colors <- get_standardized_employment_colors(unique(person_status_by_period$status))
   }
   
   if (plot_type == "alluvial") {
-    # Create alluvial-style plot using basic ggplot2
-    # For a proper alluvial plot, we'll create a simplified flow diagram
-    
-    # Create coordinates for the flow
-    transition_counts[, from_y := match(from, unique(c(from, to)))]
-    transition_counts[, to_y := match(to, unique(c(from, to)))]
-    transition_counts[, flow_width := sqrt(count) / 2]  # Scale width by count
-    
-    p <- ggplot2::ggplot(transition_counts) +
-      # From status rectangles
-      ggplot2::geom_rect(ggplot2::aes(xmin = 1, xmax = 1.5, 
-                                     ymin = from_y - flow_width, 
-                                     ymax = from_y + flow_width,
-                                     fill = from), 
-                        alpha = alpha) +
-      # To status rectangles
-      ggplot2::geom_rect(ggplot2::aes(xmin = 3.5, xmax = 4, 
-                                     ymin = to_y - flow_width, 
-                                     ymax = to_y + flow_width,
-                                     fill = to), 
-                        alpha = alpha) +
-      # Flow connections (simplified as lines)
-      ggplot2::geom_segment(ggplot2::aes(x = 1.5, y = from_y, 
-                                        xend = 3.5, yend = to_y,
-                                        color = from,
-                                        size = count), 
-                           alpha = alpha * 0.6) +
+    # Create proper alluvial plot using ggalluvial
+    p <- ggplot2::ggplot(person_status_by_period,
+                        ggplot2::aes(x = time_period, stratum = status, 
+                                    alluvium = get(person_col), fill = status)) +
+      ggalluvial::geom_flow(alpha = alpha, curve_type = "cubic", 
+                           width = stratum_width) +
+      ggalluvial::geom_stratum(alpha = 0.8, width = stratum_width) +
+      ggplot2::geom_text(stat = ggalluvial::StatStratum, 
+                        ggplot2::aes(label = ggplot2::after_stat(stratum)),
+                        size = 3, color = "white", fontface = "bold") +
       ggplot2::scale_fill_manual(values = colors, name = "Employment\nStatus") +
-      ggplot2::scale_color_manual(values = colors, guide = "none") +
-      ggplot2::scale_size_continuous(range = c(0.5, 3), guide = "none") +
-      ggplot2::scale_y_continuous(breaks = seq_along(unique(c(transition_counts$from, transition_counts$to))),
-                                 labels = unique(c(transition_counts$from, transition_counts$to))) +
       ggplot2::labs(
-        title = "Employment Status Transition Flows",
-        subtitle = paste("Showing", nrow(transition_counts), "transition patterns"),
-        x = NULL,
-        y = "Employment Status",
-        caption = "Line width proportional to transition frequency"
+        title = "Employment Status Flows Over Time",
+        subtitle = paste("Showing employment transitions for", 
+                        length(unique(person_status_by_period[[person_col]])), "individuals"),
+        x = paste("Time Period (", agg_period, ")", sep = ""),
+        y = "Number of Individuals",
+        caption = "Flow ribbons show individual transitions between employment states"
       ) +
-      theme_vecshift(base_size = 11, grid = "none", axis = "y") +
+      theme_vecshift(base_size = 11, grid = "major", axis = "both") +
       ggplot2::theme(
-        axis.text.x = ggplot2::element_blank(),
-        axis.ticks.x = ggplot2::element_blank(),
-        legend.position = "bottom"
-      ) +
-      ggplot2::annotate("text", x = 1.25, y = max(transition_counts$from_y) + 1, 
-                       label = "From", fontface = "bold", size = 4) +
-      ggplot2::annotate("text", x = 3.75, y = max(transition_counts$to_y) + 1, 
-                       label = "To", fontface = "bold", size = 4)
-      
-  } else if (plot_type == "sankey" || plot_type == "chord") {
-    # For now, create a chord-style plot using a heatmap approach
-    # Create transition matrix
-    all_statuses <- unique(c(transition_counts$from, transition_counts$to))
-    transition_matrix <- matrix(0, nrow = length(all_statuses), ncol = length(all_statuses))
-    rownames(transition_matrix) <- all_statuses
-    colnames(transition_matrix) <- all_statuses
+        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        legend.box = "vertical"
+      )
     
-    for (i in 1:nrow(transition_counts)) {
-      row_idx <- which(rownames(transition_matrix) == transition_counts$from[i])
-      col_idx <- which(colnames(transition_matrix) == transition_counts$to[i])
-      transition_matrix[row_idx, col_idx] <- transition_counts$count[i]
-    }
-    
-    # Convert to long format for ggplot2
-    matrix_long <- expand.grid(from = all_statuses, to = all_statuses, stringsAsFactors = FALSE)
-    matrix_long$count <- as.vector(transition_matrix)
-    matrix_long <- matrix_long[matrix_long$count > 0, ]
-    
+    # Add percentages to stratum labels if requested
     if (show_percentages) {
-      matrix_long$percentage <- round(100 * matrix_long$count / sum(matrix_long$count), 1)
-      matrix_long$label <- ifelse(matrix_long$count >= min_transitions,
-                                 paste0(matrix_long$count, "\n(", matrix_long$percentage, "%)"),
-                                 "")
-    } else {
-      matrix_long$label <- ifelse(matrix_long$count >= min_transitions, 
-                                 as.character(matrix_long$count), "")
+      period_status_counts <- person_status_by_period[, .(count = .N), by = .(time_period, status)]
+      period_totals <- period_status_counts[, .(total = sum(count)), by = time_period]
+      period_status_counts <- merge(period_status_counts, period_totals, by = "time_period")
+      period_status_counts[, percentage := round(100 * count / total, 1)]
+      period_status_counts[, label := paste0(status, "\n(", percentage, "%)")]
+      
+      p <- p + ggplot2::geom_text(stat = ggalluvial::StatStratum, 
+                                 ggplot2::aes(label = paste0(ggplot2::after_stat(stratum), "\n(",
+                                                           round(100 * ggplot2::after_stat(count) / 
+                                                                sum(ggplot2::after_stat(count)), 1), "%)")),
+                                 size = 2.5, color = "white", fontface = "bold")
     }
     
-    p <- ggplot2::ggplot(matrix_long, ggplot2::aes(x = to, y = from, fill = count)) +
-      ggplot2::geom_tile(alpha = alpha, color = "white", size = 0.5) +
-      ggplot2::geom_text(ggplot2::aes(label = label), color = "white", 
-                        fontface = "bold", size = 3) +
-      ggplot2::scale_fill_gradient(low = colors[1], high = colors[length(colors)],
-                                  name = "Transition\nCount") +
+  } else if (plot_type == "flow") {
+    # Create flow-only visualization (flows without strata)
+    p <- ggplot2::ggplot(person_status_by_period,
+                        ggplot2::aes(x = time_period, stratum = status, 
+                                    alluvium = get(person_col), fill = status)) +
+      ggalluvial::geom_flow(alpha = alpha, curve_type = "cubic") +
+      ggplot2::scale_fill_manual(values = colors, name = "Employment\nStatus") +
       ggplot2::labs(
-        title = "Employment Status Transition Matrix",
-        subtitle = paste("Heatmap showing", sum(matrix_long$count > 0), "transition patterns"),
-        x = "To Status",
-        y = "From Status",
-        caption = "Numbers show transition counts and percentages"
+        title = "Employment Status Flow Transitions",
+        subtitle = paste("Flow patterns for", 
+                        length(unique(person_status_by_period[[person_col]])), "individuals"),
+        x = paste("Time Period (", agg_period, ")", sep = ""),
+        y = "Flow Volume",
+        caption = "Pure flow visualization showing transition patterns"
       ) +
-      theme_vecshift(base_size = 11, grid = "none") +
+      theme_vecshift(base_size = 11, grid = "major", axis = "x") +
       ggplot2::theme(
         axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
         legend.position = "right"
       )
+      
+  } else {
+    # Sankey-style with transition summary
+    transitions <- person_status_by_period[, .SD[c(1, .N)], by = person_col]
+    if (nrow(transitions) > 0 && ncol(transitions) >= 4) {
+      transition_summary <- transitions[, {
+        if (.N == 2) {
+          .(from_status = status[1], to_status = status[2], 
+            from_period = time_period[1], to_period = time_period[2])
+        }
+      }, by = person_col]
+      
+      if (nrow(transition_summary) > 0) {
+        transition_counts <- transition_summary[, .N, by = .(from_status, to_status)]
+        setnames(transition_counts, "N", "count")
+        
+        p <- ggplot2::ggplot(transition_counts, 
+                            ggplot2::aes(axis1 = from_status, axis2 = to_status, y = count)) +
+          ggalluvial::geom_alluvium(ggplot2::aes(fill = from_status), alpha = alpha) +
+          ggalluvial::geom_stratum(alpha = 0.8) +
+          ggplot2::geom_text(stat = ggalluvial::StatStratum, ggplot2::aes(label = ggplot2::after_stat(stratum)),
+                            size = 3, color = "white", fontface = "bold") +
+          ggplot2::scale_x_discrete(limits = c("Initial Status", "Final Status"), expand = c(0.1, 0)) +
+          ggplot2::scale_fill_manual(values = colors, name = "Employment\nStatus") +
+          ggplot2::labs(
+            title = "Employment Status Transitions Summary",
+            subtitle = paste("Initial to final status for", nrow(transition_summary), "individuals"),
+            y = "Number of Individuals",
+            caption = "Sankey diagram showing overall transition patterns"
+          ) +
+          theme_vecshift(base_size = 11, grid = "major", axis = "y")
+      }
+    }
   }
   
   return(p)

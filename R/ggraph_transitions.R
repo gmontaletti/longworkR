@@ -172,8 +172,11 @@ plot_transitions_network <- function(transitions_data,
   # Calculate network metrics
   tg <- .add_network_metrics(tg, node_size_var, node_color_var)
   
+  # Determine number of colors needed for discrete color variables
+  n_colors_needed <- .get_required_colors_count(tg, node_color_var)
+  
   # Get colors
-  colors <- .get_accessibility_colors(palette, use_bw, accessibility_mode)
+  colors <- .get_accessibility_colors(palette, use_bw, accessibility_mode, n = n_colors_needed)
   
   # Create base ggraph plot
   p <- ggraph::ggraph(tg, layout = layout)
@@ -310,7 +313,7 @@ plot_transitions_heatmap <- function(transitions_data,
   
   # Create base heatmap plot
   p <- ggplot2::ggplot(heatmap_data, ggplot2::aes(x = to, y = from, fill = value)) +
-    ggplot2::geom_tile(color = border_color, size = border_size, alpha = 0.9) +
+    ggplot2::geom_tile(color = border_color, linewidth = border_size, alpha = 0.9) +
     ggplot2::coord_fixed(ratio = aspect_ratio)
   
   # Apply color scale
@@ -561,8 +564,11 @@ plot_transitions_hierarchical <- function(transitions_data,
   # Add network metrics
   tg <- .add_network_metrics(tg, node_size_var, node_color_var)
   
+  # Determine number of colors needed for discrete color variables
+  n_colors_needed <- .get_required_colors_count(tg, node_color_var)
+  
   # Get colors
-  colors <- .get_accessibility_colors(palette, use_bw, accessibility_mode)
+  colors <- .get_accessibility_colors(palette, use_bw, accessibility_mode, n = n_colors_needed)
   
   # Create hierarchical layout
   layout_name <- .get_hierarchical_layout_name(hierarchy_type, layout_direction)
@@ -740,32 +746,138 @@ plot_transitions_hierarchical <- function(transitions_data,
 #'
 #' @return Character vector of colors
 #' @keywords internal
-.get_accessibility_colors <- function(palette_name, use_bw, accessibility_mode) {
+.get_accessibility_colors <- function(palette_name, use_bw, accessibility_mode, n = NULL) {
   
+  # Get base palette
   if (use_bw || accessibility_mode) {
     # Use vecshift BW palette for accessibility
-    return(vecshift_colors("main_bw"))
-  }
-  
-  if (palette_name == "viridis") {
+    base_colors <- vecshift_colors("main_bw")
+  } else if (palette_name == "viridis") {
     if (requireNamespace("viridis", quietly = TRUE)) {
-      return(viridis::viridis(10, option = "D"))
+      base_colors <- viridis::viridis(10, option = "D")
     } else {
       # Fallback to vecshift main palette
-      return(vecshift_colors("main"))
+      base_colors <- vecshift_colors("main")
     }
   } else if (palette_name == "okabe_ito") {
     # Okabe-Ito colorblind-friendly palette
-    return(c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", 
-             "#D55E00", "#CC79A7", "#999999", "#000000"))
+    base_colors <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", 
+                     "#D55E00", "#CC79A7", "#999999", "#000000")
   } else if (palette_name == "colorbrewer_set2") {
     # ColorBrewer Set2 (qualitative, colorblind-friendly)
-    return(c("#66C2A5", "#FC8D62", "#8DA0CB", "#E78AC3", "#A6D854", 
-             "#FFD92F", "#E5C494", "#B3B3B3"))
+    base_colors <- c("#66C2A5", "#FC8D62", "#8DA0CB", "#E78AC3", "#A6D854", 
+                     "#FFD92F", "#E5C494", "#B3B3B3")
   } else {
     # Use vecshift palettes
-    return(vecshift_colors(palette_name))
+    base_colors <- vecshift_colors(palette_name)
   }
+  
+  # If no specific number requested, return base palette
+  if (is.null(n)) {
+    return(base_colors)
+  }
+  
+  # If we have enough colors, return subset or full palette
+  if (length(base_colors) >= n) {
+    return(base_colors[1:n])
+  }
+  
+  # If we need more colors, extend the palette intelligently
+  return(.extend_color_palette(base_colors, n, use_bw || accessibility_mode))
+}
+
+#' Get Required Number of Colors for Node Color Variable
+#'
+#' Internal helper to determine how many colors are needed for discrete color variables.
+#' Returns appropriate count for continuous variables or unique value count for discrete.
+#'
+#' @param tg tidygraph object with node data
+#' @param color_var Character. Color variable name
+#' @return Integer. Number of colors needed
+#' @keywords internal
+.get_required_colors_count <- function(tg, color_var) {
+  
+  # If no color variable or fixed coloring, return default
+  if (is.null(color_var) || color_var == "fixed") {
+    return(NULL)
+  }
+  
+  # If continuous variable (network metrics), return NULL for continuous scale
+  if (color_var %in% c("degree", "strength", "betweenness", "closeness", "level")) {
+    return(NULL)
+  }
+  
+  # For discrete variables, count unique values
+  if (requireNamespace("tidygraph", quietly = TRUE)) {
+    node_data <- tidygraph::as_tibble(tg, what = "nodes")
+    
+    if (color_var %in% colnames(node_data)) {
+      unique_values <- length(unique(node_data[[color_var]]))
+      return(unique_values)
+    }
+  }
+  
+  # Fallback: return default
+  return(NULL)
+}
+
+#' Extend Color Palette for Large Numbers of Categories
+#'
+#' Internal helper to extend color palettes when more colors are needed than available
+#' in the base palette. Uses intelligent color interpolation and generation strategies.
+#'
+#' @param base_colors Character vector of base colors to extend
+#' @param n Integer. Total number of colors needed
+#' @param accessibility_mode Logical. Whether to prioritize accessibility
+#' @return Character vector of n colors
+#' @keywords internal
+.extend_color_palette <- function(base_colors, n, accessibility_mode = FALSE) {
+  
+  if (n <= length(base_colors)) {
+    return(base_colors[1:n])
+  }
+  
+  # For accessibility mode, use grayscale interpolation
+  if (accessibility_mode) {
+    if (requireNamespace("grDevices", quietly = TRUE)) {
+      # Generate grayscale sequence
+      gray_values <- seq(0.15, 0.85, length.out = n)
+      return(grDevices::gray(gray_values))
+    } else {
+      # Fallback: repeat base colors
+      return(rep(base_colors, length.out = n))
+    }
+  }
+  
+  # For regular palettes, use intelligent extension strategies
+  if (requireNamespace("grDevices", quietly = TRUE)) {
+    
+    # Strategy 1: If viridis is available and we need many colors, use it
+    if (n > 20 && requireNamespace("viridis", quietly = TRUE)) {
+      return(viridis::viridis(n, option = "D"))
+    }
+    
+    # Strategy 2: Interpolate between base colors for medium numbers
+    if (n <= 20) {
+      extended_colors <- grDevices::colorRampPalette(base_colors)(n)
+      return(extended_colors)
+    }
+    
+    # Strategy 3: For very large numbers, combine strategies
+    if (n > 20) {
+      # Use half interpolated base colors, half viridis-style colors
+      n_base <- ceiling(n / 2)
+      n_extra <- n - n_base
+      
+      base_extended <- grDevices::colorRampPalette(base_colors)(n_base)
+      extra_colors <- grDevices::rainbow(n_extra, start = 0.6, end = 1.0)
+      
+      return(c(base_extended, extra_colors))
+    }
+  }
+  
+  # Final fallback: repeat base colors
+  return(rep(base_colors, length.out = n))
 }
 
 #' Check Required Packages for ggraph Functions
@@ -1748,21 +1860,29 @@ plot_transitions_hierarchical <- function(transitions_data,
   )
   long_data[, value := as.vector(matrix)]
   
-  # Calculate percentages if needed
+  # Set values below min_value to NA for proper color scale mapping
+  # This ensures cells below threshold are excluded from color gradient
+  long_data[value < min_value, value := NA_real_]
+  
+  # Calculate percentages if needed (use original values before NA conversion)
   if (cell_value %in% c("percentage", "both")) {
     total_sum <- sum(matrix, na.rm = TRUE)
-    long_data[, percentage := round(100 * value / total_sum, 1)]
+    # Store original values for percentage calculation
+    orig_values <- as.vector(matrix)
+    long_data[, percentage := round(100 * orig_values / total_sum, 1)]
+    # Set percentage to NA for cells below threshold
+    long_data[orig_values < min_value, percentage := NA_real_]
   }
   
   # Create display values
   long_data[, display_value := ""]
   
   if (cell_value == "weight") {
-    long_data[value >= min_value, display_value := as.character(value)]
+    long_data[!is.na(value), display_value := as.character(value)]
   } else if (cell_value == "percentage") {
-    long_data[value >= min_value, display_value := paste0(percentage, "%")]
+    long_data[!is.na(percentage), display_value := paste0(percentage, "%")]
   } else if (cell_value == "both") {
-    long_data[value >= min_value, display_value := paste0(value, "\n(", percentage, "%)")]
+    long_data[!is.na(value) & !is.na(percentage), display_value := paste0(value, "\n(", percentage, "%)")]
   }
   
   return(long_data)

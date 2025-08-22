@@ -10,14 +10,14 @@ plot_transition_flows(
   time_col = "inizio",
   status_col = "stato",
   plot_type = "alluvial",
-  min_transitions = 5,
+  agg_period = "year",
+  min_freq = 10,
   max_categories = 8,
-  time_window = "all",
-  group_by = NULL,
   palette = "employment",
   use_bw = FALSE,
   alpha = 0.7,
-  show_percentages = TRUE
+  show_percentages = TRUE,
+  stratum_width = 0.3
 )
 }
 \arguments{
@@ -29,40 +29,42 @@ plot_transition_flows(
 
 \item{status_col}{Character. Column name for employment status (default: "stato")}
 
-\item{plot_type}{Character. Type of plot: "sankey", "alluvial", "chord" (default: "alluvial")}
+\item{plot_type}{Character. Type of plot: "alluvial", "flow", "sankey" (default: "alluvial")}
 
-\item{min_transitions}{Integer. Minimum number of transitions to show (default: 5)}
+\item{agg_period}{Character. Time aggregation: "year", "quarter", "month" (default: "year")}
 
-\item{max_categories}{Integer. Maximum categories to show (default: 8)}
+\item{min_freq}{Integer. Minimum frequency to include status-period combinations (default: 10)}
 
-\item{time_window}{Character. Time window for transitions: "all", "year", "quarter" (default: "all")}
-
-\item{group_by}{Character. Column to group transitions by (default: NULL)}
+\item{max_categories}{Integer. Maximum employment categories to show (default: 8)}
 
 \item{palette}{Character. Color palette to use (default: "employment")}
 
 \item{use_bw}{Logical. Use black and white palette (default: FALSE)}
 
-\item{alpha}{Numeric. Transparency (default: 0.7)}
+\item{alpha}{Numeric. Flow transparency (default: 0.7)}
 
-\item{show_percentages}{Logical. Show transition percentages (default: TRUE)}
+\item{show_percentages}{Logical. Show percentages in stratum labels (default: TRUE)}
+
+\item{stratum_width}{Numeric. Width of the stacked bars/strata (default: 0.3)}
 }
 \value{
-A ggplot2 object showing transition flows
+A ggplot2 object showing transition flows with proper alluvial ribbons
 }
 \description{
-Creates flow diagrams showing transitions between employment statuses,
-using Sankey-style or alluvial visualizations to show employment pathways.
+Creates alluvial flow diagrams showing how individuals transition between employment
+statuses over time. Uses ggalluvial to create proper flow ribbons that connect
+employment categories across multiple time periods, showing both the stacked
+distribution at each time point and the flowing transitions between them.
 }
 \examples{
 \dontrun{
-# Basic alluvial diagram
-plot_transition_flows(data, plot_type = "alluvial")
+# Basic alluvial diagram showing flows across years
+plot_transition_flows(data, plot_type = "alluvial", agg_period = "year")
 
-# Sankey diagram with minimum transitions
-plot_transition_flows(data, plot_type = "sankey", min_transitions = 10)
+# Flow-only visualization (no stacked bars)
+plot_transition_flows(data, plot_type = "flow", agg_period = "quarter")
 
-# Transitions within a year window
-plot_transition_flows(data, time_window = "year")
+# Sankey summary (first to last status)
+plot_transition_flows(data, plot_type = "sankey")
 }
 }

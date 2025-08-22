@@ -174,7 +174,7 @@
 #'   corresponding [transition_variable]_from_median and [transition_variable]_to_median columns.
 #'
 #' @export
-#' @importFrom data.table data.table setorder copy setnames shift :=
+#' @importFrom data.table data.table setorder copy setnames shift set :=
 #' @importFrom stats median weighted.mean
 #' @importFrom utils head
 #'
@@ -432,7 +432,50 @@ analyze_employment_transitions <- function(pipeline_result,
       
       # Use fast consolidation function with type support
       if (exists("merge_consecutive_employment_fast_with_type", mode = "function")) {
-        dt <- merge_consecutive_employment_fast_with_type(pipeline_result, consolidation_type = consolidation_type)
+        # Pre-process data to ensure type consistency before consolidation
+        # This prevents data.table column type mismatch errors during aggregation
+        pipeline_copy <- copy(pipeline_result)
+        
+        # Ensure consistent column types to prevent aggregation errors
+        # Convert potentially mixed integer/numeric columns to numeric
+        for (col_name in names(pipeline_copy)) {
+          col_class <- class(pipeline_copy[[col_name]])[1]
+          if (col_class %in% c("integer", "numeric")) {
+            # Check if column has mixed types that could cause issues during aggregation
+            if (col_class == "integer") {
+              # Convert integers to numeric to avoid type conflicts during consolidation
+              # This is safer as numeric can handle both integer and decimal aggregations
+              data.table::set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
+            }
+          }
+        }
+        
+        dt <- merge_consecutive_employment_fast_with_type(pipeline_copy, consolidation_type = consolidation_type)
+      } else if (exists("merge_consecutive_employment_fast", mode = "function")) {
+        # Use fast version without type parameter (vecshift 0.9.0+)
+        if (show_progress) {
+          message("Using fast consolidation method")
+        }
+        
+        # Pre-process data to ensure type consistency before consolidation
+        # This prevents data.table column type mismatch errors during aggregation
+        pipeline_copy <- copy(pipeline_result)
+        
+        # Ensure consistent column types to prevent aggregation errors
+        # Convert potentially mixed integer/numeric columns to numeric
+        for (col_name in names(pipeline_copy)) {
+          col_class <- class(pipeline_copy[[col_name]])[1]
+          if (col_class %in% c("integer", "numeric")) {
+            # Check if column has mixed types that could cause issues during aggregation
+            if (col_class == "integer") {
+              # Convert integers to numeric to avoid type conflicts during consolidation
+              # This is safer as numeric can handle both integer and decimal aggregations
+              data.table::set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
+            }
+          }
+        }
+        
+        dt <- merge_consecutive_employment_fast(pipeline_copy)
       } else if (exists("merge_consecutive_employment", mode = "function")) {
         # Fall back to slow function if fast version not available
         if (show_progress) {
@@ -452,7 +495,7 @@ analyze_employment_transitions <- function(pipeline_result,
             if (col_class == "integer") {
               # Convert integers to numeric to avoid type conflicts during consolidation
               # This is safer as numeric can handle both integer and decimal aggregations
-              set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
+              data.table::set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
             }
           }
         }
@@ -711,9 +754,9 @@ analyze_employment_transitions <- function(pipeline_result,
             if (length(w) > 0 && sum(w, na.rm = TRUE) > 0) {
               # For weighted median, use repeated values approach
               rep_v <- rep(v, times = pmax(1, round(w)))  # Ensure minimum weight of 1
-              median(rep_v, na.rm = TRUE)
+              as.numeric(median(rep_v, na.rm = TRUE))
             } else {
-              median(as.numeric(get(from_stat_col)), na.rm = TRUE)
+              as.numeric(median(as.numeric(get(from_stat_col)), na.rm = TRUE))
             }
           }
           to_value <- {
@@ -722,9 +765,9 @@ analyze_employment_transitions <- function(pipeline_result,
             if (length(w) > 0 && sum(w, na.rm = TRUE) > 0) {
               # For weighted median, use repeated values approach
               rep_v <- rep(v, times = pmax(1, round(w)))  # Ensure minimum weight of 1
-              median(rep_v, na.rm = TRUE)
+              as.numeric(median(rep_v, na.rm = TRUE))
             } else {
-              median(as.numeric(get(to_stat_col)), na.rm = TRUE)
+              as.numeric(median(as.numeric(get(to_stat_col)), na.rm = TRUE))
             }
           }
           
