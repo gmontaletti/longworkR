@@ -132,6 +132,18 @@ NULL
     setnames(work_data, employment_var, "arco")
     # Filter to only employment periods (arco >= 1)
     work_data <- work_data[arco >= 1]
+    
+    # EDGE CASE FIX: If no employment periods exist, return empty result
+    if (nrow(work_data) == 0) {
+      return(data.table(
+        cf = character(0),
+        period = integer(0),
+        period_start = as.Date(character(0)),
+        period_end = as.Date(character(0)),
+        total_days_employed = numeric(0),
+        employment_rate = numeric(0)
+      ))
+    }
   }
   
   if (use_consolidation && over_id_var %in% names(work_data)) {
@@ -164,19 +176,33 @@ NULL
   work_data[, period_end_limited := pmin(period_end, period_start + 20)]
   work_data[period_start > period_end_limited, period_end_limited := period_start]
   
-  # Step 2: Create contract-period combinations using vectorized expansion
-  # This replaces the nested for loop with a single vectorized operation
-  contract_periods <- work_data[, {
-    periods_spanned <- period_start:period_end_limited
-    .(period = periods_spanned, 
-      row_id = rep(.I, length(periods_spanned)))
-  }, by = .(cf, period_start, period_end_limited)]
+  # Step 2: Create contract-period combinations using completely different approach
+  # Fix: Abandon problematic grouped operation and use explicit expansion method
+  work_data[, row_id := .I]
+  
+  # Create expanded data using a more reliable method
+  contract_period_list <- list()
+  for (i in seq_len(nrow(work_data))) {
+    row <- work_data[i]
+    periods_spanned <- seq(from = row$period_start, to = row$period_end_limited, by = 1L)
+    
+    contract_period_list[[i]] <- data.table(
+      cf = rep(row$cf, length(periods_spanned)),
+      period_start_orig = rep(row$period_start, length(periods_spanned)),
+      period_end_limited_orig = rep(row$period_end_limited, length(periods_spanned)),
+      period = periods_spanned,
+      row_id = rep(i, length(periods_spanned))
+    )
+  }
+  
+  contract_periods <- rbindlist(contract_period_list)
   
   # Step 3: Join back contract information efficiently
-  contract_periods[, `:=`(
-    inizio = work_data$inizio[row_id],
-    fine = work_data$fine[row_id]
-  )]
+  # Now merge is much simpler since row_id corresponds directly to work_data rows
+  contract_periods <- merge(contract_periods, 
+                           work_data[, .(row_id, inizio, fine)], 
+                           by = "row_id", 
+                           all.x = TRUE)
   
   # Step 4: Vectorized overlap calculation using data.table join
   # Set keys for optimal join performance
@@ -405,16 +431,73 @@ NULL
                                         1.0, 0.8)]
   work_data[, final_quality_score := contract_quality_score * intensity_factor]
   
-  # Assign temporal periods
-  work_data[, period := .get_temporal_period(inizio, period_type, reference_date)]
+  # Use the same period expansion logic as the employment rate function
+  # This ensures contracts spanning multiple periods are handled correctly
   
-  # Calculate duration-weighted average quality by period
-  quality_by_period <- work_data[, .(
-    avg_contract_quality = sum(final_quality_score * durata, na.rm = TRUE) / sum(durata, na.rm = TRUE),
-    total_employment_days = sum(durata, na.rm = TRUE),
-    n_contracts = .N,
-    pct_permanent = sum(as.numeric(contract_type == "A.01.00") * durata, na.rm = TRUE) / sum(durata, na.rm = TRUE),
-    pct_full_time = sum(intensity_factor * durata, na.rm = TRUE) / sum(durata, na.rm = TRUE),
+  # Assign temporal periods for both start and end dates
+  work_data[, period_start := .get_temporal_period(inizio, period_type, reference_date)]
+  work_data[, period_end := .get_temporal_period(fine, period_type, reference_date)]
+  
+  # Create period ranges
+  all_periods <- unique(c(work_data$period_start, work_data$period_end))
+  period_info <- .create_period_ranges(all_periods, period_type, reference_date)
+  
+  # Use the exact same expansion logic as .compute_employment_rate
+  work_data[, period_end_limited := pmin(period_end, period_start + 20)]
+  work_data[period_start > period_end_limited, period_end_limited := period_start]
+  work_data[, row_id := .I]
+  
+  # Create contract-period combinations using the same logic as employment rate
+  contract_period_list <- list()
+  for (i in seq_len(nrow(work_data))) {
+    row <- work_data[i]
+    periods_spanned <- seq(from = row$period_start, to = row$period_end_limited, by = 1L)
+    
+    contract_period_list[[i]] <- data.table(
+      cf = rep(row$cf, length(periods_spanned)),
+      period_start_orig = rep(row$period_start, length(periods_spanned)),
+      period_end_limited_orig = rep(row$period_end_limited, length(periods_spanned)),
+      period = periods_spanned,
+      row_id = rep(i, length(periods_spanned))
+    )
+  }
+  
+  contract_periods <- rbindlist(contract_period_list)
+  
+  # Join back contract information using the same approach as employment rate
+  contract_periods <- merge(contract_periods, 
+                           work_data[, .(row_id, inizio, fine, final_quality_score, durata, contract_type, intensity_factor)], 
+                           by = "row_id", 
+                           all.x = TRUE)
+  
+  # Set keys for optimal join performance
+  setkey(contract_periods, period)
+  setkey(period_info, period)
+  
+  # Merge period information and calculate overlaps using same method as employment rate
+  quality_records <- period_info[contract_periods, nomatch = 0]
+  
+  # Calculate overlap for each contract-period combination (same as employment rate)
+  quality_records[, `:=`(
+    contract_start = pmax(inizio, period_start),
+    contract_end = pmin(fine, period_end)
+  )]
+  
+  # Calculate days employed with vectorized operations (same as employment rate)
+  quality_records[, days_in_period := pmax(0, as.numeric(contract_end - contract_start + 1))]
+  
+  # Weight quality score by actual days in period (proportional contribution)
+  quality_records[, weighted_quality := final_quality_score * days_in_period]
+  quality_records[, weighted_permanent := as.numeric(contract_type == "A.01.00") * days_in_period]
+  quality_records[, weighted_full_time := intensity_factor * days_in_period]
+  
+  # Aggregate by person and period (ensuring all periods with any employment appear)
+  quality_by_period <- quality_records[, .(
+    avg_contract_quality = sum(weighted_quality, na.rm = TRUE) / sum(days_in_period, na.rm = TRUE),
+    total_employment_days = sum(days_in_period, na.rm = TRUE),
+    n_contracts = length(unique(row_id)),
+    pct_permanent = sum(weighted_permanent, na.rm = TRUE) / sum(days_in_period, na.rm = TRUE),
+    pct_full_time = sum(weighted_full_time, na.rm = TRUE) / sum(days_in_period, na.rm = TRUE),
     median_survival_based_quality = TRUE  # Flag indicating survival analysis-based quality calculation
   ), by = .(cf, period)]
   
@@ -704,6 +787,17 @@ compute_temporal_employment_indicators <- function(data,
         reference_date = reference_date
       )
       
+      # DEBUG: Check what contract quality function returned
+      if (verbose) {
+        cat("Contract quality function returned", nrow(contract_quality), "rows\n")
+        cat("Contract quality periods:", paste(sort(unique(contract_quality$period)), collapse = ", "), "\n")
+        if (4 %in% contract_quality$period) {
+          cat("✓ Period 4 present in contract quality result\n")
+        } else {
+          cat("✗ Period 4 MISSING from contract quality result\n")
+        }
+      }
+      
       results$contract_quality <- contract_quality
     } else {
       warning("Contract type variable '", contract_type_var, "' not found. Skipping contract quality.")
@@ -742,58 +836,148 @@ compute_temporal_employment_indicators <- function(data,
   if ("stability_index" %in% indicators) {
     if (verbose) cat("Computing stability index...\n")
     
-    # PERFORMANCE: Create working copy with optimized operations
+    # CRITICAL FIX: Use exact same logic as employment rate calculation
+    # This ensures perfect alignment between employment_rate > 0 and stability metrics
+    
+    # Create working copy with identical preprocessing as employment rate
     stability_data <- copy(data)
     setnames(stability_data,
              c(id_var, start_date_var, end_date_var, duration_var),
              c("cf", "inizio", "fine", "durata"))
     
-    # VECTORIZATION: Single period assignment
-    stability_data[, period := .get_temporal_period(inizio, period_type, reference_date)]
-    
-    # OPTIMIZED: Calculate stability metrics with enhanced vectorization
-    stability_metrics <- stability_data[, {
-      n_contracts <- .N
+    # Add employment status with SAME FILTERING as employment rate
+    if (employment_var %in% names(data)) {
+      setnames(stability_data, employment_var, "arco")
+      # CRITICAL: Apply same early filtering as employment rate calculation
+      stability_data <- stability_data[arco >= 1]
       
-      # VECTORIZED duration consistency calculation
-      if (n_contracts > 1L) {
-        duration_mean <- mean(durata, na.rm = TRUE)
-        duration_cv <- if (duration_mean > 0) sqrt(var(durata, na.rm = TRUE)) / duration_mean else 0.0
-        duration_stability <- pmax(0.0, 1.0 - pmin(1.0, duration_cv))
-      } else {
-        duration_stability <- 1.0
+      # Handle empty case identically to employment rate
+      if (nrow(stability_data) == 0) {
+        results$stability_index <- data.table(
+          cf = character(0),
+          period = integer(0),
+          duration_stability = numeric(0),
+          continuity_score = numeric(0),
+          frequency_score = numeric(0),
+          stability_index = numeric(0),
+          n_contracts = integer(0),
+          avg_duration = numeric(0)
+        )[0]
+        next  # Skip to next indicator
       }
-      
-      # VECTORIZED employment continuity calculation
-      if (n_contracts > 1L) {
-        # Pre-order data for efficient gap calculation  
-        setorder(.SD, inizio)
-        # Vectorized gap computation - no indexing with [-1] and [-nrow()]
-        start_dates <- .SD$inizio[-1L]
-        end_dates <- .SD$fine[-.N]
-        gaps <- as.numeric(start_dates - end_dates - 1L)
-        gap_penalty <- mean(pmax(0.0, pmin(1.0, gaps / 30.0)), na.rm = TRUE)
-        continuity_score <- pmax(0.0, 1.0 - gap_penalty)
-      } else {
-        continuity_score <- 1.0
-      }
-      
-      # VECTORIZED frequency score calculation
-      frequency_score <- pmax(0.0, 1.0 - pmin(1.0, abs(n_contracts - 2L) / 5.0))
-      
-      # VECTORIZED combined stability index
-      stability_index <- 0.4 * duration_stability + 0.4 * continuity_score + 0.2 * frequency_score
-      
-      # Return all metrics in single computation
-      .(duration_stability = duration_stability,
-        continuity_score = continuity_score, 
-        frequency_score = frequency_score,
-        stability_index = stability_index,
-        n_contracts = n_contracts,
-        avg_duration = mean(durata, na.rm = TRUE))
-    }, by = .(cf, period)]
+    }
     
-    results$stability_index <- stability_metrics
+    # Apply SAME consolidation logic as employment rate if using over_id
+    if (use_consolidation && over_id_var %in% names(data)) {
+      setnames(stability_data, over_id_var, "over_id")
+      
+      # IDENTICAL consolidation logic to employment rate calculation
+      consolidated <- stability_data[, .(
+        inizio = min(inizio, na.rm = TRUE),
+        fine = max(fine, na.rm = TRUE),
+        total_duration = sum(durata, na.rm = TRUE)
+      ), by = .(cf, over_id)]
+      
+      # Recalculate duration for consolidated periods
+      consolidated[, durata := as.numeric(fine - inizio + 1)]
+      stability_data <- consolidated
+    }
+    
+    # Use IDENTICAL period expansion logic as employment rate calculation
+    stability_data[, period_start := .get_temporal_period(inizio, period_type, reference_date)]
+    stability_data[, period_end := .get_temporal_period(fine, period_type, reference_date)]
+    
+    # Create period ranges (same as employment rate)
+    all_periods <- unique(c(stability_data$period_start, stability_data$period_end))
+    period_info <- .create_period_ranges(all_periods, period_type, reference_date)
+    
+    # IDENTICAL contract-period expansion logic
+    stability_data[, period_end_limited := pmin(period_end, period_start + 20)]
+    stability_data[period_start > period_end_limited, period_end_limited := period_start]
+    stability_data[, row_id := .I]
+    
+    # Create expanded data using EXACT SAME method as employment rate
+    stability_contract_period_list <- list()
+    for (i in seq_len(nrow(stability_data))) {
+      row <- stability_data[i]
+      periods_spanned <- seq(from = row$period_start, to = row$period_end_limited, by = 1L)
+      
+      stability_contract_period_list[[i]] <- data.table(
+        cf = rep(row$cf, length(periods_spanned)),
+        period = periods_spanned,
+        row_id = rep(i, length(periods_spanned))
+      )
+    }
+    
+    expanded_stability_data <- rbindlist(stability_contract_period_list)
+    
+    # Join back contract information
+    expanded_stability_data <- merge(expanded_stability_data, 
+                                   stability_data[, .(row_id, inizio, fine, durata)], 
+                                   by = "row_id", all.x = TRUE)
+    
+    # Get all person-period combinations from the expanded employment data
+    # This ensures we calculate stability for EVERY period with employment
+    all_person_periods <- unique(expanded_stability_data[, .(cf, period)])
+    
+    # EDGE CASE FIX: If no periods to analyze, return empty result
+    if (nrow(all_person_periods) == 0) {
+      results$stability_index <- data.table(
+        cf = character(0),
+        period = integer(0),
+        duration_stability = numeric(0),
+        continuity_score = numeric(0),
+        frequency_score = numeric(0),
+        stability_index = numeric(0),
+        n_contracts = integer(0),
+        avg_duration = numeric(0)
+      )[0]
+    } else {
+      
+      # Calculate stability metrics for ALL periods with employment data
+      stability_metrics <- expanded_stability_data[, {
+        n_contracts <- .N
+        
+        # VECTORIZED duration consistency calculation
+        if (n_contracts > 1L) {
+          duration_mean <- mean(durata, na.rm = TRUE)
+          duration_cv <- if (duration_mean > 0) sqrt(var(durata, na.rm = TRUE)) / duration_mean else 0.0
+          duration_stability <- pmax(0.0, 1.0 - pmin(1.0, duration_cv))
+        } else {
+          duration_stability <- 1.0
+        }
+        
+        # VECTORIZED employment continuity calculation
+        if (n_contracts > 1L) {
+          # Pre-order data for efficient gap calculation  
+          setorder(.SD, inizio)
+          # Vectorized gap computation - no indexing with [-1] and [-nrow()]
+          start_dates <- .SD$inizio[-1L]
+          end_dates <- .SD$fine[-.N]
+          gaps <- as.numeric(start_dates - end_dates - 1L)
+          gap_penalty <- mean(pmax(0.0, pmin(1.0, gaps / 30.0)), na.rm = TRUE)
+          continuity_score <- pmax(0.0, 1.0 - gap_penalty)
+        } else {
+          continuity_score <- 1.0
+        }
+        
+        # VECTORIZED frequency score calculation
+        frequency_score <- pmax(0.0, 1.0 - pmin(1.0, abs(n_contracts - 2L) / 5.0))
+        
+        # VECTORIZED combined stability index
+        stability_index <- 0.4 * duration_stability + 0.4 * continuity_score + 0.2 * frequency_score
+        
+        # Return all metrics in single computation
+        .(duration_stability = duration_stability,
+          continuity_score = continuity_score, 
+          frequency_score = frequency_score,
+          stability_index = stability_index,
+          n_contracts = n_contracts,
+          avg_duration = mean(durata, na.rm = TRUE))
+      }, by = .(cf, period)]
+      
+      results$stability_index <- stability_metrics
+    }
   }
   
   # 5. Contract Types Distribution  
@@ -898,8 +1082,34 @@ compute_temporal_employment_indicators <- function(data,
   for (indicator in names(results)) {
     if (indicator != first_result_name) {
       merge_cols <- intersect(c("cf", "period"), names(results[[indicator]]))
+      
+      # Handle potential column conflicts by using suffixes
+      # Use all = TRUE to keep all records from both tables (not just left table)
       final_results <- merge(final_results, results[[indicator]], 
-                           by = merge_cols, all.x = TRUE)
+                           by = merge_cols, all = TRUE, suffixes = c(".x", ".y"))
+      
+      # Clean up any duplicate columns that may have been created
+      # If we have both n_contracts.x and n_contracts.y, keep the one from contract quality (more comprehensive)
+      duplicate_cols <- grep("\\.(x|y)$", names(final_results), value = TRUE)
+      if (length(duplicate_cols) > 0) {
+        for (dup_col in duplicate_cols) {
+          base_name <- gsub("\\.(x|y)$", "", dup_col)
+          x_col <- paste0(base_name, ".x")
+          y_col <- paste0(base_name, ".y")
+          
+          if (x_col %in% names(final_results) && y_col %in% names(final_results)) {
+            # Prefer .y (contract_quality) over .x (employment_rate) for most metrics
+            if (base_name %in% c("n_contracts", "total_days_employed")) {
+              final_results[, (base_name) := get(y_col)]
+            } else {
+              # For other columns, prefer the non-NA values
+              final_results[, (base_name) := ifelse(is.na(get(x_col)), get(y_col), get(x_col))]
+            }
+            # Remove the duplicate columns
+            final_results[, (c(x_col, y_col)) := NULL]
+          }
+        }
+      }
     }
   }
   

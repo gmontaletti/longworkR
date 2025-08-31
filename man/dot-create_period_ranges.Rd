@@ -2,7 +2,8 @@
 % Please edit documentation in R/temporal_indicators.R
 \name{.create_period_ranges}
 \alias{.create_period_ranges}
-\title{Helper function to create date ranges for temporal periods}
+\title{Helper function to create date ranges for temporal periods
+OPTIMIZED: Fully vectorized period range calculation for maximum performance}
 \usage{
 .create_period_ranges(
   period_numbers,
@@ -22,5 +23,6 @@ data.table with period start and end dates
 }
 \description{
 Helper function to create date ranges for temporal periods
+OPTIMIZED: Fully vectorized period range calculation for maximum performance
 }
 \keyword{internal}

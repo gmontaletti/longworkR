@@ -144,3 +144,22 @@ Rscript -e "devtools::check_man()"
 - temporary and complementary tests file, .md documents and note and todo lists should be created in ../reference/longworkR directory. On cleaning the packege agent-r-project-maintainer will move all the artefacts not needed for project compilation there.
 - the project is using renv(), use it when testing
 - annotate the .claude directory should'nt be moved during cleanup
+
+## CRITICAL CORRECTION: Contract Quality Calculation
+
+**NEVER USE FIXED WEIGHTS FOR CONTRACT QUALITY CALCULATION**
+
+The following approach is COMPLETELY WRONG and must NEVER be used:
+- Fixed weights like A.01.00 = 1.0, A.03.00 = 0.8, etc.
+- Any arbitrary quality scores assigned to contract types
+- Hardcoded quality values based on contract type codes
+
+**CORRECT APPROACH:**
+Contract quality must be calculated using **median survival duration** from survival analysis:
+1. Use `estimate_contract_survival_optimized()` function from survival analysis module
+2. Calculate median survival time for each contract type in the actual data
+3. Convert median survival times to quality scores (0.3-1.0 scale)
+4. Longer median survival = higher contract quality
+5. Apply employment intensity adjustments (part-time factor)
+
+This data-driven approach using actual employment survival patterns is scientifically sound and avoids arbitrary assumptions about contract quality. The survival analysis methodology is already implemented in the `temporal_indicators.R` module.
