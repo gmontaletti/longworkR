@@ -2184,7 +2184,7 @@
     },
     "ggraph": {
       "Package": "ggraph",
-      "Version": "2.2.1",
+      "Version": "2.2.2",
       "Source": "Repository",
       "Type": "Package",
       "Title": "An Implementation of Grammar of Graphics for Graphs and Networks",
@@ -2230,7 +2230,7 @@
       "LinkingTo": [
         "cpp11"
       ],
-      "RoxygenNote": "7.3.1",
+      "RoxygenNote": "7.3.2",
       "Depends": [
         "R (>= 2.10)",
         "ggplot2 (>= 3.5.0)"
@@ -2239,7 +2239,7 @@
       "URL": "https://ggraph.data-imaginist.com, https://github.com/thomasp85/ggraph",
       "BugReports": "https://github.com/thomasp85/ggraph/issues",
       "NeedsCompilation": "yes",
-      "Author": "Thomas Lin Pedersen [cre, aut] (<https://orcid.org/0000-0002-5147-4711>), RStudio [cph]",
+      "Author": "Thomas Lin Pedersen [cre, aut] (ORCID: <https://orcid.org/0000-0002-5147-4711>), RStudio [cph]",
       "Repository": "CRAN"
     },
     "ggrepel": {
@@ -5843,13 +5843,13 @@
     },
     "vecshift": {
       "Package": "vecshift",
-      "Version": "0.9.0",
+      "Version": "1.0.0",
       "Source": "GitHub",
       "Type": "Package",
       "Title": "Temporal Analysis of Employment Data with Event-Based Processing",
-      "Authors@R": "c( person( \"Jane\", \"Doe\", email = \"jane@example.com\", role = c(\"aut\", \"cre\") ) )",
+      "Authors@R": "c( person( \"Giampaolo\", \"Montaletti\", email = \"giampaolo.montaletti@gmail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0009-0002-5327-1122\") ) )",
       "Description": "Processes employment records with temporal data, transforming them into  continuous time segments with employment status classifications. Implements precise  date logic including FINE+1 rules for unemployment calculations, handles overlapping  contracts, and provides both high-performance and modular processing modes.",
-      "License": "What license is it under?",
+      "License": "MIT + file LICENSE",
       "Encoding": "UTF-8",
       "Imports": [
         "data.table"
@@ -5869,10 +5869,10 @@
       "RemoteRepo": "vecshift",
       "RemoteUsername": "gmontaletti",
       "RemoteRef": "main",
-      "RemoteSha": "690cd88a344b4160bb4ae0d1a962d88c5f88872b",
+      "RemoteSha": "1e89ac7ee58839cdd59f18e84709fd06411ba237",
       "NeedsCompilation": "no",
-      "Author": "Jane Doe [aut, cre]",
-      "Maintainer": "Jane Doe <jane@example.com>"
+      "Author": "Giampaolo Montaletti [aut, cre] (ORCID: <https://orcid.org/0009-0002-5327-1122>)",
+      "Maintainer": "Giampaolo Montaletti <giampaolo.montaletti@gmail.com>"
     },
     "viridis": {
       "Package": "viridis",

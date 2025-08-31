@@ -13,7 +13,8 @@ identify_treatment_events(
   multiple_events = "first",
   require_employment_before = TRUE,
   id_column = "cf",
-  date_column = "inizio"
+  date_column = "inizio",
+  verbose = FALSE
 )
 }
 \arguments{
@@ -51,6 +52,8 @@ Default: TRUE}
 
 \item{date_column}{Character. Name of the date column to use for event timing.
 Default: "inizio"}
+
+\item{verbose}{Logical. Print debugging information? Default: FALSE}
 }
 \value{
 A data.table with ALL employment events for both treated and control people including:

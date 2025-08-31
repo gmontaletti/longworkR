@@ -298,15 +298,15 @@ test_that("survival analysis integrates with vecshift output", {
   dt <- data.table(
     id = 1:5,
     cf = c("CF001", "CF001", "CF002", "CF002", "CF003"),
-    INIZIO = as.Date(c("2020-01-01", "2020-07-01", "2020-02-01", 
+    inizio = as.Date(c("2020-01-01", "2020-07-01", "2020-02-01", 
                       "2020-08-01", "2020-03-01")),
-    FINE = as.Date(c("2020-06-30", "2020-12-31", "2020-07-31", 
+    fine = as.Date(c("2020-06-30", "2020-12-31", "2020-07-31", 
                     "2020-12-31", "2020-09-30")),
     prior = c(1, 0, 1, 1, 0)
   )
   
   # Process with vecshift
-  vecshift_result <- vecshift(dt, classify_status = FALSE)
+  vecshift_result <- vecshift(dt)
   
   # Add contract types to original data
   dt[, COD_TIPOLOGIA_CONTRATTUALE := c("C.01.00", "C.02.00", "C.01.00", 

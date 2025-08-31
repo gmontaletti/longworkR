@@ -356,8 +356,10 @@ analyze_employment_transitions <- function(pipeline_result,
   # Check for over_id column if consolidation is requested
   if (use_consolidated_periods && consolidation_type != "none") {
     if (!"over_id" %in% names(pipeline_result)) {
-      stop("Parameter 'use_consolidated_periods = TRUE' requires 'over_id' column from vecshift() output. ", 
-           "Either set use_consolidated_periods = FALSE or ensure pipeline_result contains over_id column.")
+      if (show_progress) {
+        message("Note: 'over_id' column not found in data. Disabling period consolidation.")
+      }
+      use_consolidated_periods <- FALSE
     }
   }
   

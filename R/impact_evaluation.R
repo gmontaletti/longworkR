@@ -36,6 +36,7 @@ NULL
 #' @param id_column Character. Name of the person identifier column. Default: "cf"
 #' @param date_column Character. Name of the date column to use for event timing.
 #'   Default: "inizio"
+#' @param verbose Logical. Print debugging information? Default: FALSE
 #'
 #' @return A data.table with ALL employment events for both treated and control people including:
 #'   \item{cf}{Person identifier}
@@ -83,19 +84,49 @@ identify_treatment_events <- function(data,
                                     multiple_events = "first",
                                     require_employment_before = TRUE,
                                     id_column = "cf",
-                                    date_column = "inizio") {
+                                    date_column = "inizio",
+                                    verbose = FALSE) {
   
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("Input data must be a data.table")
   }
   
+  if (verbose) {
+    cat("[DEBUG] Starting identify_treatment_events with:", nrow(data), "observations\n")
+    cat("[DEBUG] Available columns:", paste(names(data), collapse = ", "), "\n")
+    cat("[DEBUG] Looking for id column:", id_column, "\n")
+    cat("[DEBUG] Looking for date column:", date_column, "\n")
+  }
+  
   if (!id_column %in% names(data)) {
-    stop(paste("ID column", id_column, "not found in data"))
+    # Try case-insensitive matching
+    available_cols <- names(data)
+    matches <- which(tolower(available_cols) == tolower(id_column))
+    if (length(matches) > 0) {
+      actual_id_col <- available_cols[matches[1]]
+      if (verbose) {
+        cat("[DEBUG] Found id column with different case:", actual_id_col, "\n")
+      }
+      id_column <- actual_id_col
+    } else {
+      stop(paste("ID column", id_column, "not found in data. Available:", paste(names(data), collapse = ", ")))
+    }
   }
   
   if (!date_column %in% names(data)) {
-    stop(paste("Date column", date_column, "not found in data"))
+    # Try case-insensitive matching
+    available_cols <- names(data)
+    matches <- which(tolower(available_cols) == tolower(date_column))
+    if (length(matches) > 0) {
+      actual_date_col <- available_cols[matches[1]]
+      if (verbose) {
+        cat("[DEBUG] Found date column with different case:", actual_date_col, "\n")
+      }
+      date_column <- actual_date_col
+    } else {
+      stop(paste("Date column", date_column, "not found in data. Available:", paste(names(data), collapse = ", ")))
+    }
   }
   
   if (length(event_window) != 2 || event_window[2] <= event_window[1]) {
@@ -115,18 +146,57 @@ identify_treatment_events <- function(data,
   dt <- copy(data)
   setnames(dt, c(id_column, date_column), c("cf", "obs_date"))
   
+  if (verbose) {
+    cat("[DEBUG] Working with", nrow(dt), "observations for", dt[, uniqueN(cf)], "individuals\n")
+  }
+  
   # STEP 1: Find people (cf) who experienced treatment condition
   # Apply treatment conditions to identify treatment events
   treatment_events_list <- list()
   
+  if (verbose) {
+    cat("[DEBUG] Evaluating", length(treatment_conditions), "treatment conditions\n")
+  }
+  
   for (i in seq_along(treatment_conditions)) {
     condition <- treatment_conditions[[i]]
+    
+    if (verbose) {
+      cat("[DEBUG] Condition", i, ":", 
+          if(is.character(condition)) condition else if(is.list(condition)) paste(condition, collapse=" ") else "function", "\n")
+    }
     
     # Apply condition based on type
     if (is.character(condition)) {
       # String expression
-      condition_met <- dt[, eval(parse(text = condition))]
-      condition_desc <- condition
+      # Need to handle conditions that reference columns from previous rows (e.g., lag)
+      tryCatch({
+        # Sort data by cf and date for proper lag calculations
+        setorder(dt, cf, obs_date)
+        
+        # Check if condition references columns that require by-group evaluation
+        if (grepl("lag\\(|shift\\(|lead\\(", condition)) {
+          # Evaluate within groups
+          condition_met <- dt[, eval(parse(text = condition)), by = cf]$V1
+        } else {
+          # Simple column-wise evaluation
+          condition_met <- with(dt, eval(parse(text = condition)))
+        }
+        
+        condition_desc <- condition
+        
+        if (verbose) {
+          cat("[DEBUG] String condition met by", sum(condition_met, na.rm = TRUE), "observations\n")
+        }
+      }, error = function(e) {
+        warning(paste("Error evaluating condition:", condition, "-", e$message))
+        condition_met <- rep(FALSE, nrow(dt))
+        condition_desc <- paste(condition, "(failed)")
+        
+        if (verbose) {
+          cat("[DEBUG] Condition evaluation failed:", e$message, "\n")
+        }
+      })
     } else if (is.list(condition) && all(c("column", "operator", "value") %in% names(condition))) {
       # Structured condition
       col_name <- condition$column
@@ -140,12 +210,20 @@ identify_treatment_events <- function(data,
       
       condition_expr <- paste0(col_name, " ", operator, " ", 
                               if (is.character(value)) paste0("'", value, "'") else value)
-      condition_met <- dt[, eval(parse(text = condition_expr))]
+      condition_met <- with(dt, eval(parse(text = condition_expr)))
       condition_desc <- condition_expr
+      
+      if (verbose) {
+        cat("[DEBUG] Structured condition met by", sum(condition_met, na.rm = TRUE), "observations\n")
+      }
     } else if (is.function(condition)) {
       # Function condition
       condition_met <- condition(dt)
       condition_desc <- paste("Custom function", i)
+      
+      if (verbose) {
+        cat("[DEBUG] Function condition met by", sum(condition_met, na.rm = TRUE), "observations\n")
+      }
     } else {
       stop(paste("Invalid treatment condition format at position", i))
     }
@@ -158,16 +236,44 @@ identify_treatment_events <- function(data,
         treatment_condition_met = condition_desc
       )]
       treatment_events_list[[i]] <- treatment_events
+      
+      if (verbose) {
+        cat("[DEBUG] Found", nrow(treatment_events), "treatment events from condition", i, "\n")
+        cat("[DEBUG] Affecting", treatment_events[, uniqueN(cf)], "unique individuals\n")
+      }
+    } else {
+      if (verbose) {
+        cat("[DEBUG] No treatment events found for condition", i, "\n")
+      }
     }
   }
   
   if (length(treatment_events_list) == 0) {
-    warning("No treatment events identified with the given conditions")
-    return(dt[0]) # Return empty data.table with same structure
+    message("No treatment events identified with the given conditions")
+    if (verbose) {
+      cat("[DEBUG] No treatment events found - returning original data with control indicators\n")
+    }
+    # Return original data with all indicators set to FALSE/NA
+    dt[, `:=`(
+      is_treated = FALSE,
+      treatment_event_date = as.Date(NA),
+      days_to_event = NA_real_,
+      in_event_window = FALSE,
+      pre_event_period = FALSE,
+      post_event_period = FALSE,
+      treatment_condition_met = "No events found"
+    )]
+    setnames(dt, c("cf", "obs_date"), c(id_column, date_column))
+    return(dt[])
   }
   
   # Combine all treatment events
   all_treatment_events <- rbindlist(treatment_events_list)
+  
+  if (verbose) {
+    cat("[DEBUG] Total treatment events found:", nrow(all_treatment_events), "\n")
+    cat("[DEBUG] Unique treated individuals:", all_treatment_events[, uniqueN(cf)], "\n")
+  }
   
   if (nrow(all_treatment_events) == 0) {
     warning("No treatment events found after applying conditions")
@@ -176,12 +282,20 @@ identify_treatment_events <- function(data,
   
   # STEP 2: For treated people, identify their treatment event date(s)
   # Handle multiple treatment events per person
+  if (verbose) {
+    cat("[DEBUG] Handling multiple events with strategy:", multiple_events, "\n")
+  }
+  
   if (multiple_events == "first") {
     person_treatment_dates <- all_treatment_events[, .SD[which.min(treatment_event_date)], by = cf]
   } else if (multiple_events == "last") {
     person_treatment_dates <- all_treatment_events[, .SD[which.max(treatment_event_date)], by = cf]
   } else { # "all"
     person_treatment_dates <- unique(all_treatment_events)
+  }
+  
+  if (verbose) {
+    cat("[DEBUG] Final person-level treatment events:", nrow(person_treatment_dates), "\n")
   }
   
   # Get unique treated people
@@ -216,16 +330,40 @@ identify_treatment_events <- function(data,
   }
   
   if (nrow(valid_treated_people) == 0) {
-    warning("No people meet the minimum pre/post period and employment requirements")
-    return(dt[0])
+    message("No people meet the minimum pre/post period and employment requirements")
+    if (verbose) {
+      cat("[DEBUG] No valid treated individuals after applying minimum period requirements\n")
+    }
+    # Return empty data table with correct structure
+    result_empty <- dt[0]
+    result_empty[, `:=`(
+      is_treated = logical(0),
+      treatment_event_date = as.Date(character(0)),
+      days_to_event = numeric(0),
+      in_event_window = logical(0),
+      pre_event_period = logical(0),
+      post_event_period = logical(0),
+      treatment_condition_met = character(0)
+    )]
+    setnames(result_empty, c("cf", "obs_date"), c(id_column, date_column))
+    return(result_empty)
   }
   
   # Get final list of treated people
   final_treated_people <- unique(valid_treated_people$cf)
   
+  if (verbose) {
+    cat("[DEBUG] Final treated individuals after all filters:", length(final_treated_people), "\n")
+  }
+  
   # STEP 5: Identify control people (who never experienced treatment)
   all_people <- unique(dt$cf)
   control_people <- setdiff(all_people, final_treated_people)
+  
+  if (verbose) {
+    cat("[DEBUG] Total individuals in data:", length(all_people), "\n")
+    cat("[DEBUG] Control individuals:", length(control_people), "\n")
+  }
   
   # STEP 6: Collect ALL events for both treated and control people
   # Create person-level treatment information
@@ -271,6 +409,12 @@ identify_treatment_events <- function(data,
   
   # Restore original column names
   setnames(result, c("cf", "obs_date"), c(id_column, date_column))
+  
+  if (verbose) {
+    cat("[DEBUG] Final result:", nrow(result), "observations\n")
+    cat("[DEBUG] Treated observations:", sum(result$is_treated), "\n")
+    cat("[DEBUG] Control observations:", sum(!result$is_treated), "\n")
+  }
   
   return(result[])
 }

@@ -9,7 +9,10 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(rm:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(_R_CHECK_FORCE_SUGGESTS_=FALSE R CMD check longworkR_0.3.0.tar.gz --no-manual --no-vignettes)",
+      "Bash(export _R_CHECK_FORCE_SUGGESTS_=FALSE)",
+      "Read(/Users/giampaolomontaletti/Documents/funzioni/reference/**)"
     ],
     "deny": [],
     "ask": []

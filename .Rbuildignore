@@ -14,3 +14,5 @@
 ^cran-comments\.md$
 ^CRAN-RELEASE$
 ^\.DS_Store$
+^doc$
+^Meta$

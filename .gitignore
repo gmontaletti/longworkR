@@ -85,3 +85,5 @@ inst/doc/
 data/sample.rds
 data/*_private.rds
 data/*_real.rds
+/doc/
+/Meta/

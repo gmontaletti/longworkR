@@ -984,15 +984,15 @@ calculate_career_complexity_metrics <- function(data,
         # OPTIMIZATION 5: Vectorized concurrent job calculations
         if (has_arco) {
           arco_vals <- arco[emp_rows]
-          max_conc <- fmax(arco_vals)
-          avg_conc <- fmean(arco_vals)
-          conc_days <- sum(durata_emp[arco_vals > 1])
-          conc_rate <- conc_days / total_emp_days
+          max_conc <- as.double(fmax(arco_vals))
+          avg_conc <- as.double(fmean(arco_vals))
+          conc_days <- as.double(sum(durata_emp[arco_vals > 1]))
+          conc_rate <- as.double(conc_days / total_emp_days)
         } else {
-          max_conc <- 1.0
-          avg_conc <- 1.0
-          conc_days <- 0.0
-          conc_rate <- 0.0
+          max_conc <- as.double(1.0)
+          avg_conc <- as.double(1.0)
+          conc_days <- as.double(0.0)
+          conc_rate <- as.double(0.0)
         }
         
         # OPTIMIZATION 6: Efficient diversity calculation
@@ -1100,12 +1100,15 @@ calculate_career_complexity_metrics <- function(data,
         
         if (has_arco) {
           arco_vals <- arco[emp_rows]
-          max_conc <- fmax(arco_vals)
-          avg_conc <- fmean(arco_vals)
-          conc_days <- sum(durata_emp[arco_vals > 1])
-          conc_rate <- conc_days / total_emp_days
+          max_conc <- as.double(fmax(arco_vals))
+          avg_conc <- as.double(fmean(arco_vals))
+          conc_days <- as.double(sum(durata_emp[arco_vals > 1]))
+          conc_rate <- as.double(conc_days / total_emp_days)
         } else {
-          max_conc <- avg_conc <- 1.0; conc_days <- conc_rate <- 0.0
+          max_conc <- as.double(1.0)
+          avg_conc <- as.double(1.0)
+          conc_days <- as.double(0.0)
+          conc_rate <- as.double(0.0)
         }
         
         diversity_vars <- intersect(available_vars, c("prior", "COD_TIPOLOGIA_CONTRATTUALE", "qualifica", "ateco"))
@@ -1628,15 +1631,15 @@ calculate_unified_career_metrics_optimized <- function(data,
       if (has_arco && any(over_id > 0)) {
         arco_vals <- arco[over_id > 0]
         durata_emp <- durata_vals[employed_vals == 1]
-        max_concurrent_jobs <- fmax(arco_vals)
-        avg_concurrent_jobs <- fmean(arco_vals)
+        max_concurrent_jobs <- as.double(fmax(arco_vals))
+        avg_concurrent_jobs <- as.double(fmean(arco_vals))
         concurrent_employment_days <- sum(durata_emp[arco_vals > 1])
         concurrent_employment_rate <- concurrent_employment_days / emp_days
       } else {
-        max_concurrent_jobs <- 1.0
-        avg_concurrent_jobs <- 1.0
-        concurrent_employment_days <- 0.0
-        concurrent_employment_rate <- 0.0
+        max_concurrent_jobs <- as.double(1.0)
+        avg_concurrent_jobs <- as.double(1.0)
+        concurrent_employment_days <- as.double(0.0)
+        concurrent_employment_rate <- as.double(0.0)
       }
       
       # Employment diversity (optimized)
