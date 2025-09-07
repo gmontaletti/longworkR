@@ -55,6 +55,292 @@
   return(result)
 }
 
+# Helper function to compute transitions for a specific time period
+# This function identifies transitions where the "to" state begins within the period
+.compute_period_transitions <- function(pipeline_result, transition_variable, 
+                                      period_start, period_end, time_column,
+                                      min_unemployment_duration, max_unemployment_duration,
+                                      consolidation_type, eval_chain) {
+  
+  # Use consolidation if needed
+  if (consolidation_type != "none") {
+    consolidated_data <- merge_consecutive_employment(
+      pipeline_result, 
+      type = consolidation_type,
+      show_progress = FALSE
+    )
+  } else {
+    consolidated_data <- copy(pipeline_result)
+  }
+  
+  # Order by person and start date
+  setorder(consolidated_data, cf, inizio)
+  
+  # Find transitions for each person
+  transitions_list <- list()
+  
+  for (person in unique(consolidated_data$cf)) {
+    person_data <- consolidated_data[cf == person]
+    
+    if (nrow(person_data) < 2) next  # Need at least 2 periods for transitions
+    
+    # Find transitions where the "to" period starts within our time period
+    for (j in 2:nrow(person_data)) {
+      to_start <- person_data[[time_column]][j]  # When the "to" state begins
+      
+      # Check if this transition ends in our period
+      if (to_start >= period_start && to_start <= period_end) {
+        from_end <- person_data$fine[j-1]
+        to_start_date <- person_data$inizio[j]
+        unemployment_duration <- as.numeric(to_start_date - from_end - 1)
+        
+        # Check unemployment duration constraints
+        if (unemployment_duration >= min_unemployment_duration) {
+          if (is.null(max_unemployment_duration) || unemployment_duration <= max_unemployment_duration) {
+            
+            # Extract transition values
+            from_value <- person_data[[transition_variable]][j-1]
+            to_value <- person_data[[transition_variable]][j]
+            
+            # Process chain values
+            from_processed <- .process_chain_value(from_value, eval_chain)
+            to_processed <- .process_chain_value(to_value, eval_chain)
+            
+            # Skip if either value is NA
+            if (!is.na(from_processed) && !is.na(to_processed)) {
+              transitions_list[[length(transitions_list) + 1]] <- data.table(
+                cf = person,
+                from = from_processed,
+                to = to_processed,
+                transition_end = to_start,
+                unemployment_duration = unemployment_duration
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  # Combine all transitions
+  if (length(transitions_list) == 0) {
+    return(NULL)
+  }
+  
+  transitions_dt <- rbindlist(transitions_list)
+  return(transitions_dt)
+}
+
+# Simplified helper function to filter transitions for a specific time period
+.filter_transitions_for_period <- function(transitions_data, pipeline_result, period_start, period_end,
+                                          transition_variable, consolidation_type, eval_chain) {
+  
+  if (!is.data.table(transitions_data) || nrow(transitions_data) == 0) {
+    # Don't return early - we'll create our own transitions
+  }
+  
+  # Process data for transition timing analysis
+  if (consolidation_type != "none") {
+    employment_data <- merge_consecutive_employment(
+      dt = pipeline_result, 
+      consolidation_type = consolidation_type
+    )
+  } else {
+    employment_data <- copy(pipeline_result)
+  }
+  
+  # Get employment periods only and order by person and start date
+  employment_data <- employment_data[arco >= 1]
+  setorder(employment_data, cf, inizio)
+  
+  # For each transition, check if it occurs in this period
+  period_transitions <- list()
+  
+  
+  for (person in unique(employment_data$cf)) {
+    person_data <- employment_data[cf == person]
+    
+    if (nrow(person_data) < 2) next  # Need at least 2 periods for transitions
+    
+    # Check consecutive employment periods for transitions in this time period
+    for (k in 2:nrow(person_data)) {
+      from_val <- .process_chain_value(person_data[[transition_variable]][k-1], eval_chain)
+      to_val <- .process_chain_value(person_data[[transition_variable]][k], eval_chain)
+      
+      # Skip if values are NA
+      if (is.na(from_val) || is.na(to_val)) next
+      
+      # Check if this is a real transition (from != to)
+      if (from_val == to_val) next
+      
+      # Check when the "to" state begins - assign transition to this period
+      to_state_starts <- person_data$inizio[k]
+      
+      # If "to" state begins in this period, include this transition
+      if (to_state_starts >= period_start && to_state_starts <= period_end) {
+        period_transitions[[length(period_transitions) + 1]] <- data.table(
+          from = from_val,
+          to = to_val,
+          weight = 1  # Each instance counts as weight 1
+        )
+      }
+    }
+  }
+  
+  if (length(period_transitions) == 0) {
+    return(data.table(from = character(0), to = character(0), weight = integer(0)))
+  }
+  
+  # Combine all transitions and aggregate by from-to pairs
+  result_dt <- rbindlist(period_transitions)
+  
+  # Aggregate transitions by from-to pairs
+  aggregated_transitions <- result_dt[, .(weight = sum(weight)), by = .(from, to)]
+  
+  return(aggregated_transitions)
+}
+
+
+# Helper function to map transitions to their timing (when "to" state begins) - OLD VERSION
+.map_transitions_to_timing_old <- function(pipeline_result, transitions_dt, 
+                                     transition_variable, consolidation_type, eval_chain) {
+  
+  if (nrow(transitions_dt) == 0) {
+    return(data.table(from = character(0), to = character(0), 
+                      to_start_date = as.Date(character(0))))
+  }
+  
+  # Use consolidation if specified
+  if (consolidation_type != "none") {
+    consolidated_data <- merge_consecutive_employment(
+      pipeline_result, 
+      type = consolidation_type,
+      show_progress = FALSE
+    )
+  } else {
+    consolidated_data <- copy(pipeline_result)
+  }
+  
+  # Get employment periods only
+  employment_data <- consolidated_data[arco >= 1]
+  setorder(employment_data, cf, inizio)
+  
+  timing_records <- list()
+  
+  # For each transition in the transitions_dt, find when it occurs
+  for (trans_idx in 1:nrow(transitions_dt)) {
+    trans_from <- transitions_dt$from[trans_idx]
+    trans_to <- transitions_dt$to[trans_idx]
+    trans_weight <- transitions_dt$weight[trans_idx]
+    
+    # Find all instances of this transition in the employment data
+    for (person in unique(employment_data$cf)) {
+      person_data <- employment_data[cf == person]
+      
+      if (nrow(person_data) < 2) next
+      
+      # Look for this specific transition in the person's employment history
+      for (k in 2:nrow(person_data)) {
+        from_val <- .process_chain_value(person_data[[transition_variable]][k-1], eval_chain)
+        to_val <- .process_chain_value(person_data[[transition_variable]][k], eval_chain)
+        
+        # Skip if values are NA or don't match our transition
+        if (is.na(from_val) || is.na(to_val)) next
+        if (from_val != trans_from || to_val != trans_to) next
+        
+        # Found an instance of this transition
+        to_start_date <- person_data$inizio[k]  # When "to" state begins
+        
+        timing_records[[length(timing_records) + 1]] <- data.table(
+          from = trans_from,
+          to = trans_to,
+          to_start_date = to_start_date
+        )
+      }
+    }
+  }
+  
+  if (length(timing_records) == 0) {
+    return(data.table(from = character(0), to = character(0), 
+                      to_start_date = as.Date(character(0))))
+  }
+  
+  result_dt <- rbindlist(timing_records)
+  return(result_dt)
+}
+
+# Old helper function (keeping for reference, but unused)
+.create_detailed_transitions_with_timing_old <- function(pipeline_result, transitions_dt, 
+                                                   transition_variable, time_column,
+                                                   consolidation_type, eval_chain) {
+  
+  if (nrow(transitions_dt) == 0) {
+    return(data.table(from = character(0), to = character(0), 
+                      cf = character(0), transition_end_date = as.Date(character(0))))
+  }
+  
+  # Use consolidation if specified
+  if (consolidation_type != "none") {
+    consolidated_data <- merge_consecutive_employment(
+      pipeline_result, 
+      type = consolidation_type,
+      show_progress = FALSE
+    )
+  } else {
+    consolidated_data <- copy(pipeline_result)
+  }
+  
+  # Remove unemployment periods for transition matching
+  employment_data <- consolidated_data[arco >= 1]
+  setorder(employment_data, cf, inizio)
+  
+  detailed_transitions <- list()
+  
+  # For each person, match transitions to their timing
+  for (person in unique(employment_data$cf)) {
+    person_data <- employment_data[cf == person]
+    
+    if (nrow(person_data) < 2) next
+    
+    # Check consecutive periods for transitions
+    for (j in 2:nrow(person_data)) {
+      from_value <- person_data[[transition_variable]][j-1]
+      to_value <- person_data[[transition_variable]][j]
+      
+      # Process chain values
+      from_processed <- .process_chain_value(from_value, eval_chain)
+      to_processed <- .process_chain_value(to_value, eval_chain)
+      
+      # Skip if either value is NA
+      if (is.na(from_processed) || is.na(to_processed)) next
+      
+      # Check if this transition exists in our transitions_dt
+      transition_exists <- transitions_dt[from == from_processed & to == to_processed, .N] > 0
+      
+      if (transition_exists) {
+        # The transition should be assigned to when the "to" state BEGINS, not ends
+        # So we use 'inizio' (start date) of the "to" period, not time_column (end date)
+        transition_end_date <- person_data$inizio[j]  # When the new state begins
+        
+        detailed_transitions[[length(detailed_transitions) + 1]] <- data.table(
+          from = from_processed,
+          to = to_processed,
+          cf = person,
+          transition_end_date = transition_end_date
+        )
+      }
+    }
+  }
+  
+  if (length(detailed_transitions) == 0) {
+    return(data.table(from = character(0), to = character(0), 
+                      cf = character(0), transition_end_date = as.Date(character(0))))
+  }
+  
+  result_dt <- rbindlist(detailed_transitions)
+  return(result_dt)
+}
+
 #' Analyze Employment Transitions from Pipeline Output
 #'
 #' @description
@@ -3657,37 +3943,55 @@ create_monthly_transition_matrices <- function(pipeline_result,
                      format(period_end, "%Y-%m-%d")))
     }
     
-    # Filter data for current time period - key insight: transitions assigned to when they END ("fine" date)
-    period_data <- pipeline_result[get(time_column) >= period_start & get(time_column) <= period_end]
+    # SIMPLIFIED APPROACH: Filter employment records by time period first, 
+    # then compute transitions on the filtered dataset
     
-    if (nrow(period_data) == 0) {
-      # No data for this period - create appropriate empty matrix
-      if (use_global_state_space) {
-        matrices_list[[i]] <- template_matrix
-      } else {
-        # Create minimal empty matrix
-        if (matrix_format == "sparse") {
-          matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
-        } else {
-          matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
-        }
-      }
-      next
-    }
-    
-    # Analyze transitions for this period using existing function
     tryCatch({
-      period_transitions <- analyze_employment_transitions(
-        period_data,
-        transition_variable = transition_variable,
-        min_unemployment_duration = min_unemployment_duration,
-        max_unemployment_duration = max_unemployment_duration,
-        output_transition_matrix = TRUE,
-        eval_chain = eval_chain,
-        use_consolidated_periods = (consolidation_type != "none"),
-        consolidation_type = consolidation_type,
-        show_progress = FALSE
+      
+      # SIMPLIFIED: Directly filter transitions for this time period
+      period_transitions_data <- .filter_transitions_for_period(
+        data.table(), pipeline_result, period_start, period_end,
+        transition_variable, consolidation_type, eval_chain
       )
+      
+      if (nrow(period_transitions_data) == 0) {
+        # No transitions in this period - create empty matrix
+        if (use_global_state_space) {
+          matrices_list[[i]] <- template_matrix
+        } else {
+          if (matrix_format == "sparse") {
+            matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
+          } else {
+            matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
+          }
+        }
+        next
+      }
+      
+      # STEP 3: Create matrix from filtered transitions
+      unique_states_period <- sort(unique(c(period_transitions_data$from, period_transitions_data$to)))
+      
+      if (matrix_format == "sparse") {
+        period_transitions <- Matrix::Matrix(0, 
+                                           nrow = length(unique_states_period), 
+                                           ncol = length(unique_states_period),
+                                           dimnames = list(unique_states_period, unique_states_period),
+                                           sparse = TRUE)
+      } else {
+        period_transitions <- matrix(0, 
+                                   nrow = length(unique_states_period), 
+                                   ncol = length(unique_states_period),
+                                   dimnames = list(unique_states_period, unique_states_period))
+      }
+      
+      # Fill matrix with transition weights
+      for (j in 1:nrow(period_transitions_data)) {
+        from_state <- as.character(period_transitions_data$from[j])
+        to_state <- as.character(period_transitions_data$to[j])
+        weight <- period_transitions_data$weight[j]
+        
+        period_transitions[from_state, to_state] <- period_transitions[from_state, to_state] + weight
+      }
       
       # Process the resulting matrix based on state space strategy
       if (is.matrix(period_transitions)) {
@@ -3765,7 +4069,9 @@ create_monthly_transition_matrices <- function(pipeline_result,
     }
     
     for (i in 1:n_periods) {
-      matrices_list[[i]] <- .normalize_transition_matrix(matrices_list[[i]], normalize_by)
+      if (!is.null(matrices_list[[i]]) && (is.matrix(matrices_list[[i]]) || inherits(matrices_list[[i]], "Matrix"))) {
+        matrices_list[[i]] <- .normalize_transition_matrix(matrices_list[[i]], normalize_by)
+      }
     }
   }
   
