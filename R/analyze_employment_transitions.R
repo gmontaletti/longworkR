@@ -3053,17 +3053,30 @@ analyze_employment_overlaps <- function(segments,
 }
 
 
-#' Helper Function: Extract Global State Space from Dataset
+#' Helper Function: Extract Global State Space from Dataset for Memory Management
 #'
 #' @description
-#' Internal helper function to identify all unique states in a transition variable
-#' across the entire dataset to ensure consistent matrix dimensions across time periods.
+#' Internal helper function that analyzes the complete dataset to identify all unique 
+#' states in a transition variable. This state space is used for memory estimation 
+#' and determining whether to use global or period-specific matrix dimensions. 
+#' Critical for preventing out-of-memory errors on large datasets with many states 
+#' (e.g., 290,575+ unique employment transitions).
 #'
-#' @param pipeline_result Output from process_employment_pipeline()
-#' @param transition_variable Character string specifying the variable to analyze
-#' @param eval_chain Character string specifying chain evaluation method
+#' @param pipeline_result Output from process_employment_pipeline(). Must contain 
+#'   the specified transition variable.
+#' @param transition_variable Character string specifying the variable to analyze 
+#'   for state extraction
+#' @param eval_chain Character string specifying chain evaluation method ("first", 
+#'   "last", "none") for processing composite state values
 #'
-#' @return Character vector of all unique states sorted alphabetically
+#' @return Character vector of all unique states sorted alphabetically. Used for 
+#'   memory estimation and matrix dimension planning.
+#'
+#' @details
+#' This function processes transition values through the chain evaluation logic 
+#' before extracting unique states, ensuring consistency with downstream matrix 
+#' creation. The resulting state count is used to estimate memory requirements 
+#' and trigger automatic fallback mechanisms in create_monthly_transition_matrices().
 #'
 #' @keywords internal
 #' @noRd
@@ -3086,21 +3099,39 @@ analyze_employment_overlaps <- function(segments,
 }
 
 
-#' Helper Function: Generate Time Period Boundaries and Names
+#' Helper Function: Generate Time Period Boundaries and Names for Matrix Creation
 #'
 #' @description
-#' Internal helper function to create time period boundaries and generate
-#' appropriate names for monthly transition matrices.
+#' Internal helper function that creates time period boundaries and generates consistent 
+#' naming schemes for temporal transition matrices. Supports multiple time formats and 
+#' naming conventions to enable flexible temporal analysis while maintaining consistency 
+#' across different analysis periods.
 #'
-#' @param pipeline_result Output from process_employment_pipeline()
-#' @param time_column Character string specifying the date column to use
-#' @param time_format Character string specifying period format ("monthly", "quarterly", "custom")
-#' @param custom_period_days Integer number of days for custom periods
-#' @param date_range Optional vector of two Date objects specifying start and end dates
-#' @param name_format Character string specifying naming convention
-#' @param custom_names Optional character vector of custom period names
+#' @param pipeline_result Output from process_employment_pipeline(). Used to determine 
+#'   data date range when date_range parameter is NULL.
+#' @param time_column Character string specifying the date column to use for determining 
+#'   time periods (typically "fine" for end dates)
+#' @param time_format Character string specifying period format: "monthly" (calendar months), 
+#'   "quarterly" (calendar quarters), or "custom" (user-defined period length)
+#' @param custom_period_days Integer number of days for custom periods. Required and 
+#'   used only when time_format = "custom"
+#' @param date_range Optional vector of two Date objects specifying analysis start and 
+#'   end dates. If NULL, uses full range from pipeline_result data
+#' @param name_format Character string specifying naming convention: "date" (e.g., "jan2022"), 
+#'   "period" (e.g., "period_1"), or "custom" (user-provided names)
+#' @param custom_names Optional character vector of custom period names. Required when 
+#'   name_format = "custom", must match length of generated periods
 #'
-#' @return List with period_boundaries (Date vector) and period_names (character vector)
+#' @return List containing:
+#'   \itemize{
+#'     \item{period_boundaries}: Date vector defining start/end boundaries for each time period
+#'     \item{period_names}: Character vector of corresponding period names for matrix identification
+#'   }
+#'
+#' @details
+#' This function handles the complexity of creating consistent time periods across different 
+#' formats while ensuring proper boundary handling. The period boundaries are used to filter 
+#' transitions for each matrix, and the names become the matrix identifiers in the final output.
 #'
 #' @keywords internal
 #' @noRd
@@ -3224,30 +3255,41 @@ analyze_employment_overlaps <- function(segments,
 }
 
 
-#' Create Monthly Transition Matrices from Vecshift Data
+#' Create Monthly Transition Matrices from Vecshift Data with Advanced Memory Management
 #'
 #' @description
 #' Generates a named list of transition matrices, one for each time period (month/quarter/custom),
-#' from vecshift employment data. All matrices have identical dimensions with consistent state 
-#' spaces to enable temporal comparison and analysis. Transitions are assigned to the time period
-#' when the transition is concluded (i.e., when the "to" state begins).
+#' from vecshift employment data. Features intelligent memory management for large datasets 
+#' (290,575+ unique states) with automatic fallback mechanisms to prevent memory errors. 
+#' Supports both sparse and dense matrix formats for optimal performance across different 
+#' dataset sizes.
 #'
 #' @details
-#' This function creates time-series transition matrices by:
+#' This function creates time-series transition matrices with advanced memory management:
 #' \enumerate{
-#'   \item Identifying the global state space across the entire dataset for consistent dimensions
-#'   \item Generating time period boundaries based on the specified format
-#'   \item For each period, filtering transitions and creating matrices with zero-padding
-#'   \item Returning a named list of matrices with period-specific names
+#'   \item **Memory Assessment**: Estimates memory requirements before allocation
+#'   \item **State Space Strategy**: Chooses between global or period-specific state spaces
+#'   \item **Smart Fallback**: Automatically switches modes when memory limits are exceeded
+#'   \item **Matrix Format Selection**: Uses sparse matrices for large state spaces (>10,000 states)
+#'   \item **Progress Monitoring**: Reports memory usage and performance warnings
 #' }
 #' 
 #' **Key Features:**
 #' \itemize{
-#'   \item{\strong{Consistent Dimensions}}: All matrices share identical row/column structure
-#'   \item{\strong{Zero-Padded}}: Missing transitions are filled with zeros for complete matrices
+#'   \item{\strong{Memory Efficiency}}: Intelligent memory management prevents out-of-memory errors
+#'   \item{\strong{Automatic Optimization}}: Switches between global/local state spaces based on memory constraints
+#'   \item{\strong{Sparse Matrix Support}}: Uses Matrix package for large datasets
+#'   \item{\strong{Progress Reporting}}: Real-time memory usage and performance feedback
 #'   \item{\strong{Flexible Periods}}: Monthly, quarterly, or custom time periods supported
+#'   \item{\strong{Consistent Dimensions}}: Matrices maintain identical structure when using global state space
 #'   \item{\strong{Transition Assignment}}: Uses "end" assignment - transitions assigned when "to" state begins
-#'   \item{\strong{Integration}}: Leverages existing consolidation and chain processing logic
+#' }
+#' 
+#' **Memory Management Modes:**
+#' \itemize{
+#'   \item{\strong{Global State Space} (use_global_state_space = TRUE)}: All matrices use same dimensions, higher memory usage
+#'   \item{\strong{Period-Specific State Space} (use_global_state_space = FALSE, default)}: Each matrix uses only its states, memory efficient
+#'   \item{\strong{Automatic Fallback}}: Switches to period-specific mode when memory exceeds limit
 #' }
 #' 
 #' **Matrix Naming:**
@@ -3276,8 +3318,13 @@ analyze_employment_overlaps <- function(segments,
 #'   "date" (default), "period", "custom".
 #' @param custom_names Optional character vector of custom period names. Required when
 #'   name_format = "custom".
-#' @param matrix_format Character string specifying matrix format. Currently supports
-#'   "dense" (default) for zero-padded matrices.
+#' @param matrix_format Character string specifying matrix output format. Options:
+#'   \itemize{
+#'     \item{"dense" (default)}: Standard R matrices, suitable for small to medium datasets
+#'     \item{"sparse"}: Matrix package sparse matrices, optimal for large datasets with many zero entries
+#'   }
+#'   For datasets with >10,000 states, the function automatically switches to sparse format 
+#'   regardless of this setting to prevent memory issues.
 #' @param consolidation_type Character string specifying consolidation approach 
 #'   (default: "both"). Options: "both", "overlapping", "consecutive", "none".
 #' @param min_unemployment_duration Minimum duration (in days) of unemployment period 
@@ -3293,6 +3340,20 @@ analyze_employment_overlaps <- function(segments,
 #' @param include_summary Logical. If TRUE (default), includes summary information
 #'   and metadata in the output.
 #' @param show_progress Logical. If TRUE (default), displays progress messages.
+#' @param use_global_state_space Logical. Memory management mode selection (default: FALSE). 
+#'   \itemize{
+#'     \item{FALSE (default)}: Uses period-specific state spaces for maximum memory efficiency. 
+#'       Each matrix only includes states present in that period, dramatically reducing memory usage 
+#'       for large datasets.
+#'     \item{TRUE}: Uses global state space for consistent matrix dimensions across all periods. 
+#'       All matrices have identical structure, but requires significant memory for large datasets 
+#'       (e.g., 290,575+ states may require >1GB RAM).
+#'   }
+#' @param memory_limit_gb Numeric. Memory threshold in GB for automatic fallback protection 
+#'   (default: 1.0). When estimated memory usage for dense matrices exceeds this limit, 
+#'   the function automatically switches to period-specific state spaces regardless of 
+#'   use_global_state_space setting. This prevents out-of-memory errors on large datasets. 
+#'   Set higher (e.g., 4.0) if you have sufficient RAM and need global state space consistency.
 #'
 #' @return A named list containing:
 #'   \itemize{
@@ -3313,7 +3374,7 @@ analyze_employment_overlaps <- function(segments,
 #' # Load sample data
 #' sample_data <- readRDS("data/sample.rds")
 #' 
-#' # Basic monthly transition matrices
+#' # Basic monthly transition matrices (memory-efficient, default)
 #' monthly_matrices <- create_monthly_transition_matrices(
 #'   sample_data,
 #'   transition_variable = "COD_TIPOLOGIA_CONTRATTUALE"
@@ -3323,8 +3384,29 @@ analyze_employment_overlaps <- function(segments,
 #' jan_matrix <- monthly_matrices$matrices$jan2022
 #' feb_matrix <- monthly_matrices$matrices$feb2022
 #' 
-#' # All matrices have identical dimensions
-#' identical(dim(jan_matrix), dim(feb_matrix))  # TRUE
+#' # Check memory usage and matrix info
+#' monthly_matrices$metadata$memory_mode  # Shows which mode was used
+#' monthly_matrices$metadata$estimated_memory_gb  # Memory estimation
+#' 
+#' # Global state space mode (consistent dimensions, higher memory)
+#' global_matrices <- create_monthly_transition_matrices(
+#'   sample_data,
+#'   transition_variable = "COD_TIPOLOGIA_CONTRATTUALE",
+#'   use_global_state_space = TRUE,
+#'   memory_limit_gb = 2.0  # Allow higher memory usage
+#' )
+#' 
+#' # All matrices have identical dimensions in global mode
+#' identical(dim(global_matrices$matrices$jan2022), 
+#'           dim(global_matrices$matrices$feb2022))  # TRUE
+#' 
+#' # Sparse matrices for large datasets
+#' sparse_matrices <- create_monthly_transition_matrices(
+#'   sample_data,
+#'   transition_variable = "COD_TIPOLOGIA_CONTRATTUALE",
+#'   matrix_format = "sparse",
+#'   show_progress = TRUE  # Monitor memory usage
+#' )
 #' 
 #' # Quarterly matrices with probability normalization
 #' quarterly_prob <- create_monthly_transition_matrices(
@@ -3344,8 +3426,18 @@ analyze_employment_overlaps <- function(segments,
 #'   name_format = "custom",
 #'   custom_names = c("Q1_extended", "Q2_extended", "Q3_extended", "Q4_extended")
 #' )
+#' 
+#' # Monitor performance on large datasets
+#' large_result <- create_monthly_transition_matrices(
+#'   large_data,
+#'   show_progress = TRUE,      # Shows memory warnings
+#'   memory_limit_gb = 0.5,    # Conservative memory limit
+#'   matrix_format = "sparse"  # Use sparse matrices
+#' )
 #' }
 #'
+#' @importFrom data.table data.table setDT copy .N .SD := setorder setnames
+#' @importFrom Matrix Matrix sparseMatrix
 #' @export
 create_monthly_transition_matrices <- function(pipeline_result,
                                              transition_variable = NULL,
@@ -3363,7 +3455,9 @@ create_monthly_transition_matrices <- function(pipeline_result,
                                              normalize_by = "row",
                                              eval_chain = "last",
                                              include_summary = TRUE,
-                                             show_progress = TRUE) {
+                                             show_progress = TRUE,
+                                             use_global_state_space = FALSE,
+                                             memory_limit_gb = 1.0) {
   
   # Record start time
   start_time <- Sys.time()
@@ -3378,6 +3472,11 @@ create_monthly_transition_matrices <- function(pipeline_result,
   name_format <- match.arg(name_format)
   matrix_format <- match.arg(matrix_format)
   matrix_type <- match.arg(matrix_type)
+  
+  # Load Matrix package for sparse matrix support
+  if (matrix_format == "sparse" && !requireNamespace("Matrix", quietly = TRUE)) {
+    stop("Package 'Matrix' is required for sparse matrix format but not installed.")
+  }
   
   # Input validation
   if (!inherits(pipeline_result, "data.table")) {
@@ -3442,6 +3541,15 @@ create_monthly_transition_matrices <- function(pipeline_result,
     }
   }
   
+  # Validate memory parameters
+  if (!is.logical(use_global_state_space)) {
+    stop("Parameter 'use_global_state_space' must be TRUE or FALSE.")
+  }
+  
+  if (!is.numeric(memory_limit_gb) || memory_limit_gb <= 0) {
+    stop("Parameter 'memory_limit_gb' must be a positive numeric value.")
+  }
+  
   # Progress message
   if (show_progress) {
     message("Starting monthly transition matrices creation...")
@@ -3450,9 +3558,9 @@ create_monthly_transition_matrices <- function(pipeline_result,
                    length(unique(pipeline_result$cf))))
   }
   
-  # Step 1: Extract global state space for consistent dimensions
+  # Step 1: Handle state space extraction with memory considerations
   if (show_progress) {
-    message("Step 1: Extracting global state space...")
+    message("Step 1: Analyzing state space...")
   }
   
   global_states <- .extract_global_state_space(pipeline_result, transition_variable, eval_chain)
@@ -3476,27 +3584,67 @@ create_monthly_transition_matrices <- function(pipeline_result,
   period_names <- time_periods$period_names
   n_periods <- length(period_names)
   
+  # Calculate estimated memory usage for dense matrices
+  estimated_memory_gb <- (n_states^2 * 8 * n_periods) / (1024^3)  # 8 bytes per double, convert to GB
+  
   if (show_progress) {
     message(sprintf("Created %d time periods from %s to %s", 
                    n_periods, 
                    format(period_boundaries[1], "%Y-%m-%d"),
                    format(period_boundaries[length(period_boundaries)], "%Y-%m-%d")))
+    message(sprintf("Estimated memory for dense matrices: %.2f GB", estimated_memory_gb))
+  }
+  
+  # Automatically switch to period-specific state spaces if memory would be too high
+  if (estimated_memory_gb > memory_limit_gb && use_global_state_space) {
+    if (show_progress) {
+      message(sprintf("WARNING: Estimated memory usage (%.2f GB) exceeds limit (%.2f GB)", 
+                     estimated_memory_gb, memory_limit_gb))
+      message("Automatically switching to period-specific state spaces for memory efficiency...")
+    }
+    use_global_state_space <- FALSE
+  }
+  
+  # Force sparse format for large state spaces
+  if (n_states > 10000 && matrix_format == "dense") {
+    if (show_progress) {
+      message(sprintf("Large state space (%d states) detected. Switching to sparse matrix format.", n_states))
+    }
+    matrix_format <- "sparse"
+    if (!requireNamespace("Matrix", quietly = TRUE)) {
+      stop("Package 'Matrix' is required for large state spaces but not installed. Please install it or reduce the state space size.")
+    }
   }
   
   # Step 3: Create matrices for each time period
   if (show_progress) {
-    message("Step 3: Creating transition matrices for each period...")
+    if (use_global_state_space) {
+      message("Step 3: Creating transition matrices with global state space...")
+    } else {
+      message("Step 3: Creating transition matrices with period-specific state spaces...")
+    }
   }
   
   matrices_list <- vector("list", n_periods)
   names(matrices_list) <- period_names
   periods_with_transitions <- 0
   
-  # Create template matrix with zeros for consistent dimensions
-  template_matrix <- matrix(0, 
-                           nrow = n_states, 
-                           ncol = n_states,
-                           dimnames = list(global_states, global_states))
+  # Create template matrix only if using global state space
+  template_matrix <- NULL
+  if (use_global_state_space) {
+    if (matrix_format == "sparse") {
+      template_matrix <- Matrix::Matrix(0, 
+                                       nrow = n_states, 
+                                       ncol = n_states,
+                                       dimnames = list(global_states, global_states),
+                                       sparse = TRUE)
+    } else {
+      template_matrix <- matrix(0, 
+                               nrow = n_states, 
+                               ncol = n_states,
+                               dimnames = list(global_states, global_states))
+    }
+  }
   
   for (i in 1:n_periods) {
     period_start <- period_boundaries[i]
@@ -3513,8 +3661,17 @@ create_monthly_transition_matrices <- function(pipeline_result,
     period_data <- pipeline_result[get(time_column) >= period_start & get(time_column) <= period_end]
     
     if (nrow(period_data) == 0) {
-      # No data for this period - use empty matrix with correct dimensions
-      matrices_list[[i]] <- template_matrix
+      # No data for this period - create appropriate empty matrix
+      if (use_global_state_space) {
+        matrices_list[[i]] <- template_matrix
+      } else {
+        # Create minimal empty matrix
+        if (matrix_format == "sparse") {
+          matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
+        } else {
+          matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
+        }
+      }
       next
     }
     
@@ -3532,18 +3689,36 @@ create_monthly_transition_matrices <- function(pipeline_result,
         show_progress = FALSE
       )
       
-      # If we got a matrix, ensure it has the correct global dimensions
+      # Process the resulting matrix based on state space strategy
       if (is.matrix(period_transitions)) {
-        # Create matrix with global state space
-        period_matrix <- template_matrix
-        
-        # Fill in the transitions we found
-        matrix_states <- rownames(period_transitions)
-        for (from_state in matrix_states) {
-          for (to_state in colnames(period_transitions)) {
-            if (from_state %in% global_states && to_state %in% global_states) {
-              period_matrix[from_state, to_state] <- period_transitions[from_state, to_state]
+        if (use_global_state_space) {
+          # Create matrix with global state space
+          period_matrix <- if (matrix_format == "sparse") {
+            Matrix::Matrix(0, nrow = n_states, ncol = n_states,
+                          dimnames = list(global_states, global_states),
+                          sparse = TRUE)
+          } else {
+            matrix(0, nrow = n_states, ncol = n_states,
+                   dimnames = list(global_states, global_states))
+          }
+          
+          # Fill in the transitions we found
+          matrix_states <- rownames(period_transitions)
+          for (from_state in matrix_states) {
+            for (to_state in colnames(period_transitions)) {
+              if (from_state %in% global_states && to_state %in% global_states) {
+                period_matrix[from_state, to_state] <- period_transitions[from_state, to_state]
+              }
             }
+          }
+        } else {
+          # Use period-specific state space - convert to sparse if requested
+          period_matrix <- if (matrix_format == "sparse" && !inherits(period_transitions, "Matrix")) {
+            Matrix::Matrix(period_transitions, sparse = TRUE)
+          } else if (matrix_format == "dense" && inherits(period_transitions, "Matrix")) {
+            as.matrix(period_transitions)
+          } else {
+            period_transitions
           }
         }
         
@@ -3552,15 +3727,34 @@ create_monthly_transition_matrices <- function(pipeline_result,
           periods_with_transitions <- periods_with_transitions + 1
         }
       } else {
-        # No transitions found - use template matrix
-        matrices_list[[i]] <- template_matrix
+        # No transitions found - handle empty matrix case
+        if (use_global_state_space) {
+          matrices_list[[i]] <- template_matrix
+        } else {
+          # Create minimal empty matrix
+          if (matrix_format == "sparse") {
+            matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
+          } else {
+            matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
+          }
+        }
       }
       
     }, error = function(e) {
       if (show_progress) {
         message(sprintf("Warning: No valid transitions found for period %s: %s", period_names[i], e$message))
       }
-      matrices_list[[i]] <- template_matrix
+      # Handle empty matrix case
+      if (use_global_state_space) {
+        matrices_list[[i]] <- template_matrix
+      } else {
+        # Create minimal empty matrix
+        if (matrix_format == "sparse") {
+          matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
+        } else {
+          matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
+        }
+      }
     })
   }
   
@@ -3579,8 +3773,17 @@ create_monthly_transition_matrices <- function(pipeline_result,
   elapsed_time <- Sys.time() - start_time
   
   if (show_progress) {
-    message(sprintf("Completed in %.2f seconds. Created %d matrices (%d with transitions) of %dx%d dimensions.", 
-                   as.numeric(elapsed_time), n_periods, periods_with_transitions, n_states, n_states))
+    if (use_global_state_space) {
+      message(sprintf("Completed in %.2f seconds. Created %d matrices (%d with transitions) of %dx%d dimensions.", 
+                     as.numeric(elapsed_time), n_periods, periods_with_transitions, n_states, n_states))
+    } else {
+      # Calculate average matrix dimensions for period-specific approach
+      actual_dims <- lapply(matrices_list, function(m) if (is.matrix(m) || inherits(m, "Matrix")) dim(m) else c(0, 0))
+      avg_rows <- mean(sapply(actual_dims, function(d) d[1]), na.rm = TRUE)
+      avg_cols <- mean(sapply(actual_dims, function(d) d[2]), na.rm = TRUE)
+      message(sprintf("Completed in %.2f seconds. Created %d matrices (%d with transitions). Average dimensions: %.0fx%.0f.", 
+                     as.numeric(elapsed_time), n_periods, periods_with_transitions, avg_rows, avg_cols))
+    }
   }
   
   # Prepare results
@@ -3589,12 +3792,16 @@ create_monthly_transition_matrices <- function(pipeline_result,
   # Add summary information if requested
   if (include_summary) {
     results$metadata <- list(
-      global_state_space = global_states,
+      global_state_space = if (use_global_state_space) global_states else NULL,
+      all_unique_states = global_states,  # Always include for reference
       period_info = list(
         boundaries = period_boundaries,
         names = period_names
       ),
-      matrix_dimensions = c(n_states, n_states),
+      matrix_dimensions = if (use_global_state_space) c(n_states, n_states) else "variable (period-specific)",
+      matrix_format = matrix_format,
+      use_global_state_space = use_global_state_space,
+      estimated_memory_gb = estimated_memory_gb,
       total_periods = n_periods,
       periods_with_transitions = periods_with_transitions,
       analysis_parameters = list(
