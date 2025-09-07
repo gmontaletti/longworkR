@@ -3051,3 +3051,566 @@ analyze_employment_overlaps <- function(segments,
   
   return(results)
 }
+
+
+#' Helper Function: Extract Global State Space from Dataset
+#'
+#' @description
+#' Internal helper function to identify all unique states in a transition variable
+#' across the entire dataset to ensure consistent matrix dimensions across time periods.
+#'
+#' @param pipeline_result Output from process_employment_pipeline()
+#' @param transition_variable Character string specifying the variable to analyze
+#' @param eval_chain Character string specifying chain evaluation method
+#'
+#' @return Character vector of all unique states sorted alphabetically
+#'
+#' @keywords internal
+#' @noRd
+.extract_global_state_space <- function(pipeline_result, transition_variable, eval_chain) {
+  
+  if (!requireNamespace("data.table", quietly = TRUE)) {
+    stop("Package 'data.table' is required but not installed.")
+  }
+  
+  # Extract the transition variable values
+  transition_values <- pipeline_result[[transition_variable]]
+  
+  # Process chain values if needed
+  processed_values <- .process_chain_value(transition_values, eval_chain)
+  
+  # Get unique non-NA values and sort them
+  unique_states <- sort(unique(processed_values[!is.na(processed_values)]))
+  
+  return(unique_states)
+}
+
+
+#' Helper Function: Generate Time Period Boundaries and Names
+#'
+#' @description
+#' Internal helper function to create time period boundaries and generate
+#' appropriate names for monthly transition matrices.
+#'
+#' @param pipeline_result Output from process_employment_pipeline()
+#' @param time_column Character string specifying the date column to use
+#' @param time_format Character string specifying period format ("monthly", "quarterly", "custom")
+#' @param custom_period_days Integer number of days for custom periods
+#' @param date_range Optional vector of two Date objects specifying start and end dates
+#' @param name_format Character string specifying naming convention
+#' @param custom_names Optional character vector of custom period names
+#'
+#' @return List with period_boundaries (Date vector) and period_names (character vector)
+#'
+#' @keywords internal
+#' @noRd
+.generate_time_periods <- function(pipeline_result, time_column, time_format, 
+                                   custom_period_days, date_range, name_format, custom_names) {
+  
+  if (!requireNamespace("data.table", quietly = TRUE)) {
+    stop("Package 'data.table' is required but not installed.")
+  }
+  
+  # Determine date range from data or user input
+  if (is.null(date_range)) {
+    min_date <- min(pipeline_result[[time_column]], na.rm = TRUE)
+    max_date <- max(pipeline_result[[time_column]], na.rm = TRUE)
+  } else {
+    min_date <- as.Date(date_range[1])
+    max_date <- as.Date(date_range[2])
+  }
+  
+  # Generate period boundaries based on time_format
+  if (time_format == "monthly") {
+    # Create monthly boundaries
+    start_month <- as.Date(format(min_date, "%Y-%m-01"))
+    end_month <- as.Date(format(max_date, "%Y-%m-01"))
+    
+    # Generate sequence of month starts
+    period_starts <- seq.Date(from = start_month, to = end_month, by = "month")
+    
+    # Add one more period to get the end boundary
+    period_boundaries <- c(period_starts, seq.Date(from = period_starts[length(period_starts)], 
+                                                   length.out = 2, by = "month")[2])
+    
+    # Generate names based on name_format
+    if (name_format == "date") {
+      # Force English month names to avoid locale issues
+      month_names <- c("jan", "feb", "mar", "apr", "may", "jun", 
+                       "jul", "aug", "sep", "oct", "nov", "dec")
+      month_nums <- as.numeric(format(period_starts, "%m"))
+      years <- format(period_starts, "%Y")
+      period_names <- paste0(month_names[month_nums], years)  # "jan2022", "feb2022", etc.
+    } else if (name_format == "period") {
+      period_names <- paste0("period_", seq_along(period_starts))
+    } else if (name_format == "custom" && !is.null(custom_names)) {
+      if (length(custom_names) != length(period_starts)) {
+        stop("Length of custom_names must match number of periods")
+      }
+      period_names <- custom_names
+    } else {
+      period_names <- format(period_starts, "%Y-%m")  # "2022-01", "2022-02", etc.
+    }
+    
+  } else if (time_format == "quarterly") {
+    # Create quarterly boundaries
+    start_quarter <- as.Date(paste0(format(min_date, "%Y"), "-", 
+                                   sprintf("%02d", (as.numeric(format(min_date, "%m")) - 1) %/% 3 * 3 + 1), "-01"))
+    
+    # Generate sequence of quarter starts
+    quarter_months <- seq(from = as.numeric(format(start_quarter, "%m")), 
+                         to = 12 + as.numeric(format(max_date, "%m")), by = 3)
+    quarter_years <- rep(as.numeric(format(start_quarter, "%Y")):as.numeric(format(max_date, "%Y")), each = 4)
+    
+    valid_quarters <- quarter_months <= 12
+    quarter_dates <- as.Date(paste0(quarter_years[valid_quarters], "-", 
+                                   sprintf("%02d", quarter_months[valid_quarters]), "-01"))
+    quarter_dates <- quarter_dates[quarter_dates <= max_date]
+    
+    period_starts <- quarter_dates
+    period_boundaries <- c(period_starts, seq.Date(from = period_starts[length(period_starts)], 
+                                                   length.out = 2, by = "3 months")[2])
+    
+    # Generate quarterly names
+    if (name_format == "date") {
+      quarters <- ceiling(as.numeric(format(period_starts, "%m")) / 3)
+      years <- format(period_starts, "%Y")
+      period_names <- paste0(years, "Q", quarters)
+      period_names <- tolower(period_names)  # "2022q1", "2022q2", etc.
+    } else if (name_format == "period") {
+      period_names <- paste0("period_", seq_along(period_starts))
+    } else if (name_format == "custom" && !is.null(custom_names)) {
+      if (length(custom_names) != length(period_starts)) {
+        stop("Length of custom_names must match number of periods")
+      }
+      period_names <- custom_names
+    } else {
+      quarters <- ceiling(as.numeric(format(period_starts, "%m")) / 3)
+      years <- format(period_starts, "%Y")
+      period_names <- paste0(years, "-Q", quarters)  # "2022-Q1", "2022-Q2", etc.
+    }
+    
+  } else if (time_format == "custom") {
+    if (is.null(custom_period_days) || !is.numeric(custom_period_days) || custom_period_days <= 0) {
+      stop("custom_period_days must be a positive integer when time_format is 'custom'")
+    }
+    
+    # Create custom period boundaries
+    period_starts <- seq.Date(from = min_date, to = max_date, by = custom_period_days)
+    period_boundaries <- c(period_starts, period_starts[length(period_starts)] + custom_period_days)
+    
+    # Generate custom period names
+    if (name_format == "date") {
+      period_names <- format(period_starts, "%Y%m%d")
+      period_names <- tolower(period_names)
+    } else if (name_format == "period") {
+      period_names <- paste0("period_", seq_along(period_starts))
+    } else if (name_format == "custom" && !is.null(custom_names)) {
+      if (length(custom_names) != length(period_starts)) {
+        stop("Length of custom_names must match number of periods")
+      }
+      period_names <- custom_names
+    } else {
+      period_names <- paste0("custom_", seq_along(period_starts))
+    }
+  } else {
+    stop("time_format must be one of: 'monthly', 'quarterly', 'custom'")
+  }
+  
+  return(list(
+    period_boundaries = period_boundaries,
+    period_names = period_names
+  ))
+}
+
+
+#' Create Monthly Transition Matrices from Vecshift Data
+#'
+#' @description
+#' Generates a named list of transition matrices, one for each time period (month/quarter/custom),
+#' from vecshift employment data. All matrices have identical dimensions with consistent state 
+#' spaces to enable temporal comparison and analysis. Transitions are assigned to the time period
+#' when the transition is concluded (i.e., when the "to" state begins).
+#'
+#' @details
+#' This function creates time-series transition matrices by:
+#' \enumerate{
+#'   \item Identifying the global state space across the entire dataset for consistent dimensions
+#'   \item Generating time period boundaries based on the specified format
+#'   \item For each period, filtering transitions and creating matrices with zero-padding
+#'   \item Returning a named list of matrices with period-specific names
+#' }
+#' 
+#' **Key Features:**
+#' \itemize{
+#'   \item{\strong{Consistent Dimensions}}: All matrices share identical row/column structure
+#'   \item{\strong{Zero-Padded}}: Missing transitions are filled with zeros for complete matrices
+#'   \item{\strong{Flexible Periods}}: Monthly, quarterly, or custom time periods supported
+#'   \item{\strong{Transition Assignment}}: Uses "end" assignment - transitions assigned when "to" state begins
+#'   \item{\strong{Integration}}: Leverages existing consolidation and chain processing logic
+#' }
+#' 
+#' **Matrix Naming:**
+#' \itemize{
+#'   \item{\strong{date}}: "jan2022", "feb2022" (monthly), "2022q1", "2022q2" (quarterly)
+#'   \item{\strong{period}}: "period_1", "period_2", etc.
+#'   \item{\strong{custom}}: User-provided names
+#' }
+#'
+#' @param pipeline_result Output from process_employment_pipeline(). Must be a data.table
+#'   with columns: cf (person identifier), arco (employment overlap count), 
+#'   inizio/fine (period dates), durata (period duration), and the transition variable.
+#'   Optionally over_id if consolidation is used.
+#' @param transition_variable Character string specifying the variable to use for 
+#'   transition analysis (from/to values). If NULL (default), uses the first 
+#'   non-standard attribute in the data.table.
+#' @param time_column Character string specifying the date column for transition timing.
+#'   Default: "fine" (end date of employment periods).
+#' @param time_format Character string specifying time period format. One of:
+#'   "monthly" (default), "quarterly", "custom".
+#' @param custom_period_days Integer number of days for custom periods. Required when
+#'   time_format = "custom".
+#' @param date_range Optional vector of two Date objects specifying analysis start and 
+#'   end dates. If NULL (default), uses full range from data.
+#' @param name_format Character string specifying matrix naming convention. One of:
+#'   "date" (default), "period", "custom".
+#' @param custom_names Optional character vector of custom period names. Required when
+#'   name_format = "custom".
+#' @param matrix_format Character string specifying matrix format. Currently supports
+#'   "dense" (default) for zero-padded matrices.
+#' @param consolidation_type Character string specifying consolidation approach 
+#'   (default: "both"). Options: "both", "overlapping", "consecutive", "none".
+#' @param min_unemployment_duration Minimum duration (in days) of unemployment period 
+#'   to consider a transition (default: 1).
+#' @param max_unemployment_duration Maximum duration (in days) of unemployment period 
+#'   to consider a transition. If NULL (default), no upper limit is applied.
+#' @param matrix_type Character string specifying output matrix type. One of:
+#'   "frequency" (default), "probability".
+#' @param normalize_by Character string for probability matrices. One of: 
+#'   "row" (default), "column", "total".
+#' @param eval_chain Character string specifying how to handle chained values 
+#'   (default: "last"). Options: "last", "first", "none".
+#' @param include_summary Logical. If TRUE (default), includes summary information
+#'   and metadata in the output.
+#' @param show_progress Logical. If TRUE (default), displays progress messages.
+#'
+#' @return A named list containing:
+#'   \itemize{
+#'     \item{\strong{matrices}}: Named list of transition matrices, one per time period
+#'     \item{\strong{metadata}} (if include_summary = TRUE): Information about the analysis including:
+#'       \itemize{
+#'         \item{global_state_space}: All unique states used across matrices
+#'         \item{period_info}: Time period boundaries and names
+#'         \item{matrix_dimensions}: Consistent dimensions (nrow x ncol)
+#'         \item{total_periods}: Number of time periods analyzed
+#'         \item{periods_with_transitions}: Number of periods containing transitions
+#'         \item{analysis_parameters}: Function parameters used
+#'       }
+#'   }
+#'
+#' @examples
+#' \dontrun{
+#' # Load sample data
+#' sample_data <- readRDS("data/sample.rds")
+#' 
+#' # Basic monthly transition matrices
+#' monthly_matrices <- create_monthly_transition_matrices(
+#'   sample_data,
+#'   transition_variable = "COD_TIPOLOGIA_CONTRATTUALE"
+#' )
+#' 
+#' # Access individual matrices
+#' jan_matrix <- monthly_matrices$matrices$jan2022
+#' feb_matrix <- monthly_matrices$matrices$feb2022
+#' 
+#' # All matrices have identical dimensions
+#' identical(dim(jan_matrix), dim(feb_matrix))  # TRUE
+#' 
+#' # Quarterly matrices with probability normalization
+#' quarterly_prob <- create_monthly_transition_matrices(
+#'   sample_data,
+#'   transition_variable = "COD_TIPOLOGIA_CONTRATTUALE", 
+#'   time_format = "quarterly",
+#'   matrix_type = "probability",
+#'   normalize_by = "row"
+#' )
+#' 
+#' # Custom 90-day periods
+#' custom_matrices <- create_monthly_transition_matrices(
+#'   sample_data,
+#'   transition_variable = "COD_TIPOLOGIA_CONTRATTUALE",
+#'   time_format = "custom",
+#'   custom_period_days = 90,
+#'   name_format = "custom",
+#'   custom_names = c("Q1_extended", "Q2_extended", "Q3_extended", "Q4_extended")
+#' )
+#' }
+#'
+#' @export
+create_monthly_transition_matrices <- function(pipeline_result,
+                                             transition_variable = NULL,
+                                             time_column = "fine",
+                                             time_format = c("monthly", "quarterly", "custom"),
+                                             custom_period_days = NULL,
+                                             date_range = NULL,
+                                             name_format = c("date", "period", "custom"),
+                                             custom_names = NULL,
+                                             matrix_format = c("dense", "sparse"),
+                                             consolidation_type = "both",
+                                             min_unemployment_duration = 1,
+                                             max_unemployment_duration = NULL,
+                                             matrix_type = c("frequency", "probability"),
+                                             normalize_by = "row",
+                                             eval_chain = "last",
+                                             include_summary = TRUE,
+                                             show_progress = TRUE) {
+  
+  # Record start time
+  start_time <- Sys.time()
+  
+  # Load required packages
+  if (!requireNamespace("data.table", quietly = TRUE)) {
+    stop("Package 'data.table' is required but not installed.")
+  }
+  
+  # Match arguments
+  time_format <- match.arg(time_format)
+  name_format <- match.arg(name_format)
+  matrix_format <- match.arg(matrix_format)
+  matrix_type <- match.arg(matrix_type)
+  
+  # Input validation
+  if (!inherits(pipeline_result, "data.table")) {
+    stop("Parameter 'pipeline_result' must be a data.table object from vecshift() or process_employment_pipeline().")
+  }
+  
+  # Check for required columns
+  required_cols <- c("cf", "arco", "inizio", "fine", "durata")
+  missing_cols <- setdiff(required_cols, names(pipeline_result))
+  if (length(missing_cols) > 0) {
+    stop(paste("Missing required columns in pipeline_result:", paste(missing_cols, collapse = ", ")))
+  }
+  
+  # Check time_column exists
+  if (!time_column %in% names(pipeline_result)) {
+    stop(sprintf("Time column '%s' not found in pipeline_result.", time_column))
+  }
+  
+  # Auto-detect transition variable if not provided
+  if (is.null(transition_variable)) {
+    standard_cols <- c("cf", "arco", "inizio", "fine", "durata", "over_id")
+    available_vars <- setdiff(names(pipeline_result), standard_cols)
+    if (length(available_vars) == 0) {
+      stop("No suitable transition variable found. Please specify transition_variable parameter.")
+    }
+    transition_variable <- available_vars[1]
+    if (show_progress) {
+      message(sprintf("Using '%s' as transition variable (auto-detected).", transition_variable))
+    }
+  }
+  
+  # Validate transition_variable
+  if (!transition_variable %in% names(pipeline_result)) {
+    stop(sprintf("Transition variable '%s' not found in pipeline_result.", transition_variable))
+  }
+  
+  # Validate consolidation requirements
+  if (consolidation_type != "none" && !"over_id" %in% names(pipeline_result)) {
+    stop("Parameter 'pipeline_result' must contain 'over_id' column from vecshift() output when consolidation_type is not 'none'.")
+  }
+  
+  # Validate custom parameters
+  if (time_format == "custom" && (is.null(custom_period_days) || !is.numeric(custom_period_days) || custom_period_days <= 0)) {
+    stop("custom_period_days must be a positive integer when time_format is 'custom'")
+  }
+  
+  if (name_format == "custom" && is.null(custom_names)) {
+    stop("custom_names must be provided when name_format is 'custom'")
+  }
+  
+  # Validate numeric parameters
+  if (!is.numeric(min_unemployment_duration) || min_unemployment_duration < 0) {
+    stop("Parameter 'min_unemployment_duration' must be a non-negative numeric value.")
+  }
+  
+  if (!is.null(max_unemployment_duration)) {
+    if (!is.numeric(max_unemployment_duration) || max_unemployment_duration < 0) {
+      stop("Parameter 'max_unemployment_duration' must be NULL or a non-negative numeric value.")
+    }
+    if (max_unemployment_duration < min_unemployment_duration) {
+      stop("Parameter 'max_unemployment_duration' must be greater than or equal to 'min_unemployment_duration'.")
+    }
+  }
+  
+  # Progress message
+  if (show_progress) {
+    message("Starting monthly transition matrices creation...")
+    message(sprintf("Dataset contains %d rows across %d individuals", 
+                   nrow(pipeline_result), 
+                   length(unique(pipeline_result$cf))))
+  }
+  
+  # Step 1: Extract global state space for consistent dimensions
+  if (show_progress) {
+    message("Step 1: Extracting global state space...")
+  }
+  
+  global_states <- .extract_global_state_space(pipeline_result, transition_variable, eval_chain)
+  n_states <- length(global_states)
+  
+  if (show_progress) {
+    states_preview <- paste(global_states[1:min(5, n_states)], collapse = ", ")
+    states_preview <- if (n_states > 5) paste0(states_preview, "...") else states_preview
+    message(sprintf("Found %d unique states: %s", n_states, states_preview))
+  }
+  
+  # Step 2: Generate time period boundaries and names
+  if (show_progress) {
+    message("Step 2: Generating time period boundaries...")
+  }
+  
+  time_periods <- .generate_time_periods(pipeline_result, time_column, time_format, 
+                                          custom_period_days, date_range, name_format, custom_names)
+  
+  period_boundaries <- time_periods$period_boundaries
+  period_names <- time_periods$period_names
+  n_periods <- length(period_names)
+  
+  if (show_progress) {
+    message(sprintf("Created %d time periods from %s to %s", 
+                   n_periods, 
+                   format(period_boundaries[1], "%Y-%m-%d"),
+                   format(period_boundaries[length(period_boundaries)], "%Y-%m-%d")))
+  }
+  
+  # Step 3: Create matrices for each time period
+  if (show_progress) {
+    message("Step 3: Creating transition matrices for each period...")
+  }
+  
+  matrices_list <- vector("list", n_periods)
+  names(matrices_list) <- period_names
+  periods_with_transitions <- 0
+  
+  # Create template matrix with zeros for consistent dimensions
+  template_matrix <- matrix(0, 
+                           nrow = n_states, 
+                           ncol = n_states,
+                           dimnames = list(global_states, global_states))
+  
+  for (i in 1:n_periods) {
+    period_start <- period_boundaries[i]
+    period_end <- period_boundaries[i + 1] - 1  # Subtract 1 day to avoid overlap
+    
+    if (show_progress && (i == 1 || i %% 5 == 0 || i == n_periods)) {
+      message(sprintf("Processing period %d/%d: %s (%s to %s)", 
+                     i, n_periods, period_names[i],
+                     format(period_start, "%Y-%m-%d"),
+                     format(period_end, "%Y-%m-%d")))
+    }
+    
+    # Filter data for current time period - key insight: transitions assigned to when they END ("fine" date)
+    period_data <- pipeline_result[get(time_column) >= period_start & get(time_column) <= period_end]
+    
+    if (nrow(period_data) == 0) {
+      # No data for this period - use empty matrix with correct dimensions
+      matrices_list[[i]] <- template_matrix
+      next
+    }
+    
+    # Analyze transitions for this period using existing function
+    tryCatch({
+      period_transitions <- analyze_employment_transitions(
+        period_data,
+        transition_variable = transition_variable,
+        min_unemployment_duration = min_unemployment_duration,
+        max_unemployment_duration = max_unemployment_duration,
+        output_transition_matrix = TRUE,
+        eval_chain = eval_chain,
+        use_consolidated_periods = (consolidation_type != "none"),
+        consolidation_type = consolidation_type,
+        show_progress = FALSE
+      )
+      
+      # If we got a matrix, ensure it has the correct global dimensions
+      if (is.matrix(period_transitions)) {
+        # Create matrix with global state space
+        period_matrix <- template_matrix
+        
+        # Fill in the transitions we found
+        matrix_states <- rownames(period_transitions)
+        for (from_state in matrix_states) {
+          for (to_state in colnames(period_transitions)) {
+            if (from_state %in% global_states && to_state %in% global_states) {
+              period_matrix[from_state, to_state] <- period_transitions[from_state, to_state]
+            }
+          }
+        }
+        
+        matrices_list[[i]] <- period_matrix
+        if (sum(period_matrix) > 0) {
+          periods_with_transitions <- periods_with_transitions + 1
+        }
+      } else {
+        # No transitions found - use template matrix
+        matrices_list[[i]] <- template_matrix
+      }
+      
+    }, error = function(e) {
+      if (show_progress) {
+        message(sprintf("Warning: No valid transitions found for period %s: %s", period_names[i], e$message))
+      }
+      matrices_list[[i]] <- template_matrix
+    })
+  }
+  
+  # Step 4: Convert to probability matrices if requested
+  if (matrix_type == "probability") {
+    if (show_progress) {
+      message("Step 4: Converting to probability matrices...")
+    }
+    
+    for (i in 1:n_periods) {
+      matrices_list[[i]] <- .normalize_transition_matrix(matrices_list[[i]], normalize_by)
+    }
+  }
+  
+  # Calculate elapsed time
+  elapsed_time <- Sys.time() - start_time
+  
+  if (show_progress) {
+    message(sprintf("Completed in %.2f seconds. Created %d matrices (%d with transitions) of %dx%d dimensions.", 
+                   as.numeric(elapsed_time), n_periods, periods_with_transitions, n_states, n_states))
+  }
+  
+  # Prepare results
+  results <- list(matrices = matrices_list)
+  
+  # Add summary information if requested
+  if (include_summary) {
+    results$metadata <- list(
+      global_state_space = global_states,
+      period_info = list(
+        boundaries = period_boundaries,
+        names = period_names
+      ),
+      matrix_dimensions = c(n_states, n_states),
+      total_periods = n_periods,
+      periods_with_transitions = periods_with_transitions,
+      analysis_parameters = list(
+        transition_variable = transition_variable,
+        time_column = time_column,
+        time_format = time_format,
+        matrix_format = matrix_format,
+        matrix_type = matrix_type,
+        consolidation_type = consolidation_type,
+        eval_chain = eval_chain,
+        min_unemployment_duration = min_unemployment_duration,
+        max_unemployment_duration = max_unemployment_duration
+      ),
+      processing_time = elapsed_time
+    )
+  }
+  
+  return(results)
+}
