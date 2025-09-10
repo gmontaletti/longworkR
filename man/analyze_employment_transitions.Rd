@@ -10,8 +10,10 @@ analyze_employment_transitions(
   statistics_variables = NULL,
   min_unemployment_duration = 1,
   max_unemployment_duration = NULL,
-  use_consolidated_periods = TRUE,
   consolidation_type = "both",
+  consolidation_mode = "none",
+  employer_var = NULL,
+  min_employer_lag = 30,
   output_transition_matrix = FALSE,
   eval_chain = "last",
   show_progress = TRUE
@@ -21,7 +23,7 @@ analyze_employment_transitions(
 \item{pipeline_result}{Output from process_employment_pipeline(). Must be a data.table
 with columns: cf (person identifier), arco (employment overlap count),
 inizio/fine (period dates), durata (period duration), and optionally over_id
-(overlap identifier, required if use_consolidated_periods = TRUE).}
+(overlap identifier, required when consolidation_mode is "temporal" or "both").}
 
 \item{transition_variable}{Character string specifying the variable to use for
 transition analysis (from/to values). If NULL (default), uses the first
@@ -39,14 +41,8 @@ to consider a transition. If NULL (default), no upper limit is applied. When not
 NULL, only transitions with unemployment duration between min_unemployment_duration
 and max_unemployment_duration (inclusive) are included.}
 
-\item{use_consolidated_periods}{Logical. If TRUE (default), first consolidate
-employment periods using merge_consecutive_employment() before analyzing transitions.
-This provides more accurate transition analysis by treating overlapping and/or
-consecutive employment periods as single episodes. Requires over_id column from
-vecshift() output.}
-
 \item{consolidation_type}{Character string specifying consolidation approach when
-use_consolidated_periods = TRUE (default: "both"). Options:
+consolidation_mode is "temporal" or "both" (default: "both"). Options:
 \itemize{
 \item{\code{"both"}}: First consolidate overlapping periods (same over_id > 0),
 then merge consecutive periods. Provides complete employment history consolidation.
@@ -54,8 +50,36 @@ then merge consecutive periods. Provides complete employment history consolidati
 Merges simultaneous/overlapping contracts into single periods.
 \item{\code{"consecutive"}}: Only merge periods that are contiguous in time,
 regardless of over_id. Traditional consecutive period merging.
-\item{\code{"none"}}: No consolidation (equivalent to use_consolidated_periods = FALSE).
+}
+Ignored when consolidation_mode is "employer" or "none".}
+
+\item{consolidation_mode}{Character string specifying consolidation strategy (default: "none"). Options:
+\itemize{
+\item{\code{"none"}}: No consolidation - analyze transitions using original employment periods
+\item{\code{"temporal"}}: Uses vecshift package temporal consolidation based on over_id
+and time proximity. Consolidates overlapping/consecutive periods regardless of employer
+using the consolidation_type parameter ("both", "overlapping", "consecutive").
+\item{\code{"employer"}}: Uses employer-based consolidation that respects employer boundaries.
+Only consolidates consecutive contracts from the same employer (identified by employer_var)
+if they are separated by ≤ min_employer_lag days. Never consolidates across different
+employers, ensuring transitions represent true job changes. Requires employer_var parameter.
+\item{\code{"both"}}: Sequential consolidation combining both approaches. First applies
+employer-based consolidation to respect employer boundaries, then applies temporal
+consolidation to the result. Requires both employer_var and consolidation_type parameters.
 }}
+
+\item{employer_var}{Character string specifying the column name containing employer identifiers
+(default: NULL). Required when consolidation_mode = "employer". This column should contain
+unique identifiers for each employer (e.g., company IDs, tax codes, or standardized company names).
+Contracts with the same employer_var value will be considered for consolidation if within
+min_employer_lag days. Ignored and produces a warning when consolidation_mode = "temporal".}
+
+\item{min_employer_lag}{Numeric value specifying the maximum gap in days between consecutive
+contracts from the same employer to be consolidated when consolidation_mode = "employer"
+(default: 30). Contracts from the same employer separated by more than this number of days
+will remain as separate employment periods, allowing for detection of re-hiring patterns.
+Lower values (e.g., 7) provide stricter consolidation, while higher values (e.g., 90) are
+more permissive for employers with seasonal or project-based hiring patterns.}
 
 \item{output_transition_matrix}{Logical. If TRUE, returns a square transition matrix
 instead of the normal aggregated data.table. Rows represent "from" states, columns
@@ -105,8 +129,8 @@ periods and provides transition pattern analysis. The function allows specificat
 of which variable to use for transition analysis and which variables to compute
 statistics for.
 
-With the \code{use_consolidated_periods} option, the function can first consolidate
-overlapping and/or consecutive employment periods using the \code{over_id} column
+The function supports multiple consolidation strategies controlled by \code{consolidation_mode}
+to consolidate overlapping and/or consecutive employment periods using the \code{over_id} column
 from vecshift() output, providing more accurate transition analysis by treating
 continuous employment episodes as single periods rather than administrative splits.
 }
@@ -120,18 +144,58 @@ The \code{eval_chain} parameter provides flexible handling of chained values tha
 contain "->" separators, allowing extraction of the first value, last value, or
 preservation of the complete chain for complex transition analysis scenarios.
 
-When \code{use_consolidated_periods = TRUE}, the function first applies
-\code{merge_consecutive_employment()} to consolidate employment periods based on
-the \code{over_id} column. This provides several key benefits:
+\subsection{Consolidation Strategies}{
+The function supports four distinct consolidation approaches controlled by \code{consolidation_mode}:
+
+\strong{No Consolidation (consolidation_mode = "none")}:
+Analyzes transitions using original employment periods without any consolidation.
+Provides the most granular view of transitions but may include administrative
+contract splits that don't represent actual job changes.
+
+\strong{Temporal Consolidation (consolidation_mode = "temporal")}:
+Uses vecshift package temporal consolidation based on over_id and time proximity.
+Consolidates overlapping/consecutive periods regardless of employer using the
+consolidation_type parameter. Benefits include:
 \itemize{
 \item{\strong{Accurate Transitions}}: Analyzes transitions between true employment
 episodes rather than administrative contract splits
 \item{\strong{Better Unemployment Duration}}: More precise calculation of time
 between actual employment periods
-\item{\strong{Cleaner Patterns}}: Reduces noise from overlapping contracts that
-represent the same underlying employment relationship
-\item{\strong{Career Progression}}: Better identification of genuine career moves
-vs. contract renewals or administrative changes
+\item{\strong{Cleaner Patterns}}: Reduces noise from overlapping contracts
+}
+
+\strong{Employer-Based Consolidation (consolidation_mode = "employer")}:
+Consolidates consecutive contracts with the same employer within min_employer_lag days,
+while never consolidating contracts from different employers. Characteristics:
+\itemize{
+\item{\strong{Employer Respect}}: Never merges contracts from different employers,
+even if temporally adjacent
+\item{\strong{Same-Employer Consolidation}}: Consolidates contracts from the same
+employer if separated by ≤ min_employer_lag days
+\item{\strong{True Job Changes}}: Better identification of actual job changes vs.
+contract renewals with the same employer
+}
+
+\strong{Sequential Consolidation (consolidation_mode = "both")}:
+Applies both consolidation methods sequentially - first employer-based, then temporal.
+This provides maximum consolidation while respecting employer boundaries:
+\itemize{
+\item{\strong{Step 1}}: Employer consolidation respects organizational boundaries
+\item{\strong{Step 2}}: Temporal consolidation further reduces administrative splits
+\item{\strong{Optimal Balance}}: Combines employer-aware job change detection with
+comprehensive period consolidation
+}
+}
+
+\subsection{When to Use Each Mode}{
+\itemize{
+\item{\strong{Use "temporal" mode}} when analyzing administrative employment data
+where contract splits don't necessarily represent job changes, and you want to
+focus on employment episode continuity regardless of employer.
+\item{\strong{Use "employer" mode}} when you have reliable employer identifiers and
+want to analyze true job mobility between different organizations, ensuring that
+transitions represent actual employer changes rather than contract renewals.
+}
 }
 
 For each transition, the function provides:
@@ -167,24 +231,41 @@ result <- process_employment_pipeline(
   merge_columns = c("company", "salary")
 )
 
-# Analyze company transitions with salary statistics (using consolidated periods)
+# Analyze company transitions with temporal consolidation
 transitions <- analyze_employment_transitions(
   pipeline_result = result,
   transition_variable = "company",
   statistics_variables = c("salary"),
-  use_consolidated_periods = TRUE,
+  consolidation_mode = "temporal",
   consolidation_type = "both"
 )
-print(transitions)
 
-# Compare with original (non-consolidated) analysis
+# Compare with no consolidation
 transitions_original <- analyze_employment_transitions(
   pipeline_result = result,
-  transition_variable = "company",
+  transition_variable = "company", 
   statistics_variables = c("salary"),
-  use_consolidated_periods = FALSE
+  consolidation_mode = "none"
 )
-print(transitions_original)
+
+# Employer-based consolidation
+transitions_employer <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "company",
+  consolidation_mode = "employer",
+  employer_var = "employer_id",
+  min_employer_lag = 30
+)
+
+# Sequential consolidation (both methods)
+transitions_both <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "company",
+  consolidation_mode = "both",
+  employer_var = "employer_id", 
+  min_employer_lag = 30,
+  consolidation_type = "both"
+)
 
 # Analyze salary transitions with company statistics and minimum unemployment duration
 transitions_salary <- analyze_employment_transitions(
@@ -237,11 +318,82 @@ transitions_full <- analyze_employment_transitions(
   eval_chain = "none"  # Keeps "StartupA->CompanyA->MegaCorp" as is
 )
 
-# Example showing impact of consolidation:
-# Without consolidation: May show transitions between overlapping contracts
-# CompanyA -> CompanyA (due to contract renewals during same employment episode)
-# With consolidation: Shows true transitions between different employers
-# CompanyA -> CompanyB (actual career moves)
+# ========================================================================
+# CONSOLIDATION MODE EXAMPLES: Temporal vs Employer-Based
+# ========================================================================
+
+# Create realistic example data with employer information
+result_with_employer <- copy(result)
+result_with_employer[, employer_id := c("ACME_CORP", "ACME_CORP", "BETA_LTD", 
+                                       "GAMMA_INC", "GAMMA_INC", "DELTA_CO")]
+
+# Example 1: TEMPORAL CONSOLIDATION (default behavior)
+# Consolidates based on over_id and time proximity, regardless of employer
+transitions_temporal <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "company",
+  consolidation_mode = "temporal",      # Uses over_id for consolidation
+  consolidation_type = "both"          # Consolidate overlapping + consecutive
+)
+
+# Example 2: EMPLOYER-BASED CONSOLIDATION  
+# Only consolidates contracts from same employer within time gap
+transitions_employer <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "company",
+  consolidation_mode = "employer",      # NEW: employer-based consolidation
+  employer_var = "employer_id",         # Column containing employer identifiers
+  min_employer_lag = 30                 # Max 30-day gap for same-employer consolidation
+)
+
+# Example 3: Compare consolidation approaches
+# Temporal: May consolidate CompanyA -> CompanyB if temporally adjacent
+# Employer: Never consolidates CompanyA -> CompanyB (different employers)
+print("Temporal consolidation results:")
+print(transitions_temporal)
+print("Employer-based consolidation results:")
+print(transitions_employer)
+
+# Example 4: Stricter employer-based consolidation (7-day gap)
+# Useful for identifying very close contract renewals vs. true separations
+transitions_strict <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "company",
+  consolidation_mode = "employer",
+  employer_var = "employer_id",
+  min_employer_lag = 7                  # Only 7-day gap allowed
+)
+
+# Example 5: Permissive employer-based consolidation (90-day gap)
+# Useful for seasonal employers or project-based work patterns
+transitions_permissive <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "company",
+  consolidation_mode = "employer",
+  employer_var = "employer_id",
+  min_employer_lag = 90                 # Allow 3-month gaps for same employer
+)
+
+# Example 6: Real-world use case comparison
+# When you want to analyze job mobility vs. contract administration:
+
+# For JOB MOBILITY analysis (focus on employer changes):
+job_mobility <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "employer_id",   # Analyze employer-to-employer transitions
+  consolidation_mode = "employer",
+  employer_var = "employer_id",
+  min_employer_lag = 30
+)
+
+# For ROLE/POSITION analysis within and between employers:
+role_transitions <- analyze_employment_transitions(
+  pipeline_result = result_with_employer,
+  transition_variable = "company",       # Analyze role/position transitions
+  consolidation_mode = "employer",       # But respect employer boundaries
+  employer_var = "employer_id",
+  min_employer_lag = 30
+)
 
 # Output will include columns like:
 # from, to (salary values for transitions)

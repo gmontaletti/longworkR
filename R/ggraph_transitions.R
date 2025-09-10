@@ -24,12 +24,12 @@ NULL
 #'
 #' @param transitions_data Data.table output from analyze_employment_transitions(), 
 #'   or a transition matrix when input_format = "matrix". When using consolidated 
-#'   transitions (use_consolidated_periods = TRUE), provides cleaner network structure.
+#'   transitions (consolidation_mode = "temporal"), provides cleaner network structure.
 #' @param input_format Character. Format of input data: "data.table" or "matrix" (default: "data.table")
-#' @param use_consolidated_periods Logical. If TRUE (default), apply consolidation to 
-#'   analyze_employment_transitions() call for cleaner network visualization. Requires
-#'   pipeline data with over_id column. Ignored when transitions_data is pre-computed.
-#' @param consolidation_type Character. Type of consolidation when use_consolidated_periods = TRUE:
+#' @param consolidation_mode Character. Consolidation mode for analyze_employment_transitions() call:
+#'   "temporal" (default), "employer", or "none". Used for cleaner network visualization.
+#'   Requires pipeline data with over_id column. Ignored when transitions_data is pre-computed.
+#' @param consolidation_type Character. Type of consolidation when consolidation_mode != "none":
 #'   "both" (overlapping + consecutive), "overlapping" (same over_id), "consecutive" (adjacent periods),
 #'   or "none" (default: "both"). Only used if transitions_data is pipeline data.
 #' @param show_consolidation_comparison Logical. If TRUE, create side-by-side comparison 
@@ -65,7 +65,6 @@ NULL
 #' @param directed Logical. Treat graph as directed (default: TRUE)
 #' @param show_edge_labels Logical. Show edge weight labels (default: FALSE)
 #' @param accessibility_mode Logical. Enable high contrast accessibility mode (default: FALSE)
-#' @param use_consolidated_periods Logical. Apply consolidation for cleaner heatmap (default: TRUE)
 #' @param consolidation_type Character. Type of consolidation (default: "both")
 #' @param title Character. Plot title (default: auto-generated)
 #' @param subtitle Character. Plot subtitle (default: auto-generated)
@@ -100,7 +99,7 @@ NULL
 #' 
 #' # Using pre-computed transitions (no consolidation applied)
 #' transitions <- analyze_employment_transitions(pipeline_result, transition_variable = "prior")
-#' plot_transitions_network(transitions, use_consolidated_periods = FALSE)
+#' plot_transitions_network(transitions, consolidation_mode = "none")
 #' }
 plot_transitions_network <- function(transitions_data,
                                    input_format = "data.table",
@@ -121,7 +120,7 @@ plot_transitions_network <- function(transitions_data,
                                    directed = TRUE,
                                    show_edge_labels = FALSE,
                                    accessibility_mode = FALSE,
-                                   use_consolidated_periods = TRUE,
+                                   consolidation_mode = "temporal",
                                    consolidation_type = "both",
                                    show_consolidation_comparison = FALSE,
                                    title = NULL,
@@ -139,6 +138,7 @@ plot_transitions_network <- function(transitions_data,
   edge_width_var <- match.arg(edge_width_var, c("weight", "transition_duration", "fixed"))
   node_color_var <- match.arg(node_color_var, c("community", "degree", "fixed", "status"))
   palette <- match.arg(palette, c("viridis", "okabe_ito", "employment", "main", "colorbrewer_set2"))
+  consolidation_mode <- match.arg(consolidation_mode, c("temporal", "employer", "none"))
   consolidation_type <- match.arg(consolidation_type, c("both", "overlapping", "consecutive", "none"))
   
   # Handle consolidation and comparison plots
@@ -152,7 +152,7 @@ plot_transitions_network <- function(transitions_data,
   }
   
   # Process transitions data if needed
-  if (use_consolidated_periods && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
+  if (consolidation_mode != "none" && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
     transitions_data <- .process_with_consolidation(transitions_data, consolidation_type)
   }
   
@@ -160,7 +160,7 @@ plot_transitions_network <- function(transitions_data,
   tg <- .convert_to_tidygraph(transitions_data, input_format, directed, min_edge_weight)
   
   # Add consolidation info to tidygraph if available
-  if (use_consolidated_periods && "consolidated_status" %in% names(transitions_data)) {
+  if (consolidation_mode != "none" && "consolidated_status" %in% names(transitions_data)) {
     tg <- .add_consolidation_info(tg, transitions_data)
   }
   
@@ -229,6 +229,8 @@ plot_transitions_network <- function(transitions_data,
 #' @param text_size Numeric. Size of cell text (default: 3)
 #' @param show_marginals Logical. Show row/column marginal sums (default: FALSE)
 #' @param accessibility_mode Logical. Enable high contrast mode (default: FALSE)
+#' @param consolidation_mode Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")
+#' @param consolidation_type Character. Type of consolidation when consolidation_mode != "none" (default: "both")
 #' @param aspect_ratio Numeric. Aspect ratio for cells (default: 1)
 #' @param border_color Character. Color for cell borders (default: "white")
 #' @param border_size Numeric. Size of cell borders (default: 0.5)
@@ -249,7 +251,7 @@ plot_transitions_network <- function(transitions_data,
 #' 
 #' # High contrast accessibility mode with no consolidation
 #' plot_transitions_heatmap(pipeline_result, accessibility_mode = TRUE, 
-#'                         use_consolidated_periods = FALSE)
+#'                         consolidation_mode = "none")
 #' 
 #' # Using pre-computed transitions data
 #' transitions <- analyze_employment_transitions(pipeline_result)
@@ -267,7 +269,7 @@ plot_transitions_heatmap <- function(transitions_data,
                                    text_size = 3,
                                    show_marginals = FALSE,
                                    accessibility_mode = FALSE,
-                                   use_consolidated_periods = TRUE,
+                                   consolidation_mode = "temporal",
                                    consolidation_type = "both",
                                    aspect_ratio = 1,
                                    border_color = "white",
@@ -287,10 +289,11 @@ plot_transitions_heatmap <- function(transitions_data,
   color_scale <- match.arg(color_scale, c("gradient", "diverging", "discrete"))
   text_color <- match.arg(text_color, c("auto", "white", "black"))
   palette <- match.arg(palette, c("viridis", "okabe_ito", "employment", "main", "colorbrewer_set2"))
+  consolidation_mode <- match.arg(consolidation_mode, c("temporal", "employer", "none"))
   consolidation_type <- match.arg(consolidation_type, c("both", "overlapping", "consecutive", "none"))
   
   # Process transitions data if needed for consolidation
-  if (use_consolidated_periods && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
+  if (consolidation_mode != "none" && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
     transitions_data <- .process_with_consolidation(transitions_data, consolidation_type)
   }
   
@@ -368,7 +371,7 @@ plot_transitions_heatmap <- function(transitions_data,
 #' @param palette Character. Color palette (default: "viridis")
 #' @param use_bw Logical. Use black and white version (default: FALSE)
 #' @param accessibility_mode Logical. Enable accessibility mode (default: FALSE)
-#' @param use_consolidated_periods Logical. Apply consolidation for cleaner circular layout (default: TRUE)
+#' @param consolidation_mode Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")
 #' @param consolidation_type Character. Type of consolidation (default: "both")
 #' @param show_percentages Logical. Show edge percentages instead of raw counts (default: FALSE)
 #' @param label_distance Numeric. Distance of labels from circle (default: 1.1)
@@ -389,7 +392,7 @@ plot_transitions_heatmap <- function(transitions_data,
 #' 
 #' # Wheel layout with percentages, no consolidation
 #' plot_transitions_circular(pipeline_result, circular_type = "wheel", show_percentages = TRUE,
-#'                          use_consolidated_periods = FALSE)
+#'                          consolidation_mode = "none")
 #' }
 plot_transitions_circular <- function(transitions_data,
                                     input_format = "data.table",
@@ -405,7 +408,7 @@ plot_transitions_circular <- function(transitions_data,
                                     palette = "viridis",
                                     use_bw = FALSE,
                                     accessibility_mode = FALSE,
-                                    use_consolidated_periods = TRUE,
+                                    consolidation_mode = "temporal",
                                     consolidation_type = "both",
                                     show_percentages = FALSE,
                                     label_distance = 1.1,
@@ -422,7 +425,7 @@ plot_transitions_circular <- function(transitions_data,
   consolidation_type <- match.arg(consolidation_type, c("both", "overlapping", "consecutive", "none"))
   
   # Process transitions data if needed for consolidation
-  if (use_consolidated_periods && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
+  if (consolidation_mode != "none" && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
     transitions_data <- .process_with_consolidation(transitions_data, consolidation_type)
   }
   
@@ -486,7 +489,7 @@ plot_transitions_circular <- function(transitions_data,
 #' @param palette Character. Color palette (default: "viridis")
 #' @param use_bw Logical. Use black and white version (default: FALSE)
 #' @param accessibility_mode Logical. Enable accessibility mode (default: FALSE)
-#' @param use_consolidated_periods Logical. Apply consolidation for cleaner hierarchy (default: TRUE)
+#' @param consolidation_mode Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")
 #' @param consolidation_type Character. Type of consolidation (default: "both")
 #' @param show_edge_labels Logical. Show edge weight labels (default: FALSE)
 #' @param show_node_labels Logical. Show node labels (default: TRUE)
@@ -509,7 +512,7 @@ plot_transitions_circular <- function(transitions_data,
 #' # Horizontal dendrogram with no consolidation
 #' plot_transitions_hierarchical(pipeline_result, hierarchy_type = "dendrogram", 
 #'                              layout_direction = "horizontal", 
-#'                              use_consolidated_periods = FALSE)
+#'                              consolidation_mode = "none")
 #' }
 plot_transitions_hierarchical <- function(transitions_data,
                                         input_format = "data.table",
@@ -528,7 +531,7 @@ plot_transitions_hierarchical <- function(transitions_data,
                                         palette = "viridis",
                                         use_bw = FALSE,
                                         accessibility_mode = FALSE,
-                                        use_consolidated_periods = TRUE,
+                                        consolidation_mode = "temporal",
                                         consolidation_type = "both",
                                         show_edge_labels = FALSE,
                                         show_node_labels = TRUE,
@@ -547,7 +550,7 @@ plot_transitions_hierarchical <- function(transitions_data,
   consolidation_type <- match.arg(consolidation_type, c("both", "overlapping", "consecutive", "none"))
   
   # Process transitions data if needed for consolidation
-  if (use_consolidated_periods && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
+  if (consolidation_mode != "none" && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
     transitions_data <- .process_with_consolidation(transitions_data, consolidation_type)
   }
   
@@ -2216,7 +2219,7 @@ plot_consolidation_comparison <- function(pipeline_result,
   transitions_raw <- analyze_employment_transitions(
     pipeline_result = pipeline_result,
     transition_variable = transition_variable,
-    use_consolidated_periods = FALSE,
+    consolidation_mode = "none",
     show_progress = FALSE
   )
   
@@ -2224,7 +2227,7 @@ plot_consolidation_comparison <- function(pipeline_result,
   transitions_consolidated <- analyze_employment_transitions(
     pipeline_result = pipeline_result,
     transition_variable = transition_variable,
-    use_consolidated_periods = TRUE,
+    consolidation_mode = "temporal",
     consolidation_type = consolidation_type,
     show_progress = FALSE
   )
@@ -2235,7 +2238,7 @@ plot_consolidation_comparison <- function(pipeline_result,
     layout = layout,
     palette = palette,
     accessibility_mode = accessibility_mode,
-    use_consolidated_periods = FALSE,
+    consolidation_mode = "none",
     title = "Raw Transitions",
     subtitle = paste0(nrow(transitions_raw), " transitions • Administrative splits included")
   )
@@ -2245,7 +2248,7 @@ plot_consolidation_comparison <- function(pipeline_result,
     layout = layout,
     palette = palette,
     accessibility_mode = accessibility_mode,
-    use_consolidated_periods = FALSE,
+    consolidation_mode = "none",
     title = "Consolidated Transitions", 
     subtitle = paste0(nrow(transitions_consolidated), " transitions • over_id consolidation applied")
   )
@@ -2277,6 +2280,9 @@ plot_consolidation_comparison <- function(pipeline_result,
 #' @param directed Logical. Treat as directed network (default: TRUE)
 #' @param compute_communities Logical. Compute community structure (default: TRUE)
 #' @param return_tidygraph Logical. Return tidygraph object instead of summary (default: FALSE)
+#' @param consolidation_mode Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")
+#' @param consolidation_type Character. Type of consolidation when consolidation_mode != "none" (default: "both")
+#' @param transition_variable Character. Variable for transitions (default: "prior")
 #'
 #' @return List with network analysis results or tidygraph object
 #' @export
@@ -2292,8 +2298,8 @@ plot_consolidation_comparison <- function(pipeline_result,
 #'                                  consolidation_type = "overlapping")
 #' 
 #' # Analyze pre-computed transitions without consolidation
-#' transitions <- analyze_employment_transitions(pipeline_result, use_consolidated_periods = FALSE)
-#' network_analysis_raw <- analyze_transitions_network(transitions, use_consolidated_periods = FALSE)
+#' transitions <- analyze_employment_transitions(pipeline_result, consolidation_mode = "none")
+#' network_analysis_raw <- analyze_transitions_network(transitions, consolidation_mode = "none")
 #' }
 analyze_transitions_network <- function(transitions_data,
                                       input_format = "data.table", 
@@ -2301,7 +2307,7 @@ analyze_transitions_network <- function(transitions_data,
                                       directed = TRUE,
                                       compute_communities = TRUE,
                                       return_tidygraph = FALSE,
-                                      use_consolidated_periods = TRUE,
+                                      consolidation_mode = "temporal",
                                       consolidation_type = "both",
                                       transition_variable = "prior") {
   
@@ -2312,7 +2318,7 @@ analyze_transitions_network <- function(transitions_data,
   consolidation_type <- match.arg(consolidation_type, c("both", "overlapping", "consecutive", "none"))
   
   # Process transitions data if needed for consolidation
-  if (use_consolidated_periods && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
+  if (consolidation_mode != "none" && consolidation_type != "none" && .is_pipeline_data(transitions_data)) {
     transitions_data <- .process_with_consolidation(transitions_data, consolidation_type, transition_variable)
   }
   
@@ -2404,7 +2410,7 @@ analyze_transitions_network <- function(transitions_data,
 #' @param check_color_contrast Logical. Check color contrast ratios (default: TRUE)
 #' @param check_layout_complexity Logical. Check layout complexity (default: TRUE)
 #' @param return_suggestions Logical. Return improvement suggestions (default: TRUE)
-#' @param use_consolidated_periods Logical. Test consolidation benefits (default: TRUE)
+#' @param consolidation_mode Character. Consolidation mode to test: "temporal", "employer", or "none" (default: "temporal")
 #' @param consolidation_type Character. Type of consolidation to test (default: "both")
 #'
 #' @return List with accessibility assessment and recommendations
@@ -2428,7 +2434,7 @@ create_accessibility_report <- function(transitions_data,
                                       check_color_contrast = TRUE,
                                       check_layout_complexity = TRUE,
                                       return_suggestions = TRUE,
-                                      use_consolidated_periods = TRUE,
+                                      consolidation_mode = "temporal",
                                       consolidation_type = "both") {
   
   # Initialize report
@@ -2436,7 +2442,7 @@ create_accessibility_report <- function(transitions_data,
     timestamp = Sys.time(),
     layout = layout,
     palette = palette,
-    use_consolidated_periods = use_consolidated_periods,
+    consolidation_mode = consolidation_mode,
     consolidation_type = consolidation_type,
     accessibility_score = 0,
     max_score = 0,
@@ -2448,7 +2454,7 @@ create_accessibility_report <- function(transitions_data,
   consolidation_type <- match.arg(consolidation_type, c("both", "overlapping", "consecutive", "none"))
   
   # Test consolidation benefits if pipeline data is provided
-  if (use_consolidated_periods && .is_pipeline_data(transitions_data)) {
+  if (consolidation_mode != "none" && .is_pipeline_data(transitions_data)) {
     consolidation_assessment <- .assess_consolidation_benefits(transitions_data, consolidation_type)
     report$consolidation_benefits <- consolidation_assessment
     report$max_score <- report$max_score + 20
@@ -2517,7 +2523,7 @@ create_accessibility_report <- function(transitions_data,
   }
   
   # Additional checks (adjusted for consolidation scoring)
-  additional_checks_score <- if (use_consolidated_periods) 30 else 50
+  additional_checks_score <- if (consolidation_mode != "none") 30 else 50
   report$max_score <- report$max_score + additional_checks_score
   
   # Check if using colorblind-friendly palette
@@ -2596,7 +2602,7 @@ create_accessibility_report <- function(transitions_data,
   transitions <- analyze_employment_transitions(
     pipeline_result = pipeline_data,
     transition_variable = transition_variable,
-    use_consolidated_periods = TRUE,
+    consolidation_mode = "temporal",
     consolidation_type = consolidation_type,
     show_progress = FALSE
   )
@@ -2934,14 +2940,14 @@ create_accessibility_report <- function(transitions_data,
   # Generate raw transitions
   transitions_raw <- analyze_employment_transitions(
     pipeline_result = pipeline_data,
-    use_consolidated_periods = FALSE,
+    consolidation_mode = "none",
     show_progress = FALSE
   )
   
   # Generate consolidated transitions
   transitions_consolidated <- analyze_employment_transitions(
     pipeline_result = pipeline_data,
-    use_consolidated_periods = TRUE,
+    consolidation_mode = "temporal",
     consolidation_type = consolidation_type,
     show_progress = FALSE
   )

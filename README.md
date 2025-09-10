@@ -110,6 +110,23 @@ For detailed documentation, see:
 - Function help: `?function_name`
 - Reference materials: `../reference/longworkR/`
 
+## Citation
+
+To cite longworkR in publications, please use:
+
+Montaletti, G. (2025). *longworkR: Longitudinal Employment Analytics for vecshift Data* (Version 0.5.0) [R package]. https://github.com/gmontaletti/longworkR
+
+BibTeX entry:
+```bibtex
+@software{montaletti2025longworkr,
+  author = {Montaletti, Giampaolo},
+  title = {longworkR: Longitudinal Employment Analytics for vecshift Data},
+  version = {0.5.0},
+  year = {2025},
+  url = {https://github.com/gmontaletti/longworkR}
+}
+```
+
 ## License
 
 MIT + file LICENSE

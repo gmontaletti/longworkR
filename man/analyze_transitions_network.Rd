@@ -11,7 +11,7 @@ analyze_transitions_network(
   directed = TRUE,
   compute_communities = TRUE,
   return_tidygraph = FALSE,
-  use_consolidated_periods = TRUE,
+  consolidation_mode = "temporal",
   consolidation_type = "both",
   transition_variable = "prior"
 )
@@ -28,6 +28,12 @@ analyze_transitions_network(
 \item{compute_communities}{Logical. Compute community structure (default: TRUE)}
 
 \item{return_tidygraph}{Logical. Return tidygraph object instead of summary (default: FALSE)}
+
+\item{consolidation_mode}{Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")}
+
+\item{consolidation_type}{Character. Type of consolidation when consolidation_mode != "none" (default: "both")}
+
+\item{transition_variable}{Character. Variable for transitions (default: "prior")}
 }
 \value{
 List with network analysis results or tidygraph object
@@ -48,7 +54,7 @@ tg <- analyze_transitions_network(pipeline_result, return_tidygraph = TRUE,
                                  consolidation_type = "overlapping")
 
 # Analyze pre-computed transitions without consolidation
-transitions <- analyze_employment_transitions(pipeline_result, use_consolidated_periods = FALSE)
-network_analysis_raw <- analyze_transitions_network(transitions, use_consolidated_periods = FALSE)
+transitions <- analyze_employment_transitions(pipeline_result, consolidation_mode = "none")
+network_analysis_raw <- analyze_transitions_network(transitions, consolidation_mode = "none")
 }
 }

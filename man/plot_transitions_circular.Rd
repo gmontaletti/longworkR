@@ -19,7 +19,7 @@ plot_transitions_circular(
   palette = "viridis",
   use_bw = FALSE,
   accessibility_mode = FALSE,
-  use_consolidated_periods = TRUE,
+  consolidation_mode = "temporal",
   consolidation_type = "both",
   show_percentages = FALSE,
   label_distance = 1.1,
@@ -57,7 +57,7 @@ plot_transitions_circular(
 
 \item{accessibility_mode}{Logical. Enable accessibility mode (default: FALSE)}
 
-\item{use_consolidated_periods}{Logical. Apply consolidation for cleaner circular layout (default: TRUE)}
+\item{consolidation_mode}{Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")}
 
 \item{consolidation_type}{Character. Type of consolidation (default: "both")}
 
@@ -88,6 +88,6 @@ plot_transitions_circular(pipeline_result, circular_type = "arc", node_order = "
 
 # Wheel layout with percentages, no consolidation
 plot_transitions_circular(pipeline_result, circular_type = "wheel", show_percentages = TRUE,
-                         use_consolidated_periods = FALSE)
+                         consolidation_mode = "none")
 }
 }

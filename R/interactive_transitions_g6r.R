@@ -42,7 +42,7 @@
 #'
 #' @param transitions_data Output from analyze_employment_transitions() (data.table format)
 #'   or transition matrix (matrix format). May include consolidated transition data if
-#'   analyzed with use_consolidated_periods = TRUE.
+#'   analyzed with consolidation_mode = "temporal".
 #' @param node_size_metric Character string specifying which metric to use for node sizing.
 #'   Options: "in_degree" (incoming transitions), "out_degree" (outgoing transitions),
 #'   "total_degree" (sum of both), "weight" (total transition weight). Default: "total_degree"
@@ -695,7 +695,7 @@ interactive_transitions_module <- function() {
         # Analyze transitions with current settings
         result <- analyze_employment_transitions(
           pipeline_result = pipeline_result(),
-          use_consolidated_periods = input$use_consolidated && has_over_id,
+          consolidation_mode = ifelse(input$use_consolidated && has_over_id, "temporal", "none"),
           consolidation_type = if (input$use_consolidated && has_over_id) input$consolidation_type else "none",
           max_unemployment_duration = max_unemp,
           show_progress = FALSE
@@ -706,7 +706,7 @@ interactive_transitions_module <- function() {
           # Compare with non-consolidated
           non_consolidated <- analyze_employment_transitions(
             pipeline_result = pipeline_result(),
-            use_consolidated_periods = FALSE,
+            consolidation_mode = "none",
             max_unemployment_duration = max_unemp,
             show_progress = FALSE
           )
@@ -1573,7 +1573,7 @@ create_enhanced_transitions_dashboard <- function(pipeline_result,
             pipeline_result = pipeline_data(),
             transition_variable = transition_variable,
             statistics_variables = statistics_variables,
-            use_consolidated_periods = TRUE,
+            consolidation_mode = "temporal",
             consolidation_type = "both",
             show_progress = FALSE
           )
@@ -1590,7 +1590,7 @@ create_enhanced_transitions_dashboard <- function(pipeline_result,
             pipeline_result = pipeline_data(),
             transition_variable = transition_variable,
             statistics_variables = statistics_variables,
-            use_consolidated_periods = FALSE,
+            consolidation_mode = "none",
             show_progress = FALSE
           )
           write.csv(raw_data, file, row.names = FALSE)

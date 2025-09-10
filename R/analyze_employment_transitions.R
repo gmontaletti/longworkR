@@ -55,294 +55,169 @@
   return(result)
 }
 
-# Helper function to compute transitions for a specific time period
-# This function identifies transitions where the "to" state begins within the period
-.compute_period_transitions <- function(pipeline_result, transition_variable, 
-                                      period_start, period_end, time_column,
-                                      min_unemployment_duration, max_unemployment_duration,
-                                      consolidation_type, eval_chain) {
-  
-  # Use consolidation if needed
-  if (consolidation_type != "none") {
-    consolidated_data <- merge_consecutive_employment(
-      pipeline_result, 
-      type = consolidation_type,
-      show_progress = FALSE
-    )
-  } else {
-    consolidated_data <- copy(pipeline_result)
-  }
-  
-  # Order by person and start date
-  setorder(consolidated_data, cf, inizio)
-  
-  # Find transitions for each person
-  transitions_list <- list()
-  
-  for (person in unique(consolidated_data$cf)) {
-    person_data <- consolidated_data[cf == person]
-    
-    if (nrow(person_data) < 2) next  # Need at least 2 periods for transitions
-    
-    # Find transitions where the "to" period starts within our time period
-    for (j in 2:nrow(person_data)) {
-      to_start <- person_data[[time_column]][j]  # When the "to" state begins
-      
-      # Check if this transition ends in our period
-      if (to_start >= period_start && to_start <= period_end) {
-        from_end <- person_data$fine[j-1]
-        to_start_date <- person_data$inizio[j]
-        unemployment_duration <- as.numeric(to_start_date - from_end - 1)
-        
-        # Check unemployment duration constraints
-        if (unemployment_duration >= min_unemployment_duration) {
-          if (is.null(max_unemployment_duration) || unemployment_duration <= max_unemployment_duration) {
-            
-            # Extract transition values
-            from_value <- person_data[[transition_variable]][j-1]
-            to_value <- person_data[[transition_variable]][j]
-            
-            # Process chain values
-            from_processed <- .process_chain_value(from_value, eval_chain)
-            to_processed <- .process_chain_value(to_value, eval_chain)
-            
-            # Skip if either value is NA
-            if (!is.na(from_processed) && !is.na(to_processed)) {
-              transitions_list[[length(transitions_list) + 1]] <- data.table(
-                cf = person,
-                from = from_processed,
-                to = to_processed,
-                transition_end = to_start,
-                unemployment_duration = unemployment_duration
-              )
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  # Combine all transitions
-  if (length(transitions_list) == 0) {
-    return(NULL)
-  }
-  
-  transitions_dt <- rbindlist(transitions_list)
-  return(transitions_dt)
-}
-
-# Simplified helper function to filter transitions for a specific time period
-.filter_transitions_for_period <- function(transitions_data, pipeline_result, period_start, period_end,
-                                          transition_variable, consolidation_type, eval_chain) {
-  
-  if (!is.data.table(transitions_data) || nrow(transitions_data) == 0) {
-    # Don't return early - we'll create our own transitions
-  }
-  
-  # Process data for transition timing analysis
-  if (consolidation_type != "none") {
-    employment_data <- merge_consecutive_employment(
-      dt = pipeline_result, 
-      consolidation_type = consolidation_type
-    )
-  } else {
-    employment_data <- copy(pipeline_result)
-  }
-  
-  # Get employment periods only and order by person and start date
-  employment_data <- employment_data[arco >= 1]
-  setorder(employment_data, cf, inizio)
-  
-  # For each transition, check if it occurs in this period
-  period_transitions <- list()
-  
-  
-  for (person in unique(employment_data$cf)) {
-    person_data <- employment_data[cf == person]
-    
-    if (nrow(person_data) < 2) next  # Need at least 2 periods for transitions
-    
-    # Check consecutive employment periods for transitions in this time period
-    for (k in 2:nrow(person_data)) {
-      from_val <- .process_chain_value(person_data[[transition_variable]][k-1], eval_chain)
-      to_val <- .process_chain_value(person_data[[transition_variable]][k], eval_chain)
-      
-      # Skip if values are NA
-      if (is.na(from_val) || is.na(to_val)) next
-      
-      # Check if this is a real transition (from != to)
-      if (from_val == to_val) next
-      
-      # Check when the "to" state begins - assign transition to this period
-      to_state_starts <- person_data$inizio[k]
-      
-      # If "to" state begins in this period, include this transition
-      if (to_state_starts >= period_start && to_state_starts <= period_end) {
-        period_transitions[[length(period_transitions) + 1]] <- data.table(
-          from = from_val,
-          to = to_val,
-          weight = 1  # Each instance counts as weight 1
-        )
-      }
-    }
-  }
-  
-  if (length(period_transitions) == 0) {
-    return(data.table(from = character(0), to = character(0), weight = integer(0)))
-  }
-  
-  # Combine all transitions and aggregate by from-to pairs
-  result_dt <- rbindlist(period_transitions)
-  
-  # Aggregate transitions by from-to pairs
-  aggregated_transitions <- result_dt[, .(weight = sum(weight)), by = .(from, to)]
-  
-  return(aggregated_transitions)
-}
 
 
-# Helper function to map transitions to their timing (when "to" state begins) - OLD VERSION
-.map_transitions_to_timing_old <- function(pipeline_result, transitions_dt, 
-                                     transition_variable, consolidation_type, eval_chain) {
-  
-  if (nrow(transitions_dt) == 0) {
-    return(data.table(from = character(0), to = character(0), 
-                      to_start_date = as.Date(character(0))))
-  }
-  
-  # Use consolidation if specified
-  if (consolidation_type != "none") {
-    consolidated_data <- merge_consecutive_employment(
-      pipeline_result, 
-      type = consolidation_type,
-      show_progress = FALSE
-    )
-  } else {
-    consolidated_data <- copy(pipeline_result)
-  }
-  
-  # Get employment periods only
-  employment_data <- consolidated_data[arco >= 1]
-  setorder(employment_data, cf, inizio)
-  
-  timing_records <- list()
-  
-  # For each transition in the transitions_dt, find when it occurs
-  for (trans_idx in 1:nrow(transitions_dt)) {
-    trans_from <- transitions_dt$from[trans_idx]
-    trans_to <- transitions_dt$to[trans_idx]
-    trans_weight <- transitions_dt$weight[trans_idx]
-    
-    # Find all instances of this transition in the employment data
-    for (person in unique(employment_data$cf)) {
-      person_data <- employment_data[cf == person]
-      
-      if (nrow(person_data) < 2) next
-      
-      # Look for this specific transition in the person's employment history
-      for (k in 2:nrow(person_data)) {
-        from_val <- .process_chain_value(person_data[[transition_variable]][k-1], eval_chain)
-        to_val <- .process_chain_value(person_data[[transition_variable]][k], eval_chain)
-        
-        # Skip if values are NA or don't match our transition
-        if (is.na(from_val) || is.na(to_val)) next
-        if (from_val != trans_from || to_val != trans_to) next
-        
-        # Found an instance of this transition
-        to_start_date <- person_data$inizio[k]  # When "to" state begins
-        
-        timing_records[[length(timing_records) + 1]] <- data.table(
-          from = trans_from,
-          to = trans_to,
-          to_start_date = to_start_date
-        )
-      }
-    }
-  }
-  
-  if (length(timing_records) == 0) {
-    return(data.table(from = character(0), to = character(0), 
-                      to_start_date = as.Date(character(0))))
-  }
-  
-  result_dt <- rbindlist(timing_records)
-  return(result_dt)
-}
 
-# Old helper function (keeping for reference, but unused)
-.create_detailed_transitions_with_timing_old <- function(pipeline_result, transitions_dt, 
-                                                   transition_variable, time_column,
-                                                   consolidation_type, eval_chain) {
-  
-  if (nrow(transitions_dt) == 0) {
-    return(data.table(from = character(0), to = character(0), 
-                      cf = character(0), transition_end_date = as.Date(character(0))))
-  }
-  
-  # Use consolidation if specified
-  if (consolidation_type != "none") {
-    consolidated_data <- merge_consecutive_employment(
-      pipeline_result, 
-      type = consolidation_type,
-      show_progress = FALSE
-    )
-  } else {
-    consolidated_data <- copy(pipeline_result)
-  }
-  
-  # Remove unemployment periods for transition matching
-  employment_data <- consolidated_data[arco >= 1]
-  setorder(employment_data, cf, inizio)
-  
-  detailed_transitions <- list()
-  
-  # For each person, match transitions to their timing
-  for (person in unique(employment_data$cf)) {
-    person_data <- employment_data[cf == person]
-    
-    if (nrow(person_data) < 2) next
-    
-    # Check consecutive periods for transitions
-    for (j in 2:nrow(person_data)) {
-      from_value <- person_data[[transition_variable]][j-1]
-      to_value <- person_data[[transition_variable]][j]
-      
-      # Process chain values
-      from_processed <- .process_chain_value(from_value, eval_chain)
-      to_processed <- .process_chain_value(to_value, eval_chain)
-      
-      # Skip if either value is NA
-      if (is.na(from_processed) || is.na(to_processed)) next
-      
-      # Check if this transition exists in our transitions_dt
-      transition_exists <- transitions_dt[from == from_processed & to == to_processed, .N] > 0
-      
-      if (transition_exists) {
-        # The transition should be assigned to when the "to" state BEGINS, not ends
-        # So we use 'inizio' (start date) of the "to" period, not time_column (end date)
-        transition_end_date <- person_data$inizio[j]  # When the new state begins
-        
-        detailed_transitions[[length(detailed_transitions) + 1]] <- data.table(
-          from = from_processed,
-          to = to_processed,
-          cf = person,
-          transition_end_date = transition_end_date
-        )
-      }
-    }
-  }
-  
-  if (length(detailed_transitions) == 0) {
-    return(data.table(from = character(0), to = character(0), 
-                      cf = character(0), transition_end_date = as.Date(character(0))))
-  }
-  
-  result_dt <- rbindlist(detailed_transitions)
-  return(result_dt)
-}
 
-#' Analyze Employment Transitions from Pipeline Output
+#' @title Consolidate Employment Contracts by Employer
+#' @description
+#' Helper function that consolidates consecutive contracts with the same employer
+#' within a specified time gap, while never consolidating contracts from different employers.
 #'
+#' @param pipeline_result data.table object from process_employment_pipeline()
+#' @param employer_var Character string specifying column name containing employer identifiers
+#' @param min_employer_lag Numeric value specifying maximum gap (in days) between contracts
+#'   from the same employer to be consolidated (default: 30)
+#'
+#' @return data.table with consolidated employment periods
+#'
+#' @details
+#' This function:
+#' \itemize{
+#'   \item Groups contracts by person (cf) and employer
+#'   \item Identifies consecutive contracts within min_employer_lag days
+#'   \item Consolidates them preserving appropriate column values
+#'   \item Never consolidates across different employers
+#' }
+#'
+#' Column consolidation strategy:
+#' \itemize{
+#'   \item Dates: Use first 'inizio', last 'fine'
+#'   \item Duration: Recalculate as fine - inizio + 1
+#'   \item Numeric columns: Use sum for additive values, mean for rates
+#'   \item Character columns: Use first value (mode if available)
+#' }
+#'
+#' @keywords internal
+consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_lag = 30) {
+  
+  # Input validation
+  if (!inherits(pipeline_result, "data.table")) {
+    stop("pipeline_result must be a data.table object")
+  }
+  
+  if (is.null(employer_var) || !employer_var %in% names(pipeline_result)) {
+    stop("employer_var must specify a valid column name in pipeline_result")
+  }
+  
+  if (!is.numeric(min_employer_lag) || min_employer_lag < 0) {
+    stop("min_employer_lag must be a non-negative numeric value")
+  }
+  
+  # Create working copy
+  dt <- copy(pipeline_result)
+  
+  # Ensure required columns exist
+  required_cols <- c("cf", "inizio", "fine", "durata")
+  missing_cols <- setdiff(required_cols, names(dt))
+  if (length(missing_cols) > 0) {
+    stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
+  }
+  
+  # Ensure date columns are Date objects
+  if (!inherits(dt$inizio, "Date")) {
+    dt[, inizio := as.Date(inizio)]
+  }
+  if (!inherits(dt$fine, "Date")) {
+    dt[, fine := as.Date(fine)]
+  }
+  
+  # Sort by person, employer, and start date
+  setorderv(dt, cols = c("cf", employer_var, "inizio"))
+  
+  # Create grouping for consolidation
+  # Contracts are consolidated if:
+  # 1. Same person (cf)
+  # 2. Same employer 
+  # 3. Gap between contracts <= min_employer_lag days
+  
+  dt[, `:=`(
+    prev_employer = shift(.SD[[employer_var]], 1L),
+    prev_fine = shift(fine, 1L)
+  ), by = "cf"]
+  
+  # Calculate gap between current start and previous end
+  dt[, gap_days := as.numeric(inizio - prev_fine)]
+  
+  # Mark records that should NOT start a new consolidation group
+  # (same employer and gap <= threshold)
+  dt[, new_group := is.na(prev_employer) | 
+                   .SD[[employer_var]] != prev_employer | 
+                   is.na(gap_days) | 
+                   gap_days > min_employer_lag]
+  
+  # Create consolidation group IDs
+  dt[, consolidation_group := cumsum(new_group), by = "cf"]
+  
+  # Get column names for aggregation (exclude helper columns)
+  exclude_cols <- c("prev_employer", "prev_fine", "gap_days", "new_group", "consolidation_group")
+  agg_cols <- setdiff(names(dt), exclude_cols)
+  
+  # Store original column classes for type restoration
+  original_classes <- sapply(dt, class, simplify = FALSE)
+  
+  # Perform consolidation using simple aggregation approach to avoid type conflicts
+  consolidated <- dt[, {
+    # Calculate aggregated values using consistent types
+    min_inizio <- min(inizio, na.rm = TRUE)
+    max_fine <- max(fine, na.rm = TRUE)
+    new_durata <- as.numeric(max_fine - min_inizio + 1)
+    
+    # Start with core columns (cf is automatically included by the grouping)
+    result <- list(
+      inizio = min_inizio,
+      fine = max_fine,
+      durata = new_durata
+    )
+    
+    # Add employer variable if different from cf
+    if (employer_var != "cf" && employer_var %in% agg_cols) {
+      result[[employer_var]] <- .SD[[employer_var]][1L]  # Should be same within group
+    }
+    
+    # Add all other columns with simple aggregation
+    # Note: cf is excluded because it's already in the grouping variables
+    other_cols <- setdiff(agg_cols, c("inizio", "fine", "durata", "cf", employer_var))
+    for (col in other_cols) {
+      col_vals <- .SD[[col]]
+      if (is.numeric(col_vals)) {
+        # For numeric: use mean to ensure consistent double type
+        result[[col]] <- mean(col_vals, na.rm = TRUE)
+      } else {
+        # For non-numeric: use first value to ensure consistent type
+        result[[col]] <- col_vals[1L]
+      }
+    }
+    
+    result
+  }, by = .(cf, consolidation_group)]
+  
+  # Restore original column types after aggregation
+  for (col in names(consolidated)) {
+    if (col %in% names(original_classes) && !col %in% c("cf", "consolidation_group")) {
+      orig_class <- original_classes[[col]]
+      
+      if (inherits(orig_class, "integer") && is.numeric(consolidated[[col]])) {
+        # Convert back to integer if original was integer and result is numeric
+        consolidated[, (col) := as.integer(round(get(col)))]
+      } else if (any(c("Date", "IDate") %in% orig_class)) {
+        # Restore date classes
+        consolidated[, (col) := structure(get(col), class = orig_class)]
+      }
+    }
+  }
+  
+  # Remove helper column
+  consolidated[, consolidation_group := NULL]
+  
+  # Restore original column order (approximately)
+  original_cols <- intersect(names(pipeline_result), names(consolidated))
+  setcolorder(consolidated, original_cols)
+  
+  return(consolidated)
+}
+
+#' @title Analyze Employment Transitions from Pipeline Output
 #' @description
 #' Analyzes employment transitions from the output of process_employment_pipeline().
 #' Identifies transitions between employment periods that are separated by unemployment
@@ -350,8 +225,8 @@
 #' of which variable to use for transition analysis and which variables to compute
 #' statistics for.
 #'
-#' With the \code{use_consolidated_periods} option, the function can first consolidate
-#' overlapping and/or consecutive employment periods using the \code{over_id} column
+#' The function supports multiple consolidation strategies controlled by \code{consolidation_mode}
+#' to consolidate overlapping and/or consecutive employment periods using the \code{over_id} column
 #' from vecshift() output, providing more accurate transition analysis by treating
 #' continuous employment episodes as single periods rather than administrative splits.
 #'
@@ -365,18 +240,58 @@
 #' contain "->" separators, allowing extraction of the first value, last value, or 
 #' preservation of the complete chain for complex transition analysis scenarios.
 #' 
-#' When \code{use_consolidated_periods = TRUE}, the function first applies 
-#' \code{merge_consecutive_employment()} to consolidate employment periods based on
-#' the \code{over_id} column. This provides several key benefits:
+#' \subsection{Consolidation Strategies}{
+#' The function supports four distinct consolidation approaches controlled by \code{consolidation_mode}:
+#' 
+#' \strong{No Consolidation (consolidation_mode = "none")}:
+#' Analyzes transitions using original employment periods without any consolidation.
+#' Provides the most granular view of transitions but may include administrative 
+#' contract splits that don't represent actual job changes.
+#' 
+#' \strong{Temporal Consolidation (consolidation_mode = "temporal")}:
+#' Uses vecshift package temporal consolidation based on over_id and time proximity.
+#' Consolidates overlapping/consecutive periods regardless of employer using the 
+#' consolidation_type parameter. Benefits include:
 #' \itemize{
 #'   \item{\strong{Accurate Transitions}}: Analyzes transitions between true employment
 #'     episodes rather than administrative contract splits
 #'   \item{\strong{Better Unemployment Duration}}: More precise calculation of time
 #'     between actual employment periods
-#'   \item{\strong{Cleaner Patterns}}: Reduces noise from overlapping contracts that
-#'     represent the same underlying employment relationship
-#'   \item{\strong{Career Progression}}: Better identification of genuine career moves
-#'     vs. contract renewals or administrative changes
+#'   \item{\strong{Cleaner Patterns}}: Reduces noise from overlapping contracts
+#' }
+#' 
+#' \strong{Employer-Based Consolidation (consolidation_mode = "employer")}:
+#' Consolidates consecutive contracts with the same employer within min_employer_lag days,
+#' while never consolidating contracts from different employers. Characteristics:
+#' \itemize{
+#'   \item{\strong{Employer Respect}}: Never merges contracts from different employers,
+#'     even if temporally adjacent
+#'   \item{\strong{Same-Employer Consolidation}}: Consolidates contracts from the same
+#'     employer if separated by ≤ min_employer_lag days  
+#'   \item{\strong{True Job Changes}}: Better identification of actual job changes vs.
+#'     contract renewals with the same employer
+#' }
+#' 
+#' \strong{Sequential Consolidation (consolidation_mode = "both")}:
+#' Applies both consolidation methods sequentially - first employer-based, then temporal.
+#' This provides maximum consolidation while respecting employer boundaries:
+#' \itemize{
+#'   \item{\strong{Step 1}}: Employer consolidation respects organizational boundaries
+#'   \item{\strong{Step 2}}: Temporal consolidation further reduces administrative splits
+#'   \item{\strong{Optimal Balance}}: Combines employer-aware job change detection with
+#'     comprehensive period consolidation
+#' }
+#' }
+#' 
+#' \subsection{When to Use Each Mode}{
+#' \itemize{
+#'   \item{\strong{Use "temporal" mode}} when analyzing administrative employment data
+#'     where contract splits don't necessarily represent job changes, and you want to
+#'     focus on employment episode continuity regardless of employer.
+#'   \item{\strong{Use "employer" mode}} when you have reliable employer identifiers and
+#'     want to analyze true job mobility between different organizations, ensuring that
+#'     transitions represent actual employer changes rather than contract renewals.
+#' }
 #' }
 #' 
 #' For each transition, the function provides:
@@ -392,7 +307,7 @@
 #' @param pipeline_result Output from process_employment_pipeline(). Must be a data.table
 #'   with columns: cf (person identifier), arco (employment overlap count), 
 #'   inizio/fine (period dates), durata (period duration), and optionally over_id
-#'   (overlap identifier, required if use_consolidated_periods = TRUE).
+#'   (overlap identifier, required when consolidation_mode is "temporal" or "both").
 #' @param transition_variable Character string specifying the variable to use for 
 #'   transition analysis (from/to values). If NULL (default), uses the first 
 #'   non-standard attribute in the data.table.
@@ -419,13 +334,8 @@
 #'   }
 #'   When there is only one value (no "->"), the original value is always used regardless 
 #'   of this parameter.
-#' @param use_consolidated_periods Logical. If TRUE (default), first consolidate
-#'   employment periods using merge_consecutive_employment() before analyzing transitions.
-#'   This provides more accurate transition analysis by treating overlapping and/or
-#'   consecutive employment periods as single episodes. Requires over_id column from
-#'   vecshift() output.
 #' @param consolidation_type Character string specifying consolidation approach when
-#'   use_consolidated_periods = TRUE (default: "both"). Options:
+#'   consolidation_mode is "temporal" or "both" (default: "both"). Options:
 #'   \itemize{
 #'     \item{\code{"both"}}: First consolidate overlapping periods (same over_id > 0),
 #'       then merge consecutive periods. Provides complete employment history consolidation.
@@ -433,8 +343,33 @@
 #'       Merges simultaneous/overlapping contracts into single periods.
 #'     \item{\code{"consecutive"}}: Only merge periods that are contiguous in time,
 #'       regardless of over_id. Traditional consecutive period merging.
-#'     \item{\code{"none"}}: No consolidation (equivalent to use_consolidated_periods = FALSE).
 #'   }
+#'   Ignored when consolidation_mode is "employer" or "none".
+#' @param consolidation_mode Character string specifying consolidation strategy (default: "none"). Options:
+#'   \itemize{
+#'     \item{\code{"none"}}: No consolidation - analyze transitions using original employment periods
+#'     \item{\code{"temporal"}}: Uses vecshift package temporal consolidation based on over_id
+#'       and time proximity. Consolidates overlapping/consecutive periods regardless of employer
+#'       using the consolidation_type parameter ("both", "overlapping", "consecutive").
+#'     \item{\code{"employer"}}: Uses employer-based consolidation that respects employer boundaries.
+#'       Only consolidates consecutive contracts from the same employer (identified by employer_var)
+#'       if they are separated by ≤ min_employer_lag days. Never consolidates across different
+#'       employers, ensuring transitions represent true job changes. Requires employer_var parameter.
+#'     \item{\code{"both"}}: Sequential consolidation combining both approaches. First applies
+#'       employer-based consolidation to respect employer boundaries, then applies temporal
+#'       consolidation to the result. Requires both employer_var and consolidation_type parameters.
+#'   }
+#' @param employer_var Character string specifying the column name containing employer identifiers
+#'   (default: NULL). Required when consolidation_mode = "employer". This column should contain
+#'   unique identifiers for each employer (e.g., company IDs, tax codes, or standardized company names).
+#'   Contracts with the same employer_var value will be considered for consolidation if within
+#'   min_employer_lag days. Ignored and produces a warning when consolidation_mode = "temporal".
+#' @param min_employer_lag Numeric value specifying the maximum gap in days between consecutive
+#'   contracts from the same employer to be consolidated when consolidation_mode = "employer"
+#'   (default: 30). Contracts from the same employer separated by more than this number of days
+#'   will remain as separate employment periods, allowing for detection of re-hiring patterns.
+#'   Lower values (e.g., 7) provide stricter consolidation, while higher values (e.g., 90) are
+#'   more permissive for employers with seasonal or project-based hiring patterns.
 #' @param show_progress Logical. If TRUE (default), displays a progress bar showing
 #'   the current processing step, percentage completion, and estimated time remaining.
 #'   Uses the 'progress' package if available, falls back to utils::txtProgressBar or
@@ -487,24 +422,41 @@
 #'   merge_columns = c("company", "salary")
 #' )
 #' 
-#' # Analyze company transitions with salary statistics (using consolidated periods)
+#' # Analyze company transitions with temporal consolidation
 #' transitions <- analyze_employment_transitions(
 #'   pipeline_result = result,
 #'   transition_variable = "company",
 #'   statistics_variables = c("salary"),
-#'   use_consolidated_periods = TRUE,
+#'   consolidation_mode = "temporal",
 #'   consolidation_type = "both"
 #' )
-#' print(transitions)
 #' 
-#' # Compare with original (non-consolidated) analysis
+#' # Compare with no consolidation
 #' transitions_original <- analyze_employment_transitions(
 #'   pipeline_result = result,
-#'   transition_variable = "company",
+#'   transition_variable = "company", 
 #'   statistics_variables = c("salary"),
-#'   use_consolidated_periods = FALSE
+#'   consolidation_mode = "none"
 #' )
-#' print(transitions_original)
+#' 
+#' # Employer-based consolidation
+#' transitions_employer <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "company",
+#'   consolidation_mode = "employer",
+#'   employer_var = "employer_id",
+#'   min_employer_lag = 30
+#' )
+#' 
+#' # Sequential consolidation (both methods)
+#' transitions_both <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "company",
+#'   consolidation_mode = "both",
+#'   employer_var = "employer_id", 
+#'   min_employer_lag = 30,
+#'   consolidation_type = "both"
+#' )
 #' 
 #' # Analyze salary transitions with company statistics and minimum unemployment duration
 #' transitions_salary <- analyze_employment_transitions(
@@ -557,11 +509,82 @@
 #'   eval_chain = "none"  # Keeps "StartupA->CompanyA->MegaCorp" as is
 #' )
 #' 
-#' # Example showing impact of consolidation:
-#' # Without consolidation: May show transitions between overlapping contracts
-#' # CompanyA -> CompanyA (due to contract renewals during same employment episode)
-#' # With consolidation: Shows true transitions between different employers
-#' # CompanyA -> CompanyB (actual career moves)
+#' # ========================================================================
+#' # CONSOLIDATION MODE EXAMPLES: Temporal vs Employer-Based
+#' # ========================================================================
+#' 
+#' # Create realistic example data with employer information
+#' result_with_employer <- copy(result)
+#' result_with_employer[, employer_id := c("ACME_CORP", "ACME_CORP", "BETA_LTD", 
+#'                                        "GAMMA_INC", "GAMMA_INC", "DELTA_CO")]
+#' 
+#' # Example 1: TEMPORAL CONSOLIDATION (default behavior)
+#' # Consolidates based on over_id and time proximity, regardless of employer
+#' transitions_temporal <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "company",
+#'   consolidation_mode = "temporal",      # Uses over_id for consolidation
+#'   consolidation_type = "both"          # Consolidate overlapping + consecutive
+#' )
+#' 
+#' # Example 2: EMPLOYER-BASED CONSOLIDATION  
+#' # Only consolidates contracts from same employer within time gap
+#' transitions_employer <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "company",
+#'   consolidation_mode = "employer",      # NEW: employer-based consolidation
+#'   employer_var = "employer_id",         # Column containing employer identifiers
+#'   min_employer_lag = 30                 # Max 30-day gap for same-employer consolidation
+#' )
+#' 
+#' # Example 3: Compare consolidation approaches
+#' # Temporal: May consolidate CompanyA -> CompanyB if temporally adjacent
+#' # Employer: Never consolidates CompanyA -> CompanyB (different employers)
+#' print("Temporal consolidation results:")
+#' print(transitions_temporal)
+#' print("Employer-based consolidation results:")
+#' print(transitions_employer)
+#' 
+#' # Example 4: Stricter employer-based consolidation (7-day gap)
+#' # Useful for identifying very close contract renewals vs. true separations
+#' transitions_strict <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "company",
+#'   consolidation_mode = "employer",
+#'   employer_var = "employer_id",
+#'   min_employer_lag = 7                  # Only 7-day gap allowed
+#' )
+#' 
+#' # Example 5: Permissive employer-based consolidation (90-day gap)
+#' # Useful for seasonal employers or project-based work patterns
+#' transitions_permissive <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "company",
+#'   consolidation_mode = "employer",
+#'   employer_var = "employer_id",
+#'   min_employer_lag = 90                 # Allow 3-month gaps for same employer
+#' )
+#' 
+#' # Example 6: Real-world use case comparison
+#' # When you want to analyze job mobility vs. contract administration:
+#' 
+#' # For JOB MOBILITY analysis (focus on employer changes):
+#' job_mobility <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "employer_id",   # Analyze employer-to-employer transitions
+#'   consolidation_mode = "employer",
+#'   employer_var = "employer_id",
+#'   min_employer_lag = 30
+#' )
+#' 
+#' # For ROLE/POSITION analysis within and between employers:
+#' role_transitions <- analyze_employment_transitions(
+#'   pipeline_result = result_with_employer,
+#'   transition_variable = "company",       # Analyze role/position transitions
+#'   consolidation_mode = "employer",       # But respect employer boundaries
+#'   employer_var = "employer_id",
+#'   min_employer_lag = 30
+#' )
 #' 
 #' # Output will include columns like:
 #' # from, to (salary values for transitions)
@@ -573,8 +596,10 @@ analyze_employment_transitions <- function(pipeline_result,
                                          statistics_variables = NULL,
                                          min_unemployment_duration = 1,
                                          max_unemployment_duration = NULL,
-                                         use_consolidated_periods = TRUE,
                                          consolidation_type = "both",
+                                         consolidation_mode = "none",
+                                         employer_var = NULL,
+                                         min_employer_lag = 30,
                                          output_transition_matrix = FALSE,
                                          eval_chain = "last",
                                          show_progress = TRUE) {
@@ -621,15 +646,51 @@ analyze_employment_transitions <- function(pipeline_result,
     stop("Parameter 'show_progress' must be a logical value (TRUE or FALSE).")
   }
   
-  if (!is.logical(use_consolidated_periods) || length(use_consolidated_periods) != 1) {
-    stop("Parameter 'use_consolidated_periods' must be a single logical value (TRUE or FALSE).")
+  # Validate consolidation_mode
+  valid_consolidation_modes <- c("employer", "temporal", "none", "both")
+  if (!consolidation_mode %in% valid_consolidation_modes) {
+    stop("Parameter 'consolidation_mode' must be one of: ", paste(valid_consolidation_modes, collapse = ", "))
   }
   
-  # Validate consolidation_type
-  valid_consolidation_types <- c("both", "overlapping", "consecutive", "none")
-  if (!consolidation_type %in% valid_consolidation_types) {
-    stop(paste("Parameter 'consolidation_type' must be one of:", 
-               paste(valid_consolidation_types, collapse = ", ")))
+  # Mode-specific parameter validation
+  if (consolidation_mode %in% c("employer", "both")) {
+    if (is.null(employer_var)) {
+      stop("Parameter 'employer_var' is required when consolidation_mode = '", consolidation_mode, "'")
+    }
+    if (!is.character(employer_var) || length(employer_var) != 1) {
+      stop("Parameter 'employer_var' must be a single character string")
+    }
+    if (!employer_var %in% names(pipeline_result)) {
+      stop(paste("Column", employer_var, "not found in pipeline_result"))
+    }
+    if (!is.numeric(min_employer_lag) || min_employer_lag < 0) {
+      stop("Parameter 'min_employer_lag' must be a non-negative numeric value")
+    }
+  }
+  
+  if (consolidation_mode %in% c("temporal", "both")) {
+    # Validate consolidation_type for temporal modes
+    valid_consolidation_types <- c("both", "overlapping", "consecutive")
+    if (!consolidation_type %in% valid_consolidation_types) {
+      stop(paste("Parameter 'consolidation_type' must be one of:", 
+                 paste(valid_consolidation_types, collapse = ", "), 
+                 "when consolidation_mode includes temporal consolidation"))
+    }
+  }
+  
+  # Warn if employer_var provided but not needed
+  if (!is.null(employer_var) && !consolidation_mode %in% c("employer", "both")) {
+    warning("Parameter 'employer_var' is ignored when consolidation_mode = '", consolidation_mode, "'")
+  }
+  
+  # Handle output_transition_matrix interaction with statistics_variables
+  if (output_transition_matrix && length(statistics_variables) > 0) {
+    if (show_progress) {
+      message(sprintf("Note: output_transition_matrix = TRUE, disabling statistics calculation for %d variables: %s", 
+                     length(statistics_variables),
+                     paste(statistics_variables, collapse = ", ")))
+    }
+    statistics_variables <- character(0)
   }
   
   # Validate eval_chain parameter
@@ -639,13 +700,18 @@ analyze_employment_transitions <- function(pipeline_result,
                paste(valid_eval_chain, collapse = ", ")))
   }
   
-  # Check for over_id column if consolidation is requested
-  if (use_consolidated_periods && consolidation_type != "none") {
+  # Check for over_id column if temporal consolidation is requested  
+  if (consolidation_mode %in% c("temporal", "both")) {
     if (!"over_id" %in% names(pipeline_result)) {
       if (show_progress) {
-        message("Note: 'over_id' column not found in data. Disabling period consolidation.")
+        message("Note: 'over_id' column not found in data. Temporal consolidation disabled.")
       }
-      use_consolidated_periods <- FALSE
+      # Adjust consolidation_mode if over_id is missing
+      if (consolidation_mode == "temporal") {
+        consolidation_mode <- "none"
+      } else if (consolidation_mode == "both") {
+        consolidation_mode <- "employer"
+      }
     }
   }
   
@@ -701,12 +767,77 @@ analyze_employment_transitions <- function(pipeline_result,
   # Initialize progress tracking
   start_time <- Sys.time()
   
+  # Helper function for temporal consolidation
+  .apply_temporal_consolidation <- function(data, consolidation_type, show_progress = FALSE) {
+    # Use fast consolidation function with type support
+    if (exists("merge_consecutive_employment_fast_with_type", mode = "function")) {
+      # Pre-process data to ensure type consistency before consolidation
+      data_copy <- copy(data)
+      
+      # Ensure consistent column types to prevent aggregation errors
+      for (col_name in names(data_copy)) {
+        col_class <- class(data_copy[[col_name]])[1]
+        if (col_class %in% c("integer", "numeric")) {
+          if (col_class == "integer") {
+            # Convert integers to numeric to avoid type conflicts during consolidation
+            data.table::set(data_copy, j = col_name, value = as.numeric(data_copy[[col_name]]))
+          }
+        }
+      }
+      
+      return(merge_consecutive_employment_fast_with_type(data_copy, consolidation_type = consolidation_type))
+      
+    } else if (exists("merge_consecutive_employment_fast", mode = "function")) {
+      # Use fast version without type parameter (vecshift 0.9.0+)
+      if (show_progress) {
+        message("Using fast consolidation method")
+      }
+      
+      data_copy <- copy(data)
+      
+      # Ensure consistent column types
+      for (col_name in names(data_copy)) {
+        col_class <- class(data_copy[[col_name]])[1]
+        if (col_class %in% c("integer", "numeric")) {
+          if (col_class == "integer") {
+            data.table::set(data_copy, j = col_name, value = as.numeric(data_copy[[col_name]]))
+          }
+        }
+      }
+      
+      return(merge_consecutive_employment_fast(data_copy))
+      
+    } else if (exists("merge_consecutive_employment", mode = "function")) {
+      # Fall back to slow function if fast version not available
+      if (show_progress) {
+        message("Using standard (slower) consolidation method - consider updating vecshift package")
+      }
+      
+      data_copy <- copy(data)
+      
+      # Ensure consistent column types
+      for (col_name in names(data_copy)) {
+        col_class <- class(data_copy[[col_name]])[1]
+        if (col_class %in% c("integer", "numeric")) {
+          if (col_class == "integer") {
+            data.table::set(data_copy, j = col_name, value = as.numeric(data_copy[[col_name]]))
+          }
+        }
+      }
+      
+      return(merge_consecutive_employment(data_copy, consolidation_type = consolidation_type))
+      
+    } else {
+      stop("No consolidation function found. Ensure the vecshift package is properly loaded.")
+    }
+  }
+  
   if (show_progress) {
     message("Starting employment transition analysis...")
   }
   
-  # Apply period consolidation if requested
-  if (use_consolidated_periods && consolidation_type != "none") {
+  # Apply period consolidation based on consolidation_mode
+  if (consolidation_mode != "none") {
     # Check if consolidation has already been done
     if ("collapsed" %in% names(pipeline_result)) {
       if (show_progress) {
@@ -715,82 +846,53 @@ analyze_employment_transitions <- function(pipeline_result,
       dt <- copy(pipeline_result)
     } else {
       if (show_progress) {
-        message(sprintf("Consolidating employment periods using '%s' strategy...", consolidation_type))
+        if (consolidation_mode == "employer") {
+          message(sprintf("Consolidating employment periods by employer using '%s' variable and %d-day lag...", 
+                         employer_var, min_employer_lag))
+        } else if (consolidation_mode == "temporal") {
+          message(sprintf("Consolidating employment periods using '%s' temporal strategy...", consolidation_type))
+        } else if (consolidation_mode == "both") {
+          message(sprintf("Consolidating employment periods: first by employer ('%s', %d-day lag), then temporal ('%s')...", 
+                         employer_var, min_employer_lag, consolidation_type))
+        }
       }
       
-      # Use fast consolidation function with type support
-      if (exists("merge_consecutive_employment_fast_with_type", mode = "function")) {
-        # Pre-process data to ensure type consistency before consolidation
-        # This prevents data.table column type mismatch errors during aggregation
-        pipeline_copy <- copy(pipeline_result)
+      # Execute consolidation based on mode
+      if (consolidation_mode == "employer") {
+        # Use employer-based consolidation only
+        dt <- consolidate_by_employer(pipeline_result, employer_var, min_employer_lag)
         
-        # Ensure consistent column types to prevent aggregation errors
-        # Convert potentially mixed integer/numeric columns to numeric
-        for (col_name in names(pipeline_copy)) {
-          col_class <- class(pipeline_copy[[col_name]])[1]
-          if (col_class %in% c("integer", "numeric")) {
-            # Check if column has mixed types that could cause issues during aggregation
-            if (col_class == "integer") {
-              # Convert integers to numeric to avoid type conflicts during consolidation
-              # This is safer as numeric can handle both integer and decimal aggregations
-              data.table::set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
-            }
-          }
-        }
+      } else if (consolidation_mode == "temporal") {
+        # Use temporal consolidation only (original vecshift method)
+        dt <- .apply_temporal_consolidation(pipeline_result, consolidation_type, show_progress)
         
-        dt <- merge_consecutive_employment_fast_with_type(pipeline_copy, consolidation_type = consolidation_type)
-      } else if (exists("merge_consecutive_employment_fast", mode = "function")) {
-        # Use fast version without type parameter (vecshift 0.9.0+)
+      } else if (consolidation_mode == "both") {
+        # Sequential consolidation: employer first, then temporal
         if (show_progress) {
-          message("Using fast consolidation method")
+          message("Step 1: Applying employer-based consolidation...")
         }
         
-        # Pre-process data to ensure type consistency before consolidation
-        # This prevents data.table column type mismatch errors during aggregation
-        pipeline_copy <- copy(pipeline_result)
+        # Step 1: Employer consolidation
+        dt_employer <- consolidate_by_employer(pipeline_result, employer_var, min_employer_lag)
         
-        # Ensure consistent column types to prevent aggregation errors
-        # Convert potentially mixed integer/numeric columns to numeric
-        for (col_name in names(pipeline_copy)) {
-          col_class <- class(pipeline_copy[[col_name]])[1]
-          if (col_class %in% c("integer", "numeric")) {
-            # Check if column has mixed types that could cause issues during aggregation
-            if (col_class == "integer") {
-              # Convert integers to numeric to avoid type conflicts during consolidation
-              # This is safer as numeric can handle both integer and decimal aggregations
-              data.table::set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
-            }
-          }
-        }
-        
-        dt <- merge_consecutive_employment_fast(pipeline_copy)
-      } else if (exists("merge_consecutive_employment", mode = "function")) {
-        # Fall back to slow function if fast version not available
         if (show_progress) {
-          message("Using standard (slower) consolidation method - consider updating vecshift package")
+          n_original <- nrow(pipeline_result)
+          n_employer <- nrow(dt_employer)
+          reduction_pct <- round((1 - n_employer/n_original) * 100, 1)
+          message(sprintf("Employer consolidation: %d → %d periods (%.1f%% reduction)", 
+                         n_original, n_employer, reduction_pct))
+          message("Step 2: Applying temporal consolidation...")
         }
         
-        # Pre-process data to ensure type consistency before consolidation
-        # This prevents data.table column type mismatch errors during aggregation
-        pipeline_copy <- copy(pipeline_result)
+        # Step 2: Temporal consolidation on employer-consolidated data
+        dt <- .apply_temporal_consolidation(dt_employer, consolidation_type, show_progress)
         
-        # Ensure consistent column types to prevent aggregation errors
-        # Convert potentially mixed integer/numeric columns to numeric
-        for (col_name in names(pipeline_copy)) {
-          col_class <- class(pipeline_copy[[col_name]])[1]
-          if (col_class %in% c("integer", "numeric")) {
-            # Check if column has mixed types that could cause issues during aggregation
-            if (col_class == "integer") {
-              # Convert integers to numeric to avoid type conflicts during consolidation
-              # This is safer as numeric can handle both integer and decimal aggregations
-              data.table::set(pipeline_copy, j = col_name, value = as.numeric(pipeline_copy[[col_name]]))
-            }
-          }
+        if (show_progress) {
+          n_final <- nrow(dt)
+          total_reduction_pct <- round((1 - n_final/n_original) * 100, 1)
+          message(sprintf("Combined consolidation: %d → %d periods (%.1f%% total reduction)", 
+                         n_original, n_final, total_reduction_pct))
         }
-        
-        dt <- merge_consecutive_employment(pipeline_copy, consolidation_type = consolidation_type)
-      } else {
-        stop("No consolidation function found. Ensure the vecshift package is properly loaded.")
       }
       
       # Update statistics variables list to only include columns that still exist after consolidation
@@ -804,7 +906,7 @@ analyze_employment_transitions <- function(pipeline_result,
         statistics_variables <- intersect(statistics_variables, names(dt))
       }
       
-      if (show_progress) {
+      if (show_progress && consolidation_mode != "both") {
         n_original <- nrow(pipeline_result)
         n_consolidated <- nrow(dt)
         reduction_pct <- round((1 - n_consolidated/n_original) * 100, 1)
@@ -1974,7 +2076,7 @@ create_consolidated_transition_matrix <- function(pipeline_result,
     statistics_variables = NULL,  # Focus only on transitions
     min_unemployment_duration = min_unemployment_duration,
     max_unemployment_duration = max_unemployment_duration,
-    use_consolidated_periods = ifelse(consolidation_type == "none", FALSE, TRUE),
+    consolidation_mode = ifelse(consolidation_type == "none", "none", "temporal"),
     consolidation_type = consolidation_type,
     output_transition_matrix = TRUE,
     show_progress = FALSE  # Suppress detailed progress from analyze_employment_transitions
@@ -2046,7 +2148,7 @@ create_consolidated_transition_matrix <- function(pipeline_result,
       statistics_variables = NULL,
       min_unemployment_duration = min_unemployment_duration,
       max_unemployment_duration = max_unemployment_duration,
-      use_consolidated_periods = FALSE,  # No consolidation for raw matrix
+      consolidation_mode = "none",  # No consolidation for raw matrix
       output_transition_matrix = TRUE,
       show_progress = FALSE
     )
@@ -3932,6 +4034,188 @@ create_monthly_transition_matrices <- function(pipeline_result,
     }
   }
   
+  # STEP 3: Extract ALL transitions with their timing ONCE
+  if (show_progress) {
+    message("Extracting all transitions with timing information...")
+  }
+  
+  # First, consolidate data if required
+  if (consolidation_type != "none") {
+    # Pre-process data to ensure type consistency before consolidation
+    # This prevents data.table column type mismatch errors during aggregation
+    # MEMORY-EFFICIENT: Convert columns in-place on original data using := operator
+    for (col_name in names(pipeline_result)) {
+      col_class <- class(pipeline_result[[col_name]])[1]
+      if (col_class %in% c("integer", "numeric")) {
+        # Check if column has mixed types that could cause issues during aggregation
+        if (col_class == "integer") {
+          # Convert integers to numeric to avoid type conflicts during consolidation
+          # This is safer as numeric can handle both integer and decimal aggregations
+          # Use := for in-place modification without copying data
+          pipeline_result[, (col_name) := as.numeric(get(col_name))]
+        }
+      }
+    }
+    
+    # Use existing merge_consecutive_employment function
+    if (exists("merge_consecutive_employment", mode = "function")) {
+      consolidated_data <- merge_consecutive_employment(
+        pipeline_result, 
+        consolidation_type = consolidation_type
+      )
+    } else if (requireNamespace("vecshift", quietly = TRUE)) {
+      # Try to get the function from vecshift package
+      if (exists("merge_consecutive_employment", envir = asNamespace("vecshift"))) {
+        merge_func <- get("merge_consecutive_employment", envir = asNamespace("vecshift"))
+        consolidated_data <- merge_func(
+          pipeline_result, 
+          consolidation_type = consolidation_type
+        )
+      } else {
+        if (show_progress) {
+          message("Warning: merge_consecutive_employment function not found. Proceeding without consolidation.")
+        }
+        consolidated_data <- pipeline_result
+      }
+    } else {
+      if (show_progress) {
+        message("Warning: vecshift package not available for consolidation. Proceeding without consolidation.")
+      }
+      consolidated_data <- pipeline_result
+    }
+  } else {
+    consolidated_data <- pipeline_result
+  }
+  
+  # Get employment periods only and order by person and start date
+  employment_data <- consolidated_data[arco >= 1]
+  setorder(employment_data, cf, inizio)
+  
+  # Extract ALL transitions with their to_date
+  all_transitions_list <- list()
+  
+  # Filter to people with at least 2 employment periods (need transitions)
+  person_period_counts <- employment_data[, .N, by = cf]
+  multi_period_people <- person_period_counts[N >= 2, cf]
+  
+  if (length(multi_period_people) == 0) {
+    if (show_progress) {
+      message("No people with multiple employment periods found - no transitions possible")
+    }
+    # Return empty results
+    matrices_list <- vector("list", n_periods)
+    names(matrices_list) <- period_names
+    for (i in 1:n_periods) {
+      if (matrix_format == "sparse") {
+        matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
+      } else {
+        matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
+      }
+    }
+    results <- list(matrices = matrices_list)
+    if (include_summary) {
+      results$metadata <- list(
+        periods_with_transitions = 0,
+        total_periods = n_periods
+      )
+    }
+    return(results)
+  }
+  
+  # Process only people with multiple periods
+  employment_data <- employment_data[cf %in% multi_period_people]
+  
+  # OPTIMIZED: Vectorized transition extraction using data.table operations
+  if (show_progress) {
+    message("Extracting transitions using optimized vectorized approach...")
+  }
+  
+  # Create lagged values for each person using data.table shift
+  employment_data[, `:=`(
+    prev_fine = shift(fine, 1, type = "lag"),
+    prev_transition_var = shift(get(transition_variable), 1, type = "lag")
+  ), by = cf]
+  
+  # Filter to periods that have a previous period (excluding first period for each person)
+  potential_transitions <- employment_data[!is.na(prev_fine)]
+  
+  # Calculate unemployment duration vectorized
+  potential_transitions[, unemployment_duration := as.numeric(inizio - prev_fine - 1)]
+  
+  # Apply unemployment duration filters
+  if (!is.null(max_unemployment_duration)) {
+    valid_transitions <- potential_transitions[
+      unemployment_duration >= min_unemployment_duration & 
+      unemployment_duration <= max_unemployment_duration
+    ]
+  } else {
+    valid_transitions <- potential_transitions[unemployment_duration >= min_unemployment_duration]
+  }
+  
+  if (nrow(valid_transitions) == 0) {
+    if (show_progress) {
+      message("No transitions meet unemployment duration criteria")
+    }
+    all_transitions_dt <- data.table(
+      cf = integer(0), from = character(0), to = character(0), 
+      to_date = as.Date(character(0)), unemployment_duration = numeric(0)
+    )
+  } else {
+    # Process chain values vectorized (much more efficient)
+    from_processed <- .process_chain_value(valid_transitions$prev_transition_var, eval_chain)
+    to_processed <- .process_chain_value(valid_transitions[[transition_variable]], eval_chain)
+    
+    # Create transitions data.table directly (no list growing)
+    all_transitions_dt <- data.table(
+      cf = valid_transitions$cf,
+      from = from_processed,
+      to = to_processed,
+      to_date = valid_transitions$inizio,
+      unemployment_duration = valid_transitions$unemployment_duration
+    )
+    
+    # Filter out invalid transitions (NA values or same from/to)
+    all_transitions_dt <- all_transitions_dt[
+      !is.na(from) & !is.na(to) & from != to
+    ]
+  }
+  
+  # Clean up temporary columns
+  employment_data[, c("prev_fine", "prev_transition_var") := NULL]
+  
+  # Check if we have valid transitions
+  if (nrow(all_transitions_dt) == 0) {
+    if (show_progress) {
+      message("No valid transitions found in the data")
+    }
+    # Return empty results
+    matrices_list <- vector("list", n_periods)
+    names(matrices_list) <- period_names
+    for (i in 1:n_periods) {
+      if (matrix_format == "sparse") {
+        matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
+      } else {
+        matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
+      }
+    }
+    results <- list(matrices = matrices_list)
+    if (include_summary) {
+      results$metadata <- list(
+        periods_with_transitions = 0,
+        total_periods = n_periods
+      )
+    }
+    return(results)
+  }
+  
+  # Ensure consistent column types
+  all_transitions_dt[, unemployment_duration := as.double(unemployment_duration)]
+  
+  if (show_progress) {
+    message(sprintf("Extracted %d total transitions across all time periods", nrow(all_transitions_dt)))
+  }
+  
+  # Now create matrices for each time period by filtering transitions by to_date
   for (i in 1:n_periods) {
     period_start <- period_boundaries[i]
     period_end <- period_boundaries[i + 1] - 1  # Subtract 1 day to avoid overlap
@@ -3943,123 +4227,93 @@ create_monthly_transition_matrices <- function(pipeline_result,
                      format(period_end, "%Y-%m-%d")))
     }
     
-    # SIMPLIFIED APPROACH: Filter employment records by time period first, 
-    # then compute transitions on the filtered dataset
+    # Filter transitions where to_date falls in this period
+    period_transitions <- all_transitions_dt[to_date >= period_start & to_date <= period_end]
     
-    tryCatch({
-      
-      # SIMPLIFIED: Directly filter transitions for this time period
-      period_transitions_data <- .filter_transitions_for_period(
-        data.table(), pipeline_result, period_start, period_end,
-        transition_variable, consolidation_type, eval_chain
-      )
-      
-      if (nrow(period_transitions_data) == 0) {
-        # No transitions in this period - create empty matrix
-        if (use_global_state_space) {
-          matrices_list[[i]] <- template_matrix
-        } else {
-          if (matrix_format == "sparse") {
-            matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
-          } else {
-            matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
-          }
-        }
-        next
-      }
-      
-      # STEP 3: Create matrix from filtered transitions
-      unique_states_period <- sort(unique(c(period_transitions_data$from, period_transitions_data$to)))
-      
-      if (matrix_format == "sparse") {
-        period_transitions <- Matrix::Matrix(0, 
-                                           nrow = length(unique_states_period), 
-                                           ncol = length(unique_states_period),
-                                           dimnames = list(unique_states_period, unique_states_period),
-                                           sparse = TRUE)
-      } else {
-        period_transitions <- matrix(0, 
-                                   nrow = length(unique_states_period), 
-                                   ncol = length(unique_states_period),
-                                   dimnames = list(unique_states_period, unique_states_period))
-      }
-      
-      # Fill matrix with transition weights
-      for (j in 1:nrow(period_transitions_data)) {
-        from_state <- as.character(period_transitions_data$from[j])
-        to_state <- as.character(period_transitions_data$to[j])
-        weight <- period_transitions_data$weight[j]
-        
-        period_transitions[from_state, to_state] <- period_transitions[from_state, to_state] + weight
-      }
-      
-      # Process the resulting matrix based on state space strategy
-      if (is.matrix(period_transitions)) {
-        if (use_global_state_space) {
-          # Create matrix with global state space
-          period_matrix <- if (matrix_format == "sparse") {
-            Matrix::Matrix(0, nrow = n_states, ncol = n_states,
-                          dimnames = list(global_states, global_states),
-                          sparse = TRUE)
-          } else {
-            matrix(0, nrow = n_states, ncol = n_states,
-                   dimnames = list(global_states, global_states))
-          }
-          
-          # Fill in the transitions we found
-          matrix_states <- rownames(period_transitions)
-          for (from_state in matrix_states) {
-            for (to_state in colnames(period_transitions)) {
-              if (from_state %in% global_states && to_state %in% global_states) {
-                period_matrix[from_state, to_state] <- period_transitions[from_state, to_state]
-              }
-            }
-          }
-        } else {
-          # Use period-specific state space - convert to sparse if requested
-          period_matrix <- if (matrix_format == "sparse" && !inherits(period_transitions, "Matrix")) {
-            Matrix::Matrix(period_transitions, sparse = TRUE)
-          } else if (matrix_format == "dense" && inherits(period_transitions, "Matrix")) {
-            as.matrix(period_transitions)
-          } else {
-            period_transitions
-          }
-        }
-        
-        matrices_list[[i]] <- period_matrix
-        if (sum(period_matrix) > 0) {
-          periods_with_transitions <- periods_with_transitions + 1
-        }
-      } else {
-        # No transitions found - handle empty matrix case
-        if (use_global_state_space) {
-          matrices_list[[i]] <- template_matrix
-        } else {
-          # Create minimal empty matrix
-          if (matrix_format == "sparse") {
-            matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
-          } else {
-            matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
-          }
-        }
-      }
-      
-    }, error = function(e) {
-      if (show_progress) {
-        message(sprintf("Warning: No valid transitions found for period %s: %s", period_names[i], e$message))
-      }
-      # Handle empty matrix case
-      if (use_global_state_space) {
+    if (nrow(period_transitions) == 0) {
+      # No transitions in this period - create empty matrix
+      if (use_global_state_space && !is.null(template_matrix)) {
         matrices_list[[i]] <- template_matrix
       } else {
-        # Create minimal empty matrix
         if (matrix_format == "sparse") {
           matrices_list[[i]] <- Matrix::Matrix(0, nrow = 0, ncol = 0, sparse = TRUE)
         } else {
           matrices_list[[i]] <- matrix(0, nrow = 0, ncol = 0)
         }
       }
-    })
+      next
+    }
+    
+    # Aggregate transitions by from-to pairs
+    aggregated_transitions <- period_transitions[, .(weight = .N), by = .(from, to)]
+    
+    # Create matrix from aggregated transitions
+    if (use_global_state_space) {
+      # Use global state space for consistent dimensions
+      if (matrix_format == "sparse") {
+        period_matrix <- Matrix::Matrix(0, nrow = n_states, ncol = n_states,
+                                       dimnames = list(global_states, global_states),
+                                       sparse = TRUE)
+      } else {
+        period_matrix <- matrix(0, nrow = n_states, ncol = n_states,
+                               dimnames = list(global_states, global_states))
+      }
+      
+      # OPTIMIZED: Fill matrix using vectorized operations
+      if (nrow(aggregated_transitions) > 0) {
+        # Convert states to indices for faster matrix access
+        from_indices <- match(as.character(aggregated_transitions$from), global_states)
+        to_indices <- match(as.character(aggregated_transitions$to), global_states)
+        
+        # Filter out any NA matches (states not in global space)
+        valid_idx <- !is.na(from_indices) & !is.na(to_indices)
+        
+        if (any(valid_idx)) {
+          from_indices <- from_indices[valid_idx]
+          to_indices <- to_indices[valid_idx]
+          weights <- aggregated_transitions$weight[valid_idx]
+          
+          # Use matrix indexing instead of character-based access
+          for (k in seq_along(from_indices)) {
+            period_matrix[from_indices[k], to_indices[k]] <- period_matrix[from_indices[k], to_indices[k]] + weights[k]
+          }
+        }
+      }
+      
+    } else {
+      # Use period-specific state space
+      unique_states_period <- sort(unique(c(aggregated_transitions$from, aggregated_transitions$to)))
+      
+      if (matrix_format == "sparse") {
+        period_matrix <- Matrix::Matrix(0, 
+                                       nrow = length(unique_states_period), 
+                                       ncol = length(unique_states_period),
+                                       dimnames = list(unique_states_period, unique_states_period),
+                                       sparse = TRUE)
+      } else {
+        period_matrix <- matrix(0, 
+                               nrow = length(unique_states_period), 
+                               ncol = length(unique_states_period),
+                               dimnames = list(unique_states_period, unique_states_period))
+      }
+      
+      # OPTIMIZED: Fill matrix with vectorized operations
+      if (nrow(aggregated_transitions) > 0) {
+        # Convert to indices for faster access
+        from_indices <- match(as.character(aggregated_transitions$from), unique_states_period)
+        to_indices <- match(as.character(aggregated_transitions$to), unique_states_period)
+        
+        # Use matrix indexing instead of character-based access
+        for (k in 1:nrow(aggregated_transitions)) {
+          period_matrix[from_indices[k], to_indices[k]] <- period_matrix[from_indices[k], to_indices[k]] + aggregated_transitions$weight[k]
+        }
+      }
+    }
+    
+    matrices_list[[i]] <- period_matrix
+    if (sum(period_matrix) > 0) {
+      periods_with_transitions <- periods_with_transitions + 1
+    }
   }
   
   # Step 4: Convert to probability matrices if requested

@@ -24,7 +24,7 @@ plot_transitions_network(
   directed = TRUE,
   show_edge_labels = FALSE,
   accessibility_mode = FALSE,
-  use_consolidated_periods = TRUE,
+  consolidation_mode = "temporal",
   consolidation_type = "both",
   show_consolidation_comparison = FALSE,
   title = NULL,
@@ -34,7 +34,7 @@ plot_transitions_network(
 \arguments{
 \item{transitions_data}{Data.table output from analyze_employment_transitions(),
 or a transition matrix when input_format = "matrix". When using consolidated
-transitions (use_consolidated_periods = TRUE), provides cleaner network structure.}
+transitions (consolidation_mode = "temporal"), provides cleaner network structure.}
 
 \item{input_format}{Character. Format of input data: "data.table" or "matrix" (default: "data.table")}
 
@@ -88,7 +88,9 @@ transitions (use_consolidated_periods = TRUE), provides cleaner network structur
 
 \item{accessibility_mode}{Logical. Enable high contrast accessibility mode (default: FALSE)}
 
-\item{use_consolidated_periods}{Logical. Apply consolidation for cleaner heatmap (default: TRUE)}
+\item{consolidation_mode}{Character. Consolidation mode for analyze_employment_transitions() call:
+"temporal" (default), "employer", or "none". Used for cleaner network visualization.
+Requires pipeline data with over_id column. Ignored when transitions_data is pre-computed.}
 
 \item{consolidation_type}{Character. Type of consolidation (default: "both")}
 
@@ -135,6 +137,6 @@ plot_transitions_network(pipeline_result, accessibility_mode = TRUE, use_bw = TR
 
 # Using pre-computed transitions (no consolidation applied)
 transitions <- analyze_employment_transitions(pipeline_result, transition_variable = "prior")
-plot_transitions_network(transitions, use_consolidated_periods = FALSE)
+plot_transitions_network(transitions, consolidation_mode = "none")
 }
 }

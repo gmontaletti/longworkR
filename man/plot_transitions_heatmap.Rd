@@ -17,7 +17,7 @@ plot_transitions_heatmap(
   text_size = 3,
   show_marginals = FALSE,
   accessibility_mode = FALSE,
-  use_consolidated_periods = TRUE,
+  consolidation_mode = "temporal",
   consolidation_type = "both",
   aspect_ratio = 1,
   border_color = "white",
@@ -55,6 +55,10 @@ or transition matrix when input_format = "matrix"}
 
 \item{accessibility_mode}{Logical. Enable high contrast mode (default: FALSE)}
 
+\item{consolidation_mode}{Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")}
+
+\item{consolidation_type}{Character. Type of consolidation when consolidation_mode != "none" (default: "both")}
+
 \item{aspect_ratio}{Numeric. Aspect ratio for cells (default: 1)}
 
 \item{border_color}{Character. Color for cell borders (default: "white")}
@@ -84,7 +88,7 @@ plot_transitions_heatmap(pipeline_result, normalize = "row", cell_value = "perce
 
 # High contrast accessibility mode with no consolidation
 plot_transitions_heatmap(pipeline_result, accessibility_mode = TRUE, 
-                        use_consolidated_periods = FALSE)
+                        consolidation_mode = "none")
 
 # Using pre-computed transitions data
 transitions <- analyze_employment_transitions(pipeline_result)

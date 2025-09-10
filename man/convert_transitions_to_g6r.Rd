@@ -18,7 +18,7 @@ convert_transitions_to_g6r(
 \arguments{
 \item{transitions_data}{Output from analyze_employment_transitions() (data.table format)
 or transition matrix (matrix format). May include consolidated transition data if
-analyzed with use_consolidated_periods = TRUE.}
+analyzed with consolidation_mode = "temporal".}
 
 \item{node_size_metric}{Character string specifying which metric to use for node sizing.
 Options: "in_degree" (incoming transitions), "out_degree" (outgoing transitions),

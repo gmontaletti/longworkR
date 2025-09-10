@@ -11,7 +11,7 @@ create_accessibility_report(
   check_color_contrast = TRUE,
   check_layout_complexity = TRUE,
   return_suggestions = TRUE,
-  use_consolidated_periods = TRUE,
+  consolidation_mode = "temporal",
   consolidation_type = "both"
 )
 }
@@ -28,7 +28,7 @@ create_accessibility_report(
 
 \item{return_suggestions}{Logical. Return improvement suggestions (default: TRUE)}
 
-\item{use_consolidated_periods}{Logical. Test consolidation benefits (default: TRUE)}
+\item{consolidation_mode}{Character. Consolidation mode to test: "temporal", "employer", or "none" (default: "temporal")}
 
 \item{consolidation_type}{Character. Type of consolidation to test (default: "both")}
 }

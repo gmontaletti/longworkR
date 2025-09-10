@@ -22,7 +22,7 @@ plot_transitions_hierarchical(
   palette = "viridis",
   use_bw = FALSE,
   accessibility_mode = FALSE,
-  use_consolidated_periods = TRUE,
+  consolidation_mode = "temporal",
   consolidation_type = "both",
   show_edge_labels = FALSE,
   show_node_labels = TRUE,
@@ -67,7 +67,7 @@ plot_transitions_hierarchical(
 
 \item{accessibility_mode}{Logical. Enable accessibility mode (default: FALSE)}
 
-\item{use_consolidated_periods}{Logical. Apply consolidation for cleaner hierarchy (default: TRUE)}
+\item{consolidation_mode}{Character. Consolidation mode: "temporal", "employer", or "none" (default: "temporal")}
 
 \item{consolidation_type}{Character. Type of consolidation (default: "both")}
 
@@ -101,6 +101,6 @@ plot_transitions_hierarchical(pipeline_result, hierarchy_type = "sugiyama",
 # Horizontal dendrogram with no consolidation
 plot_transitions_hierarchical(pipeline_result, hierarchy_type = "dendrogram", 
                              layout_direction = "horizontal", 
-                             use_consolidated_periods = FALSE)
+                             consolidation_mode = "none")
 }
 }
