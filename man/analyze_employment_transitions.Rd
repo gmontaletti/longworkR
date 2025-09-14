@@ -13,7 +13,7 @@ analyze_employment_transitions(
   consolidation_type = "both",
   consolidation_mode = "none",
   employer_var = NULL,
-  min_employer_lag = 30,
+  min_lag = 8,
   output_transition_matrix = FALSE,
   eval_chain = "last",
   show_progress = TRUE
@@ -61,7 +61,7 @@ and time proximity. Consolidates overlapping/consecutive periods regardless of e
 using the consolidation_type parameter ("both", "overlapping", "consecutive").
 \item{\code{"employer"}}: Uses employer-based consolidation that respects employer boundaries.
 Only consolidates consecutive contracts from the same employer (identified by employer_var)
-if they are separated by ≤ min_employer_lag days. Never consolidates across different
+if they are separated by ≤ min_lag days. Never consolidates across different
 employers, ensuring transitions represent true job changes. Requires employer_var parameter.
 \item{\code{"both"}}: Sequential consolidation combining both approaches. First applies
 employer-based consolidation to respect employer boundaries, then applies temporal
@@ -72,11 +72,11 @@ consolidation to the result. Requires both employer_var and consolidation_type p
 (default: NULL). Required when consolidation_mode = "employer". This column should contain
 unique identifiers for each employer (e.g., company IDs, tax codes, or standardized company names).
 Contracts with the same employer_var value will be considered for consolidation if within
-min_employer_lag days. Ignored and produces a warning when consolidation_mode = "temporal".}
+min_lag days. Ignored and produces a warning when consolidation_mode = "temporal".}
 
-\item{min_employer_lag}{Numeric value specifying the maximum gap in days between consecutive
+\item{min_lag}{Numeric value specifying the maximum gap in days between consecutive
 contracts from the same employer to be consolidated when consolidation_mode = "employer"
-(default: 30). Contracts from the same employer separated by more than this number of days
+(default: 8). Contracts from the same employer separated by more than this number of days
 will remain as separate employment periods, allowing for detection of re-hiring patterns.
 Lower values (e.g., 7) provide stricter consolidation, while higher values (e.g., 90) are
 more permissive for employers with seasonal or project-based hiring patterns.}
@@ -165,13 +165,13 @@ between actual employment periods
 }
 
 \strong{Employer-Based Consolidation (consolidation_mode = "employer")}:
-Consolidates consecutive contracts with the same employer within min_employer_lag days,
+Consolidates consecutive contracts with the same employer within min_lag days,
 while never consolidating contracts from different employers. Characteristics:
 \itemize{
 \item{\strong{Employer Respect}}: Never merges contracts from different employers,
 even if temporally adjacent
 \item{\strong{Same-Employer Consolidation}}: Consolidates contracts from the same
-employer if separated by ≤ min_employer_lag days
+employer if separated by ≤ min_lag days
 \item{\strong{True Job Changes}}: Better identification of actual job changes vs.
 contract renewals with the same employer
 }
@@ -254,7 +254,7 @@ transitions_employer <- analyze_employment_transitions(
   transition_variable = "company",
   consolidation_mode = "employer",
   employer_var = "employer_id",
-  min_employer_lag = 30
+  min_lag = 8
 )
 
 # Sequential consolidation (both methods)
@@ -263,7 +263,7 @@ transitions_both <- analyze_employment_transitions(
   transition_variable = "company",
   consolidation_mode = "both",
   employer_var = "employer_id", 
-  min_employer_lag = 30,
+  min_lag = 8,
   consolidation_type = "both"
 )
 
@@ -343,7 +343,7 @@ transitions_employer <- analyze_employment_transitions(
   transition_variable = "company",
   consolidation_mode = "employer",      # NEW: employer-based consolidation
   employer_var = "employer_id",         # Column containing employer identifiers
-  min_employer_lag = 30                 # Max 30-day gap for same-employer consolidation
+  min_lag = 8                 # Max 8-day gap for same-employer consolidation
 )
 
 # Example 3: Compare consolidation approaches
@@ -361,7 +361,7 @@ transitions_strict <- analyze_employment_transitions(
   transition_variable = "company",
   consolidation_mode = "employer",
   employer_var = "employer_id",
-  min_employer_lag = 7                  # Only 7-day gap allowed
+  min_lag = 7                  # Only 7-day gap allowed
 )
 
 # Example 5: Permissive employer-based consolidation (90-day gap)
@@ -371,7 +371,7 @@ transitions_permissive <- analyze_employment_transitions(
   transition_variable = "company",
   consolidation_mode = "employer",
   employer_var = "employer_id",
-  min_employer_lag = 90                 # Allow 3-month gaps for same employer
+  min_lag = 90                 # Allow 3-month gaps for same employer
 )
 
 # Example 6: Real-world use case comparison
@@ -383,7 +383,7 @@ job_mobility <- analyze_employment_transitions(
   transition_variable = "employer_id",   # Analyze employer-to-employer transitions
   consolidation_mode = "employer",
   employer_var = "employer_id",
-  min_employer_lag = 30
+  min_lag = 8
 )
 
 # For ROLE/POSITION analysis within and between employers:
@@ -392,7 +392,7 @@ role_transitions <- analyze_employment_transitions(
   transition_variable = "company",       # Analyze role/position transitions
   consolidation_mode = "employer",       # But respect employer boundaries
   employer_var = "employer_id",
-  min_employer_lag = 30
+  min_lag = 8
 )
 
 # Output will include columns like:

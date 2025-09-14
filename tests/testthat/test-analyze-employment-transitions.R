@@ -271,13 +271,13 @@ test_that("employer-based consolidation validates parameters correctly", {
     "Column nonexistent_column not found in pipeline_result"
   )
   
-  # Error: negative min_employer_lag
+  # Error: negative min_lag
   expect_error(
     analyze_employment_transitions(
       test_data,
       consolidation_mode = "employer",
       employer_var = "employer_id",
-      min_employer_lag = -5,
+      min_lag = -5,
       show_progress = FALSE
     ),
     "must be a non-negative numeric value"
@@ -321,13 +321,13 @@ test_that("employer-based consolidation works with basic same-employer scenarios
     salary = c(50000, 52000, 54000, 60000)
   )
   
-  # Test with default 30-day lag - should consolidate first 3 contracts (same employer, gaps < 30 days)
+  # Test with default 8-day lag - should consolidate first 3 contracts (same employer, gaps < 8 days)
   result <- suppressMessages(analyze_employment_transitions(
     test_data,
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   
@@ -360,13 +360,13 @@ test_that("employer-based consolidation never consolidates different employers",
     salary = c(50000, 55000, 60000)
   )
   
-  # Test with large min_employer_lag - should NOT consolidate (different employers)
+  # Test with large min_lag - should NOT consolidate (different employers)
   result_employer <- suppressMessages(analyze_employment_transitions(
     test_data,
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 365,  # Very permissive lag
+    min_lag = 365,  # Very permissive lag
     show_progress = FALSE
   ))
   
@@ -390,7 +390,7 @@ test_that("employer-based consolidation never consolidates different employers",
   }
 })
 
-test_that("employer-based consolidation respects min_employer_lag parameter", {
+test_that("employer-based consolidation respects min_lag parameter", {
   library(data.table)
   
   # Create data with same employer but varying gaps
@@ -413,7 +413,7 @@ test_that("employer-based consolidation respects min_employer_lag parameter", {
     transition_variable = "position",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 7,  # Only first gap (5 days) should consolidate
+    min_lag = 7,  # Only first gap (5 days) should consolidate
     show_progress = FALSE
   ))
   
@@ -423,7 +423,7 @@ test_that("employer-based consolidation respects min_employer_lag parameter", {
     transition_variable = "position",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 15,  # First two gaps (5, 12 days) should consolidate
+    min_lag = 15,  # First two gaps (5, 12 days) should consolidate
     show_progress = FALSE
   ))
   
@@ -433,7 +433,7 @@ test_that("employer-based consolidation respects min_employer_lag parameter", {
     transition_variable = "position",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,  # All gaps should consolidate
+    min_lag = 30,  # All gaps should consolidate
     show_progress = FALSE
   ))
   
@@ -492,7 +492,7 @@ test_that("employer-based consolidation handles edge cases correctly", {
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   
@@ -514,7 +514,7 @@ test_that("employer-based consolidation handles edge cases correctly", {
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   
@@ -524,13 +524,13 @@ test_that("employer-based consolidation handles edge cases correctly", {
     expect_true(nrow(result_diff_employers) >= 2)  # Should have A->B and B->C transitions
   }
   
-  # Test 4: Zero min_employer_lag (no consolidation allowed)
+  # Test 4: Zero min_lag (no consolidation allowed)
   result_zero_lag <- suppressMessages(analyze_employment_transitions(
     test_data_same_employer,
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 0,  # No consolidation
+    min_lag = 0,  # No consolidation
     show_progress = FALSE
   ))
   
@@ -568,7 +568,7 @@ test_that("employer-based vs temporal consolidation produces different results",
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   
@@ -610,7 +610,7 @@ test_that("employer-based consolidation preserves data integrity", {
     statistics_variables = "salary",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   
@@ -666,7 +666,7 @@ test_that("employer-based consolidation handles multiple people correctly", {
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   
@@ -898,7 +898,7 @@ test_that("consolidation_mode 'both' combines employer and temporal consolidatio
     transition_variable = "company",
     consolidation_mode = "employer",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   
@@ -907,7 +907,7 @@ test_that("consolidation_mode 'both' combines employer and temporal consolidatio
     transition_variable = "company",
     consolidation_mode = "both",
     employer_var = "employer_id",
-    min_employer_lag = 30,
+    min_lag = 8,
     show_progress = FALSE
   ))
   

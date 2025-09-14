@@ -66,8 +66,8 @@
 #'
 #' @param pipeline_result data.table object from process_employment_pipeline()
 #' @param employer_var Character string specifying column name containing employer identifiers
-#' @param min_employer_lag Numeric value specifying maximum gap (in days) between contracts
-#'   from the same employer to be consolidated (default: 30)
+#' @param min_lag Numeric value specifying maximum gap (in days) between contracts
+#'   from the same employer to be consolidated (default: 8)
 #'
 #' @return data.table with consolidated employment periods
 #'
@@ -75,7 +75,7 @@
 #' This function:
 #' \itemize{
 #'   \item Groups contracts by person (cf) and employer
-#'   \item Identifies consecutive contracts within min_employer_lag days
+#'   \item Identifies consecutive contracts within min_lag days
 #'   \item Consolidates them preserving appropriate column values
 #'   \item Never consolidates across different employers
 #' }
@@ -89,7 +89,7 @@
 #' }
 #'
 #' @keywords internal
-consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_lag = 30) {
+consolidate_by_employer <- function(pipeline_result, employer_var, min_lag = 8) {
   
   # Input validation
   if (!inherits(pipeline_result, "data.table")) {
@@ -100,8 +100,8 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
     stop("employer_var must specify a valid column name in pipeline_result")
   }
   
-  if (!is.numeric(min_employer_lag) || min_employer_lag < 0) {
-    stop("min_employer_lag must be a non-negative numeric value")
+  if (!is.numeric(min_lag) || min_lag < 0) {
+    stop("min_lag must be a non-negative numeric value")
   }
   
   # Create working copy
@@ -129,7 +129,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
   # Contracts are consolidated if:
   # 1. Same person (cf)
   # 2. Same employer 
-  # 3. Gap between contracts <= min_employer_lag days
+  # 3. Gap between contracts <= min_lag days
   
   dt[, `:=`(
     prev_employer = shift(.SD[[employer_var]], 1L),
@@ -144,7 +144,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
   dt[, new_group := is.na(prev_employer) | 
                    .SD[[employer_var]] != prev_employer | 
                    is.na(gap_days) | 
-                   gap_days > min_employer_lag]
+                   gap_days > min_lag]
   
   # Create consolidation group IDs
   dt[, consolidation_group := cumsum(new_group), by = "cf"]
@@ -212,7 +212,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
   
   # Restore original column order (approximately)
   original_cols <- intersect(names(pipeline_result), names(consolidated))
-  setcolorder(consolidated, original_cols)
+  data.table::setcolorder(consolidated, original_cols)
   
   return(consolidated)
 }
@@ -261,13 +261,13 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #' }
 #' 
 #' \strong{Employer-Based Consolidation (consolidation_mode = "employer")}:
-#' Consolidates consecutive contracts with the same employer within min_employer_lag days,
+#' Consolidates consecutive contracts with the same employer within min_lag days,
 #' while never consolidating contracts from different employers. Characteristics:
 #' \itemize{
 #'   \item{\strong{Employer Respect}}: Never merges contracts from different employers,
 #'     even if temporally adjacent
 #'   \item{\strong{Same-Employer Consolidation}}: Consolidates contracts from the same
-#'     employer if separated by ≤ min_employer_lag days  
+#'     employer if separated by ≤ min_lag days  
 #'   \item{\strong{True Job Changes}}: Better identification of actual job changes vs.
 #'     contract renewals with the same employer
 #' }
@@ -353,7 +353,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'       using the consolidation_type parameter ("both", "overlapping", "consecutive").
 #'     \item{\code{"employer"}}: Uses employer-based consolidation that respects employer boundaries.
 #'       Only consolidates consecutive contracts from the same employer (identified by employer_var)
-#'       if they are separated by ≤ min_employer_lag days. Never consolidates across different
+#'       if they are separated by ≤ min_lag days. Never consolidates across different
 #'       employers, ensuring transitions represent true job changes. Requires employer_var parameter.
 #'     \item{\code{"both"}}: Sequential consolidation combining both approaches. First applies
 #'       employer-based consolidation to respect employer boundaries, then applies temporal
@@ -363,10 +363,10 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   (default: NULL). Required when consolidation_mode = "employer". This column should contain
 #'   unique identifiers for each employer (e.g., company IDs, tax codes, or standardized company names).
 #'   Contracts with the same employer_var value will be considered for consolidation if within
-#'   min_employer_lag days. Ignored and produces a warning when consolidation_mode = "temporal".
-#' @param min_employer_lag Numeric value specifying the maximum gap in days between consecutive
+#'   min_lag days. Ignored and produces a warning when consolidation_mode = "temporal".
+#' @param min_lag Numeric value specifying the maximum gap in days between consecutive
 #'   contracts from the same employer to be consolidated when consolidation_mode = "employer"
-#'   (default: 30). Contracts from the same employer separated by more than this number of days
+#'   (default: 8). Contracts from the same employer separated by more than this number of days
 #'   will remain as separate employment periods, allowing for detection of re-hiring patterns.
 #'   Lower values (e.g., 7) provide stricter consolidation, while higher values (e.g., 90) are
 #'   more permissive for employers with seasonal or project-based hiring patterns.
@@ -445,7 +445,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   transition_variable = "company",
 #'   consolidation_mode = "employer",
 #'   employer_var = "employer_id",
-#'   min_employer_lag = 30
+#'   min_lag = 8
 #' )
 #' 
 #' # Sequential consolidation (both methods)
@@ -454,7 +454,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   transition_variable = "company",
 #'   consolidation_mode = "both",
 #'   employer_var = "employer_id", 
-#'   min_employer_lag = 30,
+#'   min_lag = 8,
 #'   consolidation_type = "both"
 #' )
 #' 
@@ -534,7 +534,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   transition_variable = "company",
 #'   consolidation_mode = "employer",      # NEW: employer-based consolidation
 #'   employer_var = "employer_id",         # Column containing employer identifiers
-#'   min_employer_lag = 30                 # Max 30-day gap for same-employer consolidation
+#'   min_lag = 8                 # Max 8-day gap for same-employer consolidation
 #' )
 #' 
 #' # Example 3: Compare consolidation approaches
@@ -552,7 +552,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   transition_variable = "company",
 #'   consolidation_mode = "employer",
 #'   employer_var = "employer_id",
-#'   min_employer_lag = 7                  # Only 7-day gap allowed
+#'   min_lag = 7                  # Only 7-day gap allowed
 #' )
 #' 
 #' # Example 5: Permissive employer-based consolidation (90-day gap)
@@ -562,7 +562,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   transition_variable = "company",
 #'   consolidation_mode = "employer",
 #'   employer_var = "employer_id",
-#'   min_employer_lag = 90                 # Allow 3-month gaps for same employer
+#'   min_lag = 90                 # Allow 3-month gaps for same employer
 #' )
 #' 
 #' # Example 6: Real-world use case comparison
@@ -574,7 +574,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   transition_variable = "employer_id",   # Analyze employer-to-employer transitions
 #'   consolidation_mode = "employer",
 #'   employer_var = "employer_id",
-#'   min_employer_lag = 30
+#'   min_lag = 8
 #' )
 #' 
 #' # For ROLE/POSITION analysis within and between employers:
@@ -583,7 +583,7 @@ consolidate_by_employer <- function(pipeline_result, employer_var, min_employer_
 #'   transition_variable = "company",       # Analyze role/position transitions
 #'   consolidation_mode = "employer",       # But respect employer boundaries
 #'   employer_var = "employer_id",
-#'   min_employer_lag = 30
+#'   min_lag = 8
 #' )
 #' 
 #' # Output will include columns like:
@@ -599,7 +599,7 @@ analyze_employment_transitions <- function(pipeline_result,
                                          consolidation_type = "both",
                                          consolidation_mode = "none",
                                          employer_var = NULL,
-                                         min_employer_lag = 30,
+                                         min_lag = 8,
                                          output_transition_matrix = FALSE,
                                          eval_chain = "last",
                                          show_progress = TRUE) {
@@ -663,8 +663,8 @@ analyze_employment_transitions <- function(pipeline_result,
     if (!employer_var %in% names(pipeline_result)) {
       stop(paste("Column", employer_var, "not found in pipeline_result"))
     }
-    if (!is.numeric(min_employer_lag) || min_employer_lag < 0) {
-      stop("Parameter 'min_employer_lag' must be a non-negative numeric value")
+    if (!is.numeric(min_lag) || min_lag < 0) {
+      stop("Parameter 'min_lag' must be a non-negative numeric value")
     }
   }
   
@@ -848,19 +848,19 @@ analyze_employment_transitions <- function(pipeline_result,
       if (show_progress) {
         if (consolidation_mode == "employer") {
           message(sprintf("Consolidating employment periods by employer using '%s' variable and %d-day lag...", 
-                         employer_var, min_employer_lag))
+                         employer_var, min_lag))
         } else if (consolidation_mode == "temporal") {
           message(sprintf("Consolidating employment periods using '%s' temporal strategy...", consolidation_type))
         } else if (consolidation_mode == "both") {
           message(sprintf("Consolidating employment periods: first by employer ('%s', %d-day lag), then temporal ('%s')...", 
-                         employer_var, min_employer_lag, consolidation_type))
+                         employer_var, min_lag, consolidation_type))
         }
       }
       
       # Execute consolidation based on mode
       if (consolidation_mode == "employer") {
         # Use employer-based consolidation only
-        dt <- consolidate_by_employer(pipeline_result, employer_var, min_employer_lag)
+        dt <- consolidate_by_employer(pipeline_result, employer_var, min_lag)
         
       } else if (consolidation_mode == "temporal") {
         # Use temporal consolidation only (original vecshift method)
@@ -873,7 +873,7 @@ analyze_employment_transitions <- function(pipeline_result,
         }
         
         # Step 1: Employer consolidation
-        dt_employer <- consolidate_by_employer(pipeline_result, employer_var, min_employer_lag)
+        dt_employer <- consolidate_by_employer(pipeline_result, employer_var, min_lag)
         
         if (show_progress) {
           n_original <- nrow(pipeline_result)
