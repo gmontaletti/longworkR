@@ -1,21 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(R -e \"devtools::install(''.'', quiet = TRUE); library(longworkR); print(exists(''calculate_career_quality_metrics'')); print(exists(''calculate_comprehensive_career_metrics''))\")",
+      "mcp__r-btw__btw_tool_files_list_files",
       "Bash(Rscript:*)",
-      "Bash(git add:*)",
-      "Bash(R CMD INSTALL:*)",
       "Bash(R:*)",
-      "Bash(find:*)",
-      "Bash(grep:*)",
-      "Bash(rm:*)",
-      "Bash(mv:*)",
-      "Bash(_R_CHECK_FORCE_SUGGESTS_=FALSE R CMD check longworkR_0.3.0.tar.gz --no-manual --no-vignettes)",
-      "Bash(export _R_CHECK_FORCE_SUGGESTS_=FALSE)",
-      "Read(/Users/giampaolomontaletti/Documents/funzioni/reference/**)",
       "mcp__r-btw__btw_tool_files_read_text_file",
       "Bash(sed:*)",
-      "mcp__r-btw__btw_tool_env_describe_data_frame"
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
