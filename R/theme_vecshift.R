@@ -565,26 +565,26 @@ theme_vecshift <- function(base_size = 12, base_family = "",
         panel.grid.minor = ggplot2::element_blank()
       )
   } else if (grid == "major") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
-        panel.grid.major = ggplot2::element_line(colour = "#E8EAED", 
-                                               size = base_line_size),
+        panel.grid.major = ggplot2::element_line(colour = "#E8EAED",
+                                               linewidth = base_line_size),
         panel.grid.minor = ggplot2::element_blank()
       )
   } else if (grid == "minor") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
         panel.grid.major = ggplot2::element_blank(),
-        panel.grid.minor = ggplot2::element_line(colour = "#F1F3F4", 
-                                               size = base_line_size * 0.5)
+        panel.grid.minor = ggplot2::element_line(colour = "#F1F3F4",
+                                               linewidth = base_line_size * 0.5)
       )
   } else if (grid == "both") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
-        panel.grid.major = ggplot2::element_line(colour = "#E8EAED", 
-                                               size = base_line_size),
-        panel.grid.minor = ggplot2::element_line(colour = "#F1F3F4", 
-                                               size = base_line_size * 0.5)
+        panel.grid.major = ggplot2::element_line(colour = "#E8EAED",
+                                               linewidth = base_line_size),
+        panel.grid.minor = ggplot2::element_line(colour = "#F1F3F4",
+                                               linewidth = base_line_size * 0.5)
       )
   }
   
@@ -595,21 +595,21 @@ theme_vecshift <- function(base_size = 12, base_family = "",
         axis.line = ggplot2::element_blank()
       )
   } else if (axis == "x") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
-        axis.line.x = ggplot2::element_line(colour = "#BDC3C7", size = base_line_size),
+        axis.line.x = ggplot2::element_line(colour = "#BDC3C7", linewidth = base_line_size),
         axis.line.y = ggplot2::element_blank()
       )
   } else if (axis == "y") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
         axis.line.x = ggplot2::element_blank(),
-        axis.line.y = ggplot2::element_line(colour = "#BDC3C7", size = base_line_size)
+        axis.line.y = ggplot2::element_line(colour = "#BDC3C7", linewidth = base_line_size)
       )
   } else if (axis == "both") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
-        axis.line = ggplot2::element_line(colour = "#BDC3C7", size = base_line_size)
+        axis.line = ggplot2::element_line(colour = "#BDC3C7", linewidth = base_line_size)
       )
   }
   
@@ -620,21 +620,21 @@ theme_vecshift <- function(base_size = 12, base_family = "",
         axis.ticks = ggplot2::element_blank()
       )
   } else if (ticks == "x") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
-        axis.ticks.x = ggplot2::element_line(colour = "#BDC3C7", size = base_line_size),
+        axis.ticks.x = ggplot2::element_line(colour = "#BDC3C7", linewidth = base_line_size),
         axis.ticks.y = ggplot2::element_blank()
       )
   } else if (ticks == "y") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
         axis.ticks.x = ggplot2::element_blank(),
-        axis.ticks.y = ggplot2::element_line(colour = "#BDC3C7", size = base_line_size)
+        axis.ticks.y = ggplot2::element_line(colour = "#BDC3C7", linewidth = base_line_size)
       )
   } else if (ticks == "both") {
-    theme <- theme + 
+    theme <- theme +
       ggplot2::theme(
-        axis.ticks = ggplot2::element_line(colour = "#BDC3C7", size = base_line_size)
+        axis.ticks = ggplot2::element_line(colour = "#BDC3C7", linewidth = base_line_size)
       )
   }
   

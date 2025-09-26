@@ -6,7 +6,12 @@
       "Bash(R:*)",
       "mcp__r-btw__btw_tool_files_read_text_file",
       "Bash(sed:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "mcp__r-btw__btw_tool_search_package_info",
+      "mcp__r-btw__btw_tool_search_packages",
+      "Read(//Users/giampaolomontaletti/Documents/funzioni/reference/longworkR/**)",
+      "mcp__r-btw__btw_tool_files_code_search",
+      "mcp__r-btw__btw_tool_env_describe_data_frame"
     ],
     "deny": [],
     "ask": []

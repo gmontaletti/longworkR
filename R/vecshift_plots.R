@@ -1221,7 +1221,7 @@ plot_employment_gantt <- function(data,
       axis.text.y = ggplot2::element_text(size = 9),
       legend.position = if(show_legend) "bottom" else "none",
       legend.box = "horizontal",
-      panel.grid.major.y = ggplot2::element_line(color = "#E8EAED", size = 0.3),
+      panel.grid.major.y = ggplot2::element_line(color = "#E8EAED", linewidth = 0.3),
       panel.grid.minor = ggplot2::element_blank()
     )
   
@@ -2511,9 +2511,9 @@ plot_integrated_employment_metrics <- function(employment_data,
     axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = base_size * 0.8),
     legend.position = "bottom",
     legend.box = "horizontal",
-    panel.grid.major.x = ggplot2::element_line(color = "#E8EAED", size = 0.5),
+    panel.grid.major.x = ggplot2::element_line(color = "#E8EAED", linewidth = 0.5),
     panel.grid.minor.x = ggplot2::element_blank(),
-    panel.grid.major.y = ggplot2::element_line(color = "#F4F6F7", size = 0.3),
+    panel.grid.major.y = ggplot2::element_line(color = "#F4F6F7", linewidth = 0.3),
     plot.title = ggplot2::element_text(size = base_size * 1.2, face = "bold"),
     plot.subtitle = ggplot2::element_text(size = base_size * 0.9, color = "#5D6D7E")
   )
