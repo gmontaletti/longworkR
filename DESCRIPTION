@@ -1,7 +1,7 @@
 Package: longworkR
 Title: Longitudinal Employment Analytics for vecshift Data
-Version: 0.5.2
-Date: 2025-09-29
+Version: 0.5.3
+Date: 2025-09-30
 Authors@R: 
     person("Giampaolo", "Montaletti", , "giampaolo.montaletti@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0002-5327-1122"))

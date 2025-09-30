@@ -19,7 +19,8 @@ track_sector_trajectories(
   use_bw = FALSE,
   plot_title = NULL,
   plot_subtitle = NULL,
-  chunk_size = 10000
+  chunk_size = 10000,
+  person_vars = NULL
 )
 }
 \arguments{
@@ -60,14 +61,20 @@ track_sector_trajectories(
 
 \item{chunk_size}{Integer. Number of persons to process per chunk for memory
 management (default: 10000)}
+
+\item{person_vars}{Character vector of person-level variable names to include
+in the output data (e.g., c("eta", "sesso", "istruzione")). Variables are
+extracted from the first target contract for each person. Default is NULL
+(no additional variables).}
 }
 \value{
 A list containing:
 \itemize{
 \item \code{data}: data.table with individual-level quarterly sector trajectories
 \item \code{summary}: data.table with aggregated trajectory patterns
+\item \code{transitions}: data.table with aggregated transition counts between quarters,
+including columns: from_quarter, to_quarter, from_status, to_status, person_vars (if provided), count
 \item \code{plot}: ggplot2 alluvial plot (if return_plot = TRUE)
-\item \code{reference_dates}: data.table with reference dates and sectors per person
 \item \code{parameters}: List of function parameters used
 }
 }

@@ -12,7 +12,8 @@ calculate_trajectories_vectorized(
   person_col,
   arco_col,
   employment_thresholds,
-  quarter_days
+  quarter_days,
+  reference_dates = NULL
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ calculate_trajectories_vectorized(
 \item{employment_thresholds}{Numeric vector with employment classification thresholds}
 
 \item{quarter_days}{Number of days per quarter}
+
+\item{reference_dates}{Optional data.table with reference dates and person_vars to merge}
 }
 \value{
 data.table with employment trajectories
