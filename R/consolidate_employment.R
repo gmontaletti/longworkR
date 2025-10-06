@@ -987,62 +987,39 @@ consolidate_by_employer <- function(data, employer_var, min_lag = 8,
     dt[, `:=`(
       prev_employer = shift(.SD[[employer_var]], 1L),
       prev_fine = shift(fine, 1L),
-      prev_arco = shift(arco, 1L)
+      prev_arco = shift(arco, 1L),
+      prev_durata = shift(durata, 1L)
     ), by = "cf"]
 
     # Calculate gap days
-    dt[, gap_days := as.numeric(inizio - prev_fine) - 1]
-    dt[is.na(gap_days), gap_days := 0]
+    dt[, gap_days := fifelse(is.na(prev_fine), 0L, as.integer(inizio - prev_fine - 1L))]
 
     # Enhanced grouping logic: Start new group when:
     # 1. Different person (first record for person)
-    # 2. Different employer for employment records (considering last employment employer)
+    # 2. Different employer for employment records (compared to previous employer)
     # 3. Unemployment period >= min_lag (acts as consolidation barrier)
     # 4. Gap exceeds threshold between any periods
 
-    # VECTORIZED HIGH-PERFORMANCE REPLACEMENT
-    # Track last employment employer, considering unemployment barriers
-    dt[, last_employment_employer := {
-      # Create employer values vector, set non-employment to NA
-      employer_values <- .SD[[employer_var]]
-      employer_values[arco == 0 | is.na(.SD[[employer_var]])] <- NA_character_
-
-      # Optimized forward fill for character data - data.table approach
-      if (any(!is.na(employer_values))) {
-        # Use cummax approach for character forward fill (faster than Reduce)
-        non_na_indices <- which(!is.na(employer_values))
-        if (length(non_na_indices) > 0) {
-          fill_indices <- cummax(c(0, non_na_indices))[seq_along(employer_values)]
-          fill_indices[fill_indices == 0] <- NA
-          ifelse(is.na(fill_indices), NA_character_, employer_values[fill_indices])
-        } else {
-          employer_values
-        }
-      } else {
-        rep(NA_character_, .N)
-      }
-    }, by = cf]
-
-    dt[, prev_last_employment_employer := shift(last_employment_employer, 1L), by = cf]
-
     dt[, new_group := {
-      is_first <- is.na(prev_last_employment_employer)
+      is_first <- is.na(prev_employer)
       is_employment <- arco > 0
       is_unemployment <- arco == 0
 
-      # Different employer between employment periods (ignore unemployment periods)
+      # Different employer between employment periods
+      # For employment records, check if employer changed from previous employer
       employer_changed <- is_employment &
                          !is.na(.SD[[employer_var]]) &
-                         !is.na(prev_last_employment_employer) &
-                         .SD[[employer_var]] != prev_last_employment_employer
+                         !is.na(prev_employer) &
+                         .SD[[employer_var]] != prev_employer
 
-      # CRITICAL FIX: Unemployment periods >= min_lag create new groups (consolidation barriers)
+      # Unemployment periods >= min_lag create new groups (consolidation barriers)
       # This ensures they are preserved as separate records
       unemployment_barrier <- is_unemployment & durata >= min_lag
 
       # Also start new group after unemployment >= min_lag to separate following employment
       after_long_unemployment <- prev_arco == 0 &
-                                  shift(durata, 1L, type = "lag") >= min_lag &
+                                  !is.na(prev_durata) &
+                                  prev_durata >= min_lag &
                                   is_employment
 
       # Gap exceeds threshold between any periods
@@ -1072,8 +1049,7 @@ consolidate_by_employer <- function(data, employer_var, min_lag = 8,
   dt[, consolidation_group := cumsum(new_group), by = "cf"]
   
   # Phase 2: Calculate Consolidation Metrics and Create Consolidated Records
-  exclude_cols <- c("prev_employer", "prev_fine", "prev_arco", "gap_days", "new_group", "consolidation_group",
-                    "last_employment_employer", "prev_last_employment_employer")
+  exclude_cols <- c("prev_employer", "prev_fine", "prev_arco", "prev_durata", "gap_days", "new_group", "consolidation_group")
   agg_cols <- setdiff(names(dt), exclude_cols)
   
   # Store original column classes for type restoration

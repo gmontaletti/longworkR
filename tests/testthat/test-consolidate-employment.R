@@ -85,25 +85,36 @@ test_that("consolidate_by_employer works correctly", {
     salary = c(50000, 52000, 60000, 62000, 45000, 46000, 47000)
   )
   
-  # Test with 35-day threshold (should consolidate CompanyA for person 1)
+  # Test with 35-day threshold (should consolidate both CompanyA and CompanyB for person 1)
+  # Person 1 gaps: 0 days (CompanyA Jan-Feb), 31 days (CompanyB Apr-Jun)
+  # Both gaps <= 35, so all same-employer periods consolidate
   result <- consolidate_by_employer(test_data, "employer", min_lag = 35, show_progress = FALSE)
-  
+
   expect_true(inherits(result, "data.table"))
   expect_true(nrow(result) < nrow(test_data))
-  
-  # Person 1 should have 3 periods after consolidation (CompanyA consolidated, CompanyB separate)
+
+  # Person 1 should have 2 periods after consolidation (CompanyA consolidated, CompanyB consolidated)
   person1_result <- result[cf == 1]
-  expect_equal(nrow(person1_result), 3)
-  
+  expect_equal(nrow(person1_result), 2)
+
   # Check that CompanyA periods were consolidated for person 1
   companyA_person1 <- person1_result[employer == "CompanyA"]
   expect_equal(nrow(companyA_person1), 1)
   expect_equal(companyA_person1$inizio, as.Date("2023-01-01"))
   expect_equal(companyA_person1$fine, as.Date("2023-02-28"))
-  
-  # Test with 10-day threshold (should not consolidate any)
+
+  # Check that CompanyB periods were also consolidated for person 1 (gap = 31 days <= 35)
+  companyB_person1 <- person1_result[employer == "CompanyB"]
+  expect_equal(nrow(companyB_person1), 1)
+  expect_equal(companyB_person1$inizio, as.Date("2023-04-01"))
+  expect_equal(companyB_person1$fine, as.Date("2023-06-30"))
+
+  # Test with 10-day threshold
+  # Person 1 gaps: 0 days (consolidates), 31 days (does not consolidate)
+  # Person 2 gaps: 13 days (does not consolidate), 4 days (consolidates)
+  # Expected: Person 1 = 3 periods (A+A, B, B), Person 2 = 2 periods (C, C+C)
   result_strict <- consolidate_by_employer(test_data, "employer", min_lag = 10, show_progress = FALSE)
-  expect_equal(nrow(result_strict), nrow(test_data))
+  expect_equal(nrow(result_strict), 5)  # 3 + 2 = 5 total periods
   
   # Test error handling
   expect_error(

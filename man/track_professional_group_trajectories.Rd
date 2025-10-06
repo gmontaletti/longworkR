@@ -20,7 +20,8 @@ track_professional_group_trajectories(
   plot_title = NULL,
   plot_subtitle = NULL,
   person_vars = NULL,
-  chunk_size = 10000
+  chunk_size = 10000,
+  language = "it"
 )
 }
 \arguments{
@@ -58,6 +59,9 @@ extracted from the first target contract for each person. Default is NULL
 (no additional variables).}
 
 \item{chunk_size}{Integer specifying the chunk size for processing large datasets}
+
+\item{language}{Character. Language for status labels: "it" for Italian,
+"en" for English (default: "it")}
 }
 \value{
 A list containing:

@@ -12,6 +12,39 @@
 #' @importFrom rlang sym
 NULL
 
+#' Translate trajectory status labels
+#'
+#' Translates status labels from English to the specified language
+#'
+#' @param status Character vector of status labels in English
+#' @param language Character. Language code: "it" for Italian, "en" for English (default: "it")
+#' @return Character vector with translated status labels
+#' @keywords internal
+translate_trajectory_status <- function(status, language = "it") {
+  if (language == "en") {
+    return(status)  # Already in English
+  }
+
+  # Italian translations
+  translations <- c(
+    "Not Working" = "Non Occupato",
+    "Partially Working" = "Parzialmente Occupato",
+    "Mostly Working" = "Prevalentemente Occupato",
+    "Fully Working" = "Completamente Occupato",
+    "Same Code" = "Stesso Codice",
+    "Different Code" = "Codice Diverso",
+    "Same Employer" = "Stesso Datore",
+    "Different Employer" = "Datore Diverso",
+    "Same Sector" = "Stesso Settore",
+    "Different Sector" = "Settore Diverso",
+    "No Information" = "Nessuna Informazione"
+  )
+
+  # Translate or return original if not found
+  translated <- translations[status]
+  ifelse(is.na(translated), status, translated)
+}
+
 #' Vectorized trajectory calculation helper function
 #'
 #' @param dt Employment data
@@ -168,6 +201,8 @@ calculate_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_co
 #'   (no additional variables).
 #' @param chunk_size Integer. Number of persons to process per chunk for memory
 #'   management (default: 10000)
+#' @param language Character. Language for status labels: "it" for Italian,
+#'   "en" for English (default: "it")
 #'
 #' @details
 #' Employment is determined by the `arco` variable where:
@@ -252,7 +287,8 @@ track_contract_trajectories <- function(data,
                                       plot_title = NULL,
                                       plot_subtitle = NULL,
                                       person_vars = NULL,
-                                      chunk_size = 10000) {
+                                      chunk_size = 10000,
+                                      language = "it") {
 
   # Input validation
   if (!is.data.table(data)) {
@@ -394,6 +430,9 @@ track_contract_trajectories <- function(data,
     all_trajectories <- rbindlist(trajectory_list)
   }
 
+  # Apply translation to employment status
+  all_trajectories[, employment_status := translate_trajectory_status(employment_status, language)]
+
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
@@ -430,19 +469,23 @@ track_contract_trajectories <- function(data,
     employment_statuses <- c("Not Working", "Partially Working", "Mostly Working",
                            "Fully Working", "No Information")
 
+    # Translate status labels for colors
+    employment_statuses_translated <- translate_trajectory_status(employment_statuses, language)
+
     if (palette == "employment" && !use_bw) {
       colors <- c(
-        "Not Working" = "#E74C3C",        # Red
-        "Partially Working" = "#F39C12",   # Orange
-        "Mostly Working" = "#3498DB",      # Blue
-        "Fully Working" = "#27AE60",       # Green
-        "No Information" = "#95A5A6"       # Grey
+        "#E74C3C",        # Red - Not Working
+        "#F39C12",        # Orange - Partially Working
+        "#3498DB",        # Blue - Mostly Working
+        "#27AE60",        # Green - Fully Working
+        "#95A5A6"         # Grey - No Information
       )
+      names(colors) <- employment_statuses_translated
     } else {
       # Use vecshift_colors function (assuming it exists)
       base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
                                    n = length(employment_statuses))
-      colors <- setNames(base_colors[1:length(employment_statuses)], employment_statuses)
+      colors <- setNames(base_colors[1:length(employment_statuses)], employment_statuses_translated)
     }
 
     # Create alluvial plot
@@ -497,7 +540,23 @@ track_contract_trajectories <- function(data,
   }, by = person_id]
 
   # Aggregate transitions based on whether person_vars exist
-  if (!is.null(person_vars) && length(person_vars) > 0) {
+  # Handle empty transitions_raw case
+  if (nrow(transitions_raw) == 0) {
+    # Create empty transition_counts with correct structure
+    if (!is.null(person_vars) && length(person_vars) > 0) {
+      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      setnames(transition_counts, c(group_cols, "count"))
+    } else {
+      transition_counts <- data.table::data.table(
+        from_quarter = integer(0),
+        to_quarter = integer(0),
+        from_status = character(0),
+        to_status = character(0),
+        count = integer(0)
+      )
+    }
+  } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_dates into transitions
     transitions_with_vars <- merge(transitions_raw,
                                    reference_dates[, c("person_id", person_vars), with = FALSE],
@@ -512,15 +571,25 @@ track_contract_trajectories <- function(data,
                                         by = .(from_quarter, to_quarter, from_status, to_status)]
   }
 
-  # Order by from_quarter, to_quarter, and count
-  setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-  setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  # Order by from_quarter, to_quarter, and count (only if not empty)
+  if (nrow(transition_counts) > 0) {
+    setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
+    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  }
 
   # Prepare return object
+  # Restore original person_id column name in reference_dates and data for return
+  reference_dates_return <- copy(reference_dates)
+  setnames(reference_dates_return, "person_id", person_id)
+
+  all_trajectories_return <- copy(all_trajectories)
+  setnames(all_trajectories_return, "person_id", person_id)
+
   result <- list(
-    data = all_trajectories,
+    data = all_trajectories_return,
     summary = trajectory_summary,
     transitions = transition_counts,
+    reference_dates = reference_dates_return,
     plot = plot_obj,
     parameters = list(
       contract_type_var = contract_type_var,
@@ -536,6 +605,7 @@ track_contract_trajectories <- function(data,
       person_vars = person_vars,
       quarter_days = quarter_days,
       chunk_size = chunk_size,
+      language = language,
       n_individuals = nrow(reference_dates)
     )
   )
@@ -760,6 +830,8 @@ calculate_employer_trajectories_vectorized <- function(dt, quarters_dt, start_co
 #'   (no additional variables).
 #' @param chunk_size Integer. Number of persons to process per chunk for memory
 #'   management (default: 10000)
+#' @param language Character. Language for status labels: "it" for Italian,
+#'   "en" for English (default: "it")
 #'
 #' @details
 #' Professional code tracking is determined by the `qualifica` variable where:
@@ -831,7 +903,8 @@ track_professional_trajectories <- function(data,
                                            plot_title = NULL,
                                            plot_subtitle = NULL,
                                            person_vars = NULL,
-                                           chunk_size = 10000) {
+                                           chunk_size = 10000,
+                                           language = "it") {
 
   # Input validation
   if (!is.data.table(data)) {
@@ -957,6 +1030,9 @@ track_professional_trajectories <- function(data,
     all_trajectories <- rbindlist(trajectory_list)
   }
 
+  # Apply translation to professional status
+  all_trajectories[, professional_status := translate_trajectory_status(professional_status, language)]
+
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
@@ -992,18 +1068,22 @@ track_professional_trajectories <- function(data,
     # Get colors for professional status
     professional_statuses <- c("Same Code", "Different Code", "Not Working", "No Information")
 
+    # Translate status labels for colors
+    professional_statuses_translated <- translate_trajectory_status(professional_statuses, language)
+
     if (palette == "professional" && !use_bw) {
       colors <- c(
-        "Same Code" = "#27AE60",        # Green
-        "Different Code" = "#3498DB",    # Blue
-        "Not Working" = "#E74C3C",       # Red
-        "No Information" = "#95A5A6"     # Grey
+        "#27AE60",        # Green - Same Code
+        "#3498DB",        # Blue - Different Code
+        "#E74C3C",        # Red - Not Working
+        "#95A5A6"         # Grey - No Information
       )
+      names(colors) <- professional_statuses_translated
     } else {
       # Use vecshift_colors function
       base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
                                    n = length(professional_statuses))
-      colors <- setNames(base_colors[1:length(professional_statuses)], professional_statuses)
+      colors <- setNames(base_colors[1:length(professional_statuses)], professional_statuses_translated)
     }
 
     # Create alluvial plot
@@ -1058,7 +1138,23 @@ track_professional_trajectories <- function(data,
   }, by = person_id]
 
   # Aggregate transitions based on whether person_vars exist
-  if (!is.null(person_vars) && length(person_vars) > 0) {
+  # Handle empty transitions_raw case
+  if (nrow(transitions_raw) == 0) {
+    # Create empty transition_counts with correct structure
+    if (!is.null(person_vars) && length(person_vars) > 0) {
+      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      setnames(transition_counts, c(group_cols, "count"))
+    } else {
+      transition_counts <- data.table::data.table(
+        from_quarter = integer(0),
+        to_quarter = integer(0),
+        from_status = character(0),
+        to_status = character(0),
+        count = integer(0)
+      )
+    }
+  } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_codes into transitions
     transitions_with_vars <- merge(transitions_raw,
                                    reference_codes[, c(person_id, person_vars), with = FALSE],
@@ -1073,15 +1169,18 @@ track_professional_trajectories <- function(data,
                                         by = .(from_quarter, to_quarter, from_status, to_status)]
   }
 
-  # Order by from_quarter, to_quarter, and count
-  setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-  setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  # Order by from_quarter, to_quarter, and count (only if not empty)
+  if (nrow(transition_counts) > 0) {
+    setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
+    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  }
 
   # Prepare return object
   result <- list(
     data = all_trajectories,
     summary = trajectory_summary,
     transitions = transition_counts,
+    reference_dates = reference_codes,
     plot = plot_obj,
     parameters = list(
       contract_type_var = contract_type_var,
@@ -1097,6 +1196,7 @@ track_professional_trajectories <- function(data,
       person_vars = person_vars,
       quarter_days = quarter_days,
       chunk_size = chunk_size,
+      language = language,
       n_individuals = nrow(reference_codes)
     )
   )
@@ -1143,6 +1243,8 @@ track_professional_trajectories <- function(data,
 #'   (no additional variables).
 #' @param chunk_size Integer. Number of persons to process per chunk for memory
 #'   management (default: 10000)
+#' @param language Character. Language for status labels: "it" for Italian,
+#'   "en" for English (default: "it")
 #'
 #' @details
 #' Employment is determined by the `arco` variable where:
@@ -1222,7 +1324,8 @@ track_employer_trajectories <- function(data,
                                        plot_title = NULL,
                                        plot_subtitle = NULL,
                                        person_vars = NULL,
-                                       chunk_size = 10000) {
+                                       chunk_size = 10000,
+                                       language = "it") {
 
   # Input validation
   if (!is.data.table(data)) {
@@ -1351,6 +1454,9 @@ track_employer_trajectories <- function(data,
     all_trajectories <- rbindlist(trajectory_list)
   }
 
+  # Apply translation to employer status
+  all_trajectories[, employer_status := translate_trajectory_status(employer_status, language)]
+
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
@@ -1386,18 +1492,22 @@ track_employer_trajectories <- function(data,
     # Get colors for employer status
     employer_statuses <- c("Same Employer", "Different Employer", "Not Working", "No Information")
 
+    # Translate status labels for colors
+    employer_statuses_translated <- translate_trajectory_status(employer_statuses, language)
+
     if (palette == "employer" && !use_bw) {
       colors <- c(
-        "Same Employer" = "#2ECC71",         # Bright green
-        "Different Employer" = "#E67E22",    # Orange
-        "Not Working" = "#E74C3C",           # Red
-        "No Information" = "#95A5A6"         # Grey
+        "#2ECC71",         # Bright green - Same Employer
+        "#E67E22",         # Orange - Different Employer
+        "#E74C3C",         # Red - Not Working
+        "#95A5A6"          # Grey - No Information
       )
+      names(colors) <- employer_statuses_translated
     } else {
       # Use vecshift_colors function
       base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
                                    n = length(employer_statuses))
-      colors <- setNames(base_colors[1:length(employer_statuses)], employer_statuses)
+      colors <- setNames(base_colors[1:length(employer_statuses)], employer_statuses_translated)
     }
 
     # Create alluvial plot
@@ -1452,7 +1562,23 @@ track_employer_trajectories <- function(data,
   }, by = person_id]
 
   # Aggregate transitions based on whether person_vars exist
-  if (!is.null(person_vars) && length(person_vars) > 0) {
+  # Handle empty transitions_raw case
+  if (nrow(transitions_raw) == 0) {
+    # Create empty transition_counts with correct structure
+    if (!is.null(person_vars) && length(person_vars) > 0) {
+      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      setnames(transition_counts, c(group_cols, "count"))
+    } else {
+      transition_counts <- data.table::data.table(
+        from_quarter = integer(0),
+        to_quarter = integer(0),
+        from_status = character(0),
+        to_status = character(0),
+        count = integer(0)
+      )
+    }
+  } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_employers into transitions
     transitions_with_vars <- merge(transitions_raw,
                                    reference_employers[, c(person_id, person_vars), with = FALSE],
@@ -1467,15 +1593,18 @@ track_employer_trajectories <- function(data,
                                         by = .(from_quarter, to_quarter, from_status, to_status)]
   }
 
-  # Order by from_quarter, to_quarter, and count
-  setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-  setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  # Order by from_quarter, to_quarter, and count (only if not empty)
+  if (nrow(transition_counts) > 0) {
+    setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
+    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  }
 
   # Prepare return object
   result <- list(
     data = all_trajectories,
     summary = trajectory_summary,
     transitions = transition_counts,
+    reference_dates = reference_employers,
     plot = plot_obj,
     parameters = list(
       contract_type_var = contract_type_var,
@@ -1490,6 +1619,7 @@ track_employer_trajectories <- function(data,
       use_bw = use_bw,
       quarter_days = quarter_days,
       chunk_size = chunk_size,
+      language = language,
       n_individuals = nrow(reference_employers)
     )
   )
@@ -1625,6 +1755,8 @@ calculate_sector_trajectories_vectorized <- function(dt, quarters_dt, start_col,
 #'   in the output data (e.g., c("eta", "sesso", "istruzione")). Variables are
 #'   extracted from the first target contract for each person. Default is NULL
 #'   (no additional variables).
+#' @param language Character. Language for status labels: "it" for Italian,
+#'   "en" for English (default: "it")
 #'
 #' @details
 #' Employment is determined by the `arco` variable where:
@@ -1713,7 +1845,8 @@ track_sector_trajectories <- function(data,
                                      plot_title = NULL,
                                      plot_subtitle = NULL,
                                      chunk_size = 10000,
-                                     person_vars = NULL) {
+                                     person_vars = NULL,
+                                     language = "it") {
 
   # Input validation
   if (!is.data.table(data)) {
@@ -1842,6 +1975,9 @@ track_sector_trajectories <- function(data,
     all_trajectories <- rbindlist(trajectory_list)
   }
 
+  # Apply translation to sector status
+  all_trajectories[, sector_status := translate_trajectory_status(sector_status, language)]
+
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
@@ -1877,18 +2013,22 @@ track_sector_trajectories <- function(data,
     # Get colors for sector status
     sector_statuses <- c("Same Sector", "Different Sector", "Not Working", "No Information")
 
+    # Translate status labels for colors
+    sector_statuses_translated <- translate_trajectory_status(sector_statuses, language)
+
     if (palette == "sector" && !use_bw) {
       colors <- c(
-        "Same Sector" = "#3498DB",        # Blue
-        "Different Sector" = "#9B59B6",   # Purple
-        "Not Working" = "#E74C3C",        # Red
-        "No Information" = "#95A5A6"      # Grey
+        "#3498DB",        # Blue - Same Sector
+        "#9B59B6",        # Purple - Different Sector
+        "#E74C3C",        # Red - Not Working
+        "#95A5A6"         # Grey - No Information
       )
+      names(colors) <- sector_statuses_translated
     } else {
       # Use vecshift_colors function
       base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
                                    n = length(sector_statuses))
-      colors <- setNames(base_colors[1:length(sector_statuses)], sector_statuses)
+      colors <- setNames(base_colors[1:length(sector_statuses)], sector_statuses_translated)
     }
 
     # Create alluvial plot
@@ -1943,7 +2083,23 @@ track_sector_trajectories <- function(data,
   }, by = person_id]
 
   # Aggregate transitions based on whether person_vars exist
-  if (!is.null(person_vars) && length(person_vars) > 0) {
+  # Handle empty transitions_raw case
+  if (nrow(transitions_raw) == 0) {
+    # Create empty transition_counts with correct structure
+    if (!is.null(person_vars) && length(person_vars) > 0) {
+      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      setnames(transition_counts, c(group_cols, "count"))
+    } else {
+      transition_counts <- data.table::data.table(
+        from_quarter = integer(0),
+        to_quarter = integer(0),
+        from_status = character(0),
+        to_status = character(0),
+        count = integer(0)
+      )
+    }
+  } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_sectors into transitions
     transitions_with_vars <- merge(transitions_raw,
                                    reference_sectors[, c(person_id, person_vars), with = FALSE],
@@ -1958,15 +2114,18 @@ track_sector_trajectories <- function(data,
                                         by = .(from_quarter, to_quarter, from_status, to_status)]
   }
 
-  # Order by from_quarter, to_quarter, and count
-  setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-  setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  # Order by from_quarter, to_quarter, and count (only if not empty)
+  if (nrow(transition_counts) > 0) {
+    setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
+    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  }
 
   # Prepare return object
   result <- list(
     data = all_trajectories,
     summary = trajectory_summary,
     transitions = transition_counts,
+    reference_dates = reference_sectors,
     plot = plot_obj,
     parameters = list(
       contract_type_var = contract_type_var,
@@ -1982,6 +2141,7 @@ track_sector_trajectories <- function(data,
       quarter_days = quarter_days,
       chunk_size = chunk_size,
       person_vars = person_vars,
+      language = language,
       n_individuals = nrow(reference_sectors)
     )
   )
@@ -2113,6 +2273,8 @@ calculate_professional_group_trajectories_vectorized <- function(dt, quarters_dt
 #'   extracted from the first target contract for each person. Default is NULL
 #'   (no additional variables).
 #' @param chunk_size Integer specifying the chunk size for processing large datasets
+#' @param language Character. Language for status labels: "it" for Italian,
+#'   "en" for English (default: "it")
 #'
 #' @details
 #' The function identifies individuals who completed the specified contract type and tracks
@@ -2196,7 +2358,8 @@ track_professional_group_trajectories <- function(data,
                                                   plot_title = NULL,
                                                   plot_subtitle = NULL,
                                                   person_vars = NULL,
-                                                  chunk_size = 10000) {
+                                                  chunk_size = 10000,
+                                                  language = "it") {
 
   # Input validation
   if (!is.data.table(data)) {
@@ -2336,6 +2499,10 @@ track_professional_group_trajectories <- function(data,
     all_trajectories <- rbindlist(trajectory_list)
   }
 
+  # Apply translation to group status (only "Not Working" and "No Information", preserve group names)
+  all_trajectories[, group_status := translate_trajectory_status(group_status, language)]
+  all_trajectories[, group_status_simple := translate_trajectory_status(group_status_simple, language)]
+
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
@@ -2378,10 +2545,15 @@ track_professional_group_trajectories <- function(data,
 
       # Create color mapping for actual group names
       actual_groups <- unique_groups
+
+      # Translate "Not Working" and "No Information" labels
+      not_working_label <- translate_trajectory_status("Not Working", language)
+      no_info_label <- translate_trajectory_status("No Information", language)
+
       colors <- c(
         setNames(group_colors[1:length(actual_groups)], actual_groups),
-        "Not Working" = "#95A5A6",       # Grey
-        "No Information" = "#34495E"     # Dark Grey
+        setNames("#95A5A6", not_working_label),       # Grey - Not Working
+        setNames("#34495E", no_info_label)            # Dark Grey - No Information
       )
 
       # Filter to only the statuses present in data
@@ -2445,7 +2617,23 @@ track_professional_group_trajectories <- function(data,
   }, by = person_id]
 
   # Aggregate transitions based on whether person_vars exist
-  if (!is.null(person_vars) && length(person_vars) > 0) {
+  # Handle empty transitions_raw case
+  if (nrow(transitions_raw) == 0) {
+    # Create empty transition_counts with correct structure
+    if (!is.null(person_vars) && length(person_vars) > 0) {
+      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      setnames(transition_counts, c(group_cols, "count"))
+    } else {
+      transition_counts <- data.table::data.table(
+        from_quarter = integer(0),
+        to_quarter = integer(0),
+        from_status = character(0),
+        to_status = character(0),
+        count = integer(0)
+      )
+    }
+  } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_groups into transitions
     transitions_with_vars <- merge(transitions_raw,
                                    reference_groups[, c(person_id, person_vars), with = FALSE],
@@ -2460,15 +2648,18 @@ track_professional_group_trajectories <- function(data,
                                         by = .(from_quarter, to_quarter, from_status, to_status)]
   }
 
-  # Order by from_quarter, to_quarter, and count
-  setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-  setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  # Order by from_quarter, to_quarter, and count (only if not empty)
+  if (nrow(transition_counts) > 0) {
+    setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
+    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+  }
 
   # Prepare return object
   result <- list(
     data = all_trajectories,
     summary = trajectory_summary,
     transitions = transition_counts,
+    reference_dates = reference_groups,
     plot = plot_obj,
     parameters = list(
       contract_type_var = contract_type_var,
@@ -2480,6 +2671,7 @@ track_professional_group_trajectories <- function(data,
       end_date_col = end_date_col,
       arco_col = arco_col,
       chunk_size = chunk_size,
+      language = language,
       group_mapping = group_mapping
     )
   )

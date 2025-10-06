@@ -20,7 +20,8 @@ track_contract_trajectories(
   plot_title = NULL,
   plot_subtitle = NULL,
   person_vars = NULL,
-  chunk_size = 10000
+  chunk_size = 10000,
+  language = "it"
 )
 }
 \arguments{
@@ -66,6 +67,9 @@ extracted from the first target contract for each person. Default is NULL
 
 \item{chunk_size}{Integer. Number of persons to process per chunk for memory
 management (default: 10000)}
+
+\item{language}{Character. Language for status labels: "it" for Italian,
+"en" for English (default: "it")}
 }
 \value{
 A list containing:

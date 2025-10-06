@@ -20,7 +20,8 @@ track_sector_trajectories(
   plot_title = NULL,
   plot_subtitle = NULL,
   chunk_size = 10000,
-  person_vars = NULL
+  person_vars = NULL,
+  language = "it"
 )
 }
 \arguments{
@@ -66,6 +67,9 @@ management (default: 10000)}
 in the output data (e.g., c("eta", "sesso", "istruzione")). Variables are
 extracted from the first target contract for each person. Default is NULL
 (no additional variables).}
+
+\item{language}{Character. Language for status labels: "it" for Italian,
+"en" for English (default: "it")}
 }
 \value{
 A list containing:

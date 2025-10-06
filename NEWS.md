@@ -1,3 +1,43 @@
+# longworkR 0.5.3
+
+## New Features
+
+* **Multilingual Support**: Added comprehensive multilingual support to all trajectory analysis functions with Italian as default language:
+  - New `language` parameter in all `track_*_trajectories()` functions (default: "it")
+  - Supports English ("en") and Italian ("it") status labels
+  - New `translate_trajectory_status()` internal function for status translation
+  - Employment statuses now display in Italian (e.g., "Non Occupato", "Parzialmente Occupato")
+  - Professional, employer, and sector statuses translated accordingly
+
+## Bug Fixes
+
+* **Fixed consolidation logic in `consolidate_by_employer()`**: Simplified employer tracking logic to correctly consolidate adjacent employment periods with the same employer within `min_lag` days
+* **Fixed missing `reference_dates` in trajectory functions**: All five trajectory functions now properly return `reference_dates` component in results
+* **Fixed empty transitions handling**: Added proper handling for edge cases where no transitions occur between quarters
+* **Fixed column naming consistency**: `track_contract_trajectories()` now preserves original column names in returned data structures
+
+## Breaking Changes
+
+* **Default language changed to Italian**: All trajectory analysis functions now return Italian labels by default. To use English labels, specify `language = "en"`
+
+## Technical Details
+
+* Updated test expectations to use Italian labels throughout trajectory analysis test suite
+* Added 20+ tests for English language support
+* Fixed consolidation test parameters (`consolidation` → `consolidation_type`)
+* Improved test coverage with 195 passing tests in trajectory analysis
+
+---
+
+# longworkR 0.5.2
+
+## Enhancements
+
+* **Trajectory Analysis Improvements**: Enhanced trajectory analysis functions with better error handling and edge case management
+* **Test Suite Expansion**: Added comprehensive tests for unemployment detection and professional code tracking
+
+---
+
 # longworkR 0.5.1
 
 ## Bug Fixes

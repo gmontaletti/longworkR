@@ -15,13 +15,13 @@ test_that("Correctness validation: consolidation preserves person identity", {
   original_persons <- unique(test_data[arco > 0, cf])
   
   # Test all consolidation modes preserve persons
-  result_none <- analyze_employment_transitions(test_data, consolidation = "none")
-  result_temporal <- analyze_employment_transitions(test_data, consolidation = "temporal")
+  result_none <- analyze_employment_transitions(test_data, consolidation_type = "none")
+  result_temporal <- analyze_employment_transitions(test_data, consolidation_type = "temporal")
   result_employer <- analyze_employment_transitions(
-    test_data, consolidation = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
+    test_data, consolidation_type = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
   )
   result_both <- analyze_employment_transitions(
-    test_data, consolidation = "both", employer_var = "CODICE_FISCALE_AZIENDA"
+    test_data, consolidation_type = "both", employer_var = "CODICE_FISCALE_AZIENDA"
   )
   
   # All modes should preserve the same set of persons
@@ -51,8 +51,8 @@ test_that("Correctness validation: temporal consolidation reduces periods correc
     CODICE_FISCALE_AZIENDA = paste0("COMP", c(1, 1, 2, 2, 3, 4, 1, 1, 2, 3))
   )
   
-  result_none <- analyze_employment_transitions(test_data, consolidation = "none")
-  result_temporal <- analyze_employment_transitions(test_data, consolidation = "temporal")
+  result_none <- analyze_employment_transitions(test_data, consolidation_type = "none")
+  result_temporal <- analyze_employment_transitions(test_data, consolidation_type = "temporal")
   
   # Should reduce from 10 to 6 periods (4 consolidations: 2 pairs per person)
   expect_equal(nrow(result_none$transition_data), 10)
@@ -102,7 +102,7 @@ test_that("Correctness validation: employer consolidation works within same empl
   
   result_employer <- analyze_employment_transitions(
     test_data, 
-    consolidation = "employer", 
+    consolidation_type = "employer", 
     employer_var = "CODICE_FISCALE_AZIENDA",
     min_lag = 60  # Allow consolidation within 60 days
   )
@@ -156,12 +156,12 @@ test_that("Correctness validation: 'both' consolidation applies both methods seq
     # First 4 same employer, next 3 same employer, last different
   )
   
-  result_temporal <- analyze_employment_transitions(test_data, consolidation = "temporal")
+  result_temporal <- analyze_employment_transitions(test_data, consolidation_type = "temporal")
   result_employer <- analyze_employment_transitions(
-    test_data, consolidation = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
+    test_data, consolidation_type = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
   )
   result_both <- analyze_employment_transitions(
-    test_data, consolidation = "both", employer_var = "CODICE_FISCALE_AZIENDA"
+    test_data, consolidation_type = "both", employer_var = "CODICE_FISCALE_AZIENDA"
   )
   
   # 'both' should achieve maximum consolidation
@@ -228,10 +228,10 @@ test_that("Correctness validation: arco filtering works consistently", {
   expect_equal(expected_periods, 6)  # Should be 6 employment periods
   
   # Test all consolidation modes filter consistently
-  result_none <- analyze_employment_transitions(test_data, consolidation = "none")
-  result_temporal <- analyze_employment_transitions(test_data, consolidation = "temporal")
+  result_none <- analyze_employment_transitions(test_data, consolidation_type = "none")
+  result_temporal <- analyze_employment_transitions(test_data, consolidation_type = "temporal")
   result_employer <- analyze_employment_transitions(
-    test_data, consolidation = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
+    test_data, consolidation_type = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
   )
   
   # All modes should start with same base data (arco > 0)
@@ -260,7 +260,7 @@ test_that("Correctness validation: date and duration calculations are preserved"
   )
   
   # Test temporal consolidation preserves total duration
-  result_temporal <- analyze_employment_transitions(test_data, consolidation = "temporal")
+  result_temporal <- analyze_employment_transitions(test_data, consolidation_type = "temporal")
   
   # Should have 2 consolidated periods
   expect_equal(nrow(result_temporal$transition_data), 2)
@@ -295,7 +295,7 @@ test_that("Correctness validation: consolidation metrics are mathematically corr
   
   original_data <- test_data[arco > 0]
   
-  result_temporal <- analyze_employment_transitions(test_data, consolidation = "temporal")
+  result_temporal <- analyze_employment_transitions(test_data, consolidation_type = "temporal")
   
   metrics <- extract_consolidation_metrics(
     original_data = original_data,
@@ -333,7 +333,7 @@ test_that("Correctness validation: network data structure is valid", {
     seed = 789
   )
   
-  result <- analyze_employment_transitions(test_data, consolidation = "temporal")
+  result <- analyze_employment_transitions(test_data, consolidation_type = "temporal")
   
   # Network data should exist and have proper structure
   expect_type(result$network_data, "list")

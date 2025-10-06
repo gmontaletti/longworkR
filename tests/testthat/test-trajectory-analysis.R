@@ -168,8 +168,8 @@ test_that("track_contract_trajectories calculates employment percentages correct
   # Should be approximately 32.97% employed (30/91 * 100)
   expect_equal(round(q1_data$employment_percentage, 1), 33.0)
 
-  # Should be classified as "Partially Working" (1-40%)
-  expect_equal(q1_data$employment_status, "Partially Working")
+  # Should be classified as "Parzialmente Occupato" (1-40%)
+  expect_equal(q1_data$employment_status, "Parzialmente Occupato")
 })
 
 test_that("track_contract_trajectories classifies employment status correctly", {
@@ -213,12 +213,12 @@ test_that("track_contract_trajectories classifies employment status correctly", 
   q1_statuses <- result$data[quarter == "Q1"][order(cf)]$employment_status
 
   # Verify employment status classifications
-  expect_equal(q1_statuses[1], "Partially Working")  # 1 day = 1.10%
-  expect_equal(q1_statuses[2], "Partially Working")  # 20 days = ~22%
-  expect_equal(q1_statuses[3], "Mostly Working")     # 74 days = ~81%
-  expect_equal(q1_statuses[4], "Fully Working")      # 91 days = 100%
-  expect_equal(q1_statuses[5], "No Information")     # No overlap
-  expect_equal(q1_statuses[6], "No Information")     # No follow-up contract
+  expect_equal(q1_statuses[1], "Parzialmente Occupato")  # 1 day = 1.10%
+  expect_equal(q1_statuses[2], "Parzialmente Occupato")  # 20 days = ~22%
+  expect_equal(q1_statuses[3], "Prevalentemente Occupato")     # 74 days = ~81%
+  expect_equal(q1_statuses[4], "Completamente Occupato")      # 91 days = 100%
+  expect_equal(q1_statuses[5], "Nessuna Informazione")     # No overlap
+  expect_equal(q1_statuses[6], "Nessuna Informazione")     # No follow-up contract
 })
 
 test_that("track_contract_trajectories handles true 'Not Working' case", {
@@ -239,8 +239,8 @@ test_that("track_contract_trajectories handles true 'Not Working' case", {
   # For now, we'll document that <1% employment is difficult to achieve
   # with daily precision and 91-day quarters
 
-  # Skip this test as "Not Working" requires sub-day precision
-  skip("Not Working status (<1%) is difficult to achieve with daily precision in 91-day quarters")
+  # Skip this test as "Non Occupato" requires sub-day precision
+  skip("Non Occupato status (<1%) is difficult to achieve with daily precision in 91-day quarters")
 })
 
 test_that("track_contract_trajectories handles overlapping contracts", {
@@ -271,8 +271,8 @@ test_that("track_contract_trajectories handles overlapping contracts", {
   # Should be 65.9% employed (60/91)
   expect_equal(round(q1_data$employment_percentage, 1), 65.9)
 
-  # Should be classified as "Mostly Working"
-  expect_equal(q1_data$employment_status, "Mostly Working")
+  # Should be classified as "Prevalentemente Occupato"
+  expect_equal(q1_data$employment_status, "Prevalentemente Occupato")
 })
 
 test_that("track_contract_trajectories handles edge cases", {
@@ -296,7 +296,7 @@ test_that("track_contract_trajectories handles edge cases", {
 
   expect_equal(nrow(result$data), 1)
   expect_equal(nrow(result$reference_dates), 1)
-  expect_equal(result$data$employment_status, "No Information")
+  expect_equal(result$data$employment_status, "Nessuna Informazione")
 
   # Test with character dates (should be converted)
   char_date_data <- data.table(
@@ -455,7 +455,7 @@ test_that("track_contract_trajectories return structure is complete", {
 
   # Validate complete return structure
   expect_type(result, "list")
-  expect_length(result, 5)
+  expect_length(result, 6)
 
   # Check data component
   expect_s3_class(result$data, "data.table")
@@ -520,11 +520,11 @@ test_that("track_contract_trajectories handles boundary employment percentages",
   statuses <- result$data[quarter == "Q1"][order(cf)]$employment_status
 
   # Test boundary conditions
-  expect_equal(statuses[1], "Partially Working")  # 1.10% (>= 1%, <= 40%)
-  expect_equal(statuses[2], "Partially Working")  # 39.56% (>= 1%, <= 40%)
-  expect_equal(statuses[3], "Mostly Working")     # 98.90% (> 40%, <= 99%)
-  expect_equal(statuses[4], "Fully Working")      # 100% (> 99%)
-  expect_equal(statuses[5], "No Information")     # No follow-up contract
+  expect_equal(statuses[1], "Parzialmente Occupato")  # 1.10% (>= 1%, <= 40%)
+  expect_equal(statuses[2], "Parzialmente Occupato")  # 39.56% (>= 1%, <= 40%)
+  expect_equal(statuses[3], "Prevalentemente Occupato")     # 98.90% (> 40%, <= 99%)
+  expect_equal(statuses[4], "Completamente Occupato")      # 100% (> 99%)
+  expect_equal(statuses[5], "Nessuna Informazione")     # No follow-up contract
 })
 
 test_that("track_contract_trajectories performance with realistic data sizes", {
@@ -651,8 +651,8 @@ test_that("track_contract_trajectories fcase dependency works correctly", {
 
   # fcase should properly classify the employment status
   employment_statuses <- unique(result$data$employment_status)
-  valid_statuses <- c("No Information", "Not Working", "Partially Working",
-                     "Mostly Working", "Fully Working")
+  valid_statuses <- c("Nessuna Informazione", "Non Occupato", "Parzialmente Occupato",
+                     "Prevalentemente Occupato", "Completamente Occupato")
 
   expect_true(all(employment_statuses %in% valid_statuses))
 
@@ -750,9 +750,9 @@ test_that("track_contract_trajectories handles custom employment thresholds", {
 
   q1_data <- result$data[quarter == "Q1"][order(cf)]
 
-  expect_equal(q1_data$employment_status[1], "Partially Working")  # 10.99%
-  expect_equal(q1_data$employment_status[2], "Mostly Working")     # 31.87%
-  expect_equal(q1_data$employment_status[3], "Fully Working")      # 97.80%
+  expect_equal(q1_data$employment_status[1], "Parzialmente Occupato")  # 10.99%
+  expect_equal(q1_data$employment_status[2], "Prevalentemente Occupato")     # 31.87%
+  expect_equal(q1_data$employment_status[3], "Completamente Occupato")      # 97.80%
 })
 
 test_that("track_contract_trajectories validates employment_thresholds parameter", {
@@ -868,19 +868,19 @@ test_that("track_contract_trajectories handles arco = 0 periods correctly", {
 
   q1_data <- result$data[quarter == "Q1"][order(cf)]
 
-  # PERSON001: Has contract in Q1 but arco=0, so 0 employment days -> "Not Working"
+  # PERSON001: Has contract in Q1 but arco=0, so 0 employment days -> "Non Occupato"
   expect_equal(q1_data$days_employed[1], 0)
   expect_equal(q1_data$employment_percentage[1], 0)
-  expect_equal(q1_data$employment_status[1], "Not Working")
+  expect_equal(q1_data$employment_status[1], "Non Occupato")
 
-  # PERSON002: Has employment contract (arco=1) in Q1 -> "Partially Working"
+  # PERSON002: Has employment contract (arco=1) in Q1 -> "Parzialmente Occupato"
   expect_equal(q1_data$days_employed[2], 10)  # Feb 1-10 = 10 days
   expect_true(q1_data$employment_percentage[2] > 0)
-  expect_equal(q1_data$employment_status[2], "Partially Working")
+  expect_equal(q1_data$employment_status[2], "Parzialmente Occupato")
 
-  # PERSON003: No follow-up contract, so NA -> "No Information"
+  # PERSON003: No follow-up contract, so NA -> "Nessuna Informazione"
   expect_true(is.na(q1_data$days_employed[3]))
-  expect_equal(q1_data$employment_status[3], "No Information")
+  expect_equal(q1_data$employment_status[3], "Nessuna Informazione")
 })
 
 test_that("track_contract_trajectories distinguishes No Information from zero employment", {
@@ -902,9 +902,9 @@ test_that("track_contract_trajectories distinguishes No Information from zero em
     return_plot = FALSE
   )
 
-  # Should be "No Information" because no contracts in Q1
+  # Should be "Nessuna Informazione" because no contracts in Q1
   expect_true(is.na(result1$data$days_employed))
-  expect_equal(result1$data$employment_status, "No Information")
+  expect_equal(result1$data$employment_status, "Nessuna Informazione")
 
   # Test case 2: Person with arco=0 contracts in Q1
   data2 <- data.table(
@@ -922,10 +922,10 @@ test_that("track_contract_trajectories distinguishes No Information from zero em
     return_plot = FALSE
   )
 
-  # Should be "Not Working" because has contracts but arco=0
+  # Should be "Non Occupato" because has contracts but arco=0
   expect_equal(result2$data$days_employed, 0)
   expect_equal(result2$data$employment_percentage, 0)
-  expect_equal(result2$data$employment_status, "Not Working")
+  expect_equal(result2$data$employment_status, "Non Occupato")
 })
 
 # Tests for track_professional_trajectories() function
@@ -1003,7 +1003,7 @@ test_that("track_professional_trajectories handles professional status classific
 
   # Check that different professional statuses are assigned correctly
   statuses <- unique(result$data$professional_status)
-  possible_statuses <- c("Same Code", "Different Code", "Not Working", "No Information")
+  possible_statuses <- c("Stesso Codice", "Codice Diverso", "Non Occupato", "Nessuna Informazione")
   expect_true(all(statuses %in% possible_statuses))
 
   # Reference code should be "C1" (from the B.01.00 contract)
@@ -1012,17 +1012,17 @@ test_that("track_professional_trajectories handles professional status classific
   # Check specific quarters
   person_data <- result$data[cf == "PERSON001"]
 
-  # Q1 (Feb 1 - May 2): Should have "Same Code" (C1 = C1)
-  expect_equal(person_data[quarter == "Q1"]$professional_status, "Same Code")
+  # Q1 (Feb 1 - May 2): Should have "Stesso Codice" (C1 = C1)
+  expect_equal(person_data[quarter == "Q1"]$professional_status, "Stesso Codice")
 
-  # Q2 (May 3 - Aug 1): Should have "Not Working" for arco=0 periods
-  expect_equal(person_data[quarter == "Q2"]$professional_status, "Not Working")
+  # Q2 (May 3 - Aug 1): Should have "Non Occupato" for arco=0 periods
+  expect_equal(person_data[quarter == "Q2"]$professional_status, "Non Occupato")
 
-  # Q3 (Aug 2 - Oct 31): Should have "Different Code" for different qualifica (C3 != C1)
-  expect_equal(person_data[quarter == "Q3"]$professional_status, "Different Code")
+  # Q3 (Aug 2 - Oct 31): Should have "Codice Diverso" for different qualifica (C3 != C1)
+  expect_equal(person_data[quarter == "Q3"]$professional_status, "Codice Diverso")
 
-  # Q4: Should have "No Information" (no contracts)
-  expect_equal(person_data[quarter == "Q4"]$professional_status, "No Information")
+  # Q4: Should have "Nessuna Informazione" (no contracts)
+  expect_equal(person_data[quarter == "Q4"]$professional_status, "Nessuna Informazione")
 })
 
 test_that("track_professional_trajectories handles arco prioritization correctly", {
@@ -1049,8 +1049,8 @@ test_that("track_professional_trajectories handles arco prioritization correctly
   q1_data <- result$data[quarter == "Q1"]
 
   # Should use code from employment contract (C3) not unemployment contract (C2)
-  # Since C3 != C1 (reference), should be "Different Code"
-  expect_equal(q1_data$professional_status, "Different Code")
+  # Since C3 != C1 (reference), should be "Codice Diverso"
+  expect_equal(q1_data$professional_status, "Codice Diverso")
   expect_equal(q1_data$quarter_code, "C3")
 })
 
@@ -1077,7 +1077,7 @@ test_that("track_professional_trajectories handles end date prioritization", {
   # In Q1, should use code from contract with latest end date (C3)
   q1_data <- result$data[quarter == "Q1"]
   expect_equal(q1_data$quarter_code, "C3")
-  expect_equal(q1_data$professional_status, "Different Code")  # C3 != C1
+  expect_equal(q1_data$professional_status, "Codice Diverso")  # C3 != C1
 })
 
 test_that("track_professional_trajectories handles missing data correctly", {
@@ -1100,9 +1100,9 @@ test_that("track_professional_trajectories handles missing data correctly", {
     return_plot = FALSE
   )
 
-  # All Q1, Q2 and Q3 should be "No Information" (no contracts in tracking period)
+  # All Q1, Q2 and Q3 should be "Nessuna Informazione" (no contracts in tracking period)
   # Reference ends 2023-01-31, tracking starts 2023-02-01, so no overlapping contracts
-  expect_equal(sum(result$data$professional_status == "No Information"), 3)
+  expect_equal(sum(result$data$professional_status == "Nessuna Informazione"), 3)
 })
 
 test_that("track_professional_trajectories handles input validation", {
@@ -1295,19 +1295,19 @@ test_that("track_professional_trajectories detects pure unemployment quarters co
   # Get quarterly data
   person_data <- result$data[cf == "PERSON001"]
 
-  # Q1 (Feb 1 - May 2): Has unemployment period (arco=0) from Feb 15 - Apr 15 → "Not Working"
+  # Q1 (Feb 1 - May 2): Has unemployment period (arco=0) from Feb 15 - Apr 15 → "Non Occupato"
   q1_status <- person_data[quarter == "Q1"]$professional_status
-  expect_equal(q1_status, "Not Working")
+  expect_equal(q1_status, "Non Occupato")
 
-  # Q2 (May 3 - Aug 1): Has unemployment period (arco=0) from May 10 - Jul 10 → "Not Working"
+  # Q2 (May 3 - Aug 1): Has unemployment period (arco=0) from May 10 - Jul 10 → "Non Occupato"
   q2_status <- person_data[quarter == "Q2"]$professional_status
-  expect_equal(q2_status, "Not Working")
+  expect_equal(q2_status, "Non Occupato")
 
-  # Q3 and Q4: No contracts → "No Information"
+  # Q3 and Q4: No contracts → "Nessuna Informazione"
   q3_status <- person_data[quarter == "Q3"]$professional_status
   q4_status <- person_data[quarter == "Q4"]$professional_status
-  expect_equal(q3_status, "No Information")
-  expect_equal(q4_status, "No Information")
+  expect_equal(q3_status, "Nessuna Informazione")
+  expect_equal(q4_status, "Nessuna Informazione")
 })
 
 test_that("track_professional_trajectories prioritizes employment over unemployment in mixed quarters", {
@@ -1333,14 +1333,14 @@ test_that("track_professional_trajectories prioritizes employment over unemploym
   )
 
   # Q1 has mixed arco values: should prioritize employment contract (arco=1)
-  # Latest employment contract is P3 (Feb 10-15), so should be "Different Code" (P3 != P1)
+  # Latest employment contract is P3 (Feb 10-15), so should be "Codice Diverso" (P3 != P1)
   q1_data <- result$data[quarter == "Q1"]
-  expect_equal(q1_data$professional_status, "Different Code")
+  expect_equal(q1_data$professional_status, "Codice Diverso")
   expect_equal(q1_data$quarter_code, "P3")  # Should use employment contract, not unemployment
 
-  # Q2: No contracts → "No Information"
+  # Q2: No contracts → "Nessuna Informazione"
   q2_data <- result$data[quarter == "Q2"]
-  expect_equal(q2_data$professional_status, "No Information")
+  expect_equal(q2_data$professional_status, "Nessuna Informazione")
 })
 
 test_that("track_professional_trajectories handles sequential employment-unemployment-employment pattern", {
@@ -1368,23 +1368,23 @@ test_that("track_professional_trajectories handles sequential employment-unemplo
 
   person_data <- result$data[cf == "PERSON001"]
 
-  # Q1 (Feb 1 - May 2): Employment contract with P1 → "Same Code"
-  expect_equal(person_data[quarter == "Q1"]$professional_status, "Same Code")
+  # Q1 (Feb 1 - May 2): Employment contract with P1 → "Stesso Codice"
+  expect_equal(person_data[quarter == "Q1"]$professional_status, "Stesso Codice")
   expect_equal(person_data[quarter == "Q1"]$quarter_code, "P1")
 
-  # Q2 (May 3 - Aug 1): Unemployment period only (arco=0) → "Not Working"
-  expect_equal(person_data[quarter == "Q2"]$professional_status, "Not Working")
+  # Q2 (May 3 - Aug 1): Unemployment period only (arco=0) → "Non Occupato"
+  expect_equal(person_data[quarter == "Q2"]$professional_status, "Non Occupato")
 
-  # Q3 (Aug 2 - Oct 31): Unemployment period only (arco=0) → "Not Working"
-  expect_equal(person_data[quarter == "Q3"]$professional_status, "Not Working")
+  # Q3 (Aug 2 - Oct 31): Unemployment period only (arco=0) → "Non Occupato"
+  expect_equal(person_data[quarter == "Q3"]$professional_status, "Non Occupato")
 
-  # Q4 (Nov 1 - Jan 30): Employment returns with P1 → "Same Code"
-  expect_equal(person_data[quarter == "Q4"]$professional_status, "Same Code")
+  # Q4 (Nov 1 - Jan 30): Employment returns with P1 → "Stesso Codice"
+  expect_equal(person_data[quarter == "Q4"]$professional_status, "Stesso Codice")
   expect_equal(person_data[quarter == "Q4"]$quarter_code, "P1")
 
-  # Q5 & Q6: No contracts → "No Information"
-  expect_equal(person_data[quarter == "Q5"]$professional_status, "No Information")
-  expect_equal(person_data[quarter == "Q6"]$professional_status, "No Information")
+  # Q5 & Q6: No contracts → "Nessuna Informazione"
+  expect_equal(person_data[quarter == "Q5"]$professional_status, "Nessuna Informazione")
+  expect_equal(person_data[quarter == "Q6"]$professional_status, "Nessuna Informazione")
 })
 
 test_that("track_professional_trajectories handles custom qualifica_col with unemployment", {
@@ -1418,16 +1418,16 @@ test_that("track_professional_trajectories handles custom qualifica_col with une
 
   # Check unemployment detection in quarters with only arco=0
   person_data <- tiroc_prof$data[cf == "PERSON001"]
-  unemployment_quarters <- person_data[professional_status == "Not Working"]
+  unemployment_quarters <- person_data[professional_status == "Non Occupato"]
 
-  # Should have at least one "Not Working" quarter (Q1 has arco=0 only)
+  # Should have at least one "Non Occupato" quarter (Q1 has arco=0 only)
   expect_gt(nrow(unemployment_quarters), 0)
 
   # Verify specific quarters
-  # Q1 (Feb 1 - May 2): Has unemployment period (arco=0) → "Not Working"
-  expect_equal(person_data[quarter == "Q1"]$professional_status, "Not Working")
-  # Q2 (May 3 - Aug 1): Has unemployment period (arco=0) → "Not Working"
-  expect_equal(person_data[quarter == "Q2"]$professional_status, "Not Working")
+  # Q1 (Feb 1 - May 2): Has unemployment period (arco=0) → "Non Occupato"
+  expect_equal(person_data[quarter == "Q1"]$professional_status, "Non Occupato")
+  # Q2 (May 3 - Aug 1): Has unemployment period (arco=0) → "Non Occupato"
+  expect_equal(person_data[quarter == "Q2"]$professional_status, "Non Occupato")
 })
 
 test_that("track_professional_trajectories distinguishes Not Working from No Information correctly", {
@@ -1452,19 +1452,19 @@ test_that("track_professional_trajectories distinguishes Not Working from No Inf
     return_plot = FALSE
   )
 
-  # PERSON001: Q1 has unemployment contract (arco=0) → "Not Working"
+  # PERSON001: Q1 has unemployment contract (arco=0) → "Non Occupato"
   person1_q1 <- result$data[cf == "PERSON001" & quarter == "Q1"]
-  expect_equal(person1_q1$professional_status, "Not Working")
+  expect_equal(person1_q1$professional_status, "Non Occupato")
   expect_false(is.na(person1_q1$quarter_code))  # Should have code from unemployment contract
 
-  # PERSON001: Q2, Q3, Q4 have no contracts → "No Information"
+  # PERSON001: Q2, Q3, Q4 have no contracts → "Nessuna Informazione"
   person1_later <- result$data[cf == "PERSON001" & quarter %in% c("Q2", "Q3", "Q4")]
-  expect_true(all(person1_later$professional_status == "No Information"))
+  expect_true(all(person1_later$professional_status == "Nessuna Informazione"))
   expect_true(all(is.na(person1_later$quarter_code)))  # Should be NA for no contracts
 
-  # PERSON002: All quarters have no contracts → "No Information"
+  # PERSON002: All quarters have no contracts → "Nessuna Informazione"
   person2_all <- result$data[cf == "PERSON002"]
-  expect_true(all(person2_all$professional_status == "No Information"))
+  expect_true(all(person2_all$professional_status == "Nessuna Informazione"))
   expect_true(all(is.na(person2_all$quarter_code)))  # Should be NA for no contracts
 })
 
@@ -1489,9 +1489,9 @@ test_that("track_professional_trajectories handles edge case: quarter with arco=
     return_plot = FALSE
   )
 
-  # Even with NA professional code, should still be "Not Working" because arco=0
+  # Even with NA professional code, should still be "Non Occupato" because arco=0
   q1_data <- result$data[quarter == "Q1"]
-  expect_equal(q1_data$professional_status, "Not Working")
+  expect_equal(q1_data$professional_status, "Non Occupato")
   expect_true(is.na(q1_data$quarter_code))  # Code should be NA
 })
 
@@ -1521,19 +1521,19 @@ test_that("track_professional_trajectories unemployment detection matches vector
   status_summary <- result$data[, .N, by = professional_status]
 
   # Should have all four possible statuses represented
-  expected_statuses <- c("Same Code", "Different Code", "Not Working", "No Information")
+  expected_statuses <- c("Stesso Codice", "Codice Diverso", "Non Occupato", "Nessuna Informazione")
 
   # At least some of these should be present
-  expect_true(any(c("Not Working", "Same Code") %in% status_summary$professional_status))
+  expect_true(any(c("Non Occupato", "Stesso Codice") %in% status_summary$professional_status))
 
-  # PERSON001: Q1 unemployment → "Not Working"
-  expect_equal(result$data[cf == "PERSON001" & quarter == "Q1"]$professional_status, "Not Working")
+  # PERSON001: Q1 unemployment → "Non Occupato"
+  expect_equal(result$data[cf == "PERSON001" & quarter == "Q1"]$professional_status, "Non Occupato")
 
-  # PERSON002: Q1 employment with same code → "Same Code"
-  expect_equal(result$data[cf == "PERSON002" & quarter == "Q1"]$professional_status, "Same Code")
+  # PERSON002: Q1 employment with same code → "Stesso Codice"
+  expect_equal(result$data[cf == "PERSON002" & quarter == "Q1"]$professional_status, "Stesso Codice")
 
-  # PERSON003: Q1 unemployment → "Not Working"
-  expect_equal(result$data[cf == "PERSON003" & quarter == "Q1"]$professional_status, "Not Working")
+  # PERSON003: Q1 unemployment → "Non Occupato"
+  expect_equal(result$data[cf == "PERSON003" & quarter == "Q1"]$professional_status, "Non Occupato")
 })
 
 test_that("track_professional_trajectories performance with unemployment detection at scale", {
@@ -1575,7 +1575,81 @@ test_that("track_professional_trajectories performance with unemployment detecti
   expect_equal(nrow(result$reference_dates), n_persons)
   expect_equal(nrow(result$data), n_persons * 4)
 
-  # Should have some "Not Working" statuses due to unemployment periods
+  # Should have some "Non Occupato" statuses due to unemployment periods
   status_counts <- result$data[, .N, by = professional_status]
-  expect_true("Not Working" %in% status_counts$professional_status)
+  expect_true("Non Occupato" %in% status_counts$professional_status)
+})
+
+# ===== ENGLISH LANGUAGE SUPPORT TESTS =====
+# Testing backward compatibility with English labels
+
+test_that("track_contract_trajectories works with English language", {
+  library(data.table)
+
+  # Create test data
+  sample_data <- data.table(
+    cf = c("PERSON001", "PERSON001", "PERSON002", "PERSON002"),
+    COD_TIPOLOGIA_CONTRATTUALE = c("B.01.00", "A.01.00", "B.01.00", "A.01.00"),
+    inizio = as.Date(c("2023-01-01", "2023-02-15", "2023-01-01", "2023-02-01")),
+    fine = as.Date(c("2023-01-31", "2023-03-15", "2023-01-31", "2023-05-02")),
+    arco = c(1, 1, 1, 1)
+  )
+
+  # Test with explicit English language parameter
+  result <- track_contract_trajectories(
+    data = sample_data,
+    contract_type_value = "B.01.00",
+    n_quarters = 2,
+    language = "en",
+    return_plot = FALSE
+  )
+
+  # Verify English labels are used
+  employment_statuses <- unique(result$data$employment_status)
+  valid_english_statuses <- c("No Information", "Not Working", "Partially Working",
+                               "Mostly Working", "Fully Working")
+  expect_true(all(employment_statuses %in% valid_english_statuses))
+
+  # Check specific statuses
+  q1_data <- result$data[quarter == "Q1"]
+  expect_true(all(q1_data$employment_status %in% valid_english_statuses))
+
+  # Should have English labels, not Italian
+  expect_false(any(grepl("Occupato|Informazione", result$data$employment_status)))
+})
+
+test_that("track_professional_trajectories works with English language", {
+  library(data.table)
+
+  # Create test data
+  sample_data <- data.table(
+    cf = c("PERSON001", "PERSON001", "PERSON001"),
+    COD_TIPOLOGIA_CONTRATTUALE = c("B.01.00", "A.01.00", "A.01.00"),
+    inizio = as.Date(c("2023-01-01", "2023-02-15", "2023-05-10")),
+    fine = as.Date(c("2023-01-31", "2023-04-15", "2023-07-10")),
+    arco = c(1, 1, 0),
+    qualifica = c("C1", "C1", "C2")
+  )
+
+  # Test with explicit English language parameter
+  result <- track_professional_trajectories(
+    data = sample_data,
+    contract_type_value = "B.01.00",
+    n_quarters = 3,
+    language = "en",
+    return_plot = FALSE
+  )
+
+  # Verify English labels are used
+  professional_statuses <- unique(result$data$professional_status)
+  valid_english_statuses <- c("Same Code", "Different Code", "Not Working", "No Information")
+  expect_true(all(professional_statuses %in% valid_english_statuses))
+
+  # Check specific quarters
+  person_data <- result$data[cf == "PERSON001"]
+  expect_equal(person_data[quarter == "Q1"]$professional_status, "Same Code")
+  expect_equal(person_data[quarter == "Q2"]$professional_status, "Not Working")
+
+  # Should have English labels, not Italian
+  expect_false(any(grepl("Codice|Occupato|Informazione", result$data$professional_status)))
 })
