@@ -35,7 +35,8 @@ Imports:
     grDevices,
     utils,
     collapse,
-    ggalluvial
+    ggalluvial,
+    Matrix
 Suggests:
     g6r,
     networkD3,

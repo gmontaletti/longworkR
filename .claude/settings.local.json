@@ -15,7 +15,14 @@
       "mcp__r-btw__btw_tool_files_write_text_file",
       "Bash(git add:*)",
       "Bash(git restore:*)",
-      "Bash(md5sum:*)"
+      "Bash(md5sum:*)",
+      "Bash(git show-branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git fetch:*)",
+      "Bash(git log:*)",
+      "Bash(git stash push:*)",
+      "Bash(git stash show:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
