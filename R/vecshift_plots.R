@@ -2313,18 +2313,22 @@ plot_integrated_employment_metrics <- function(employment_data,
   
   # Get time range from employment data
   if (nrow(plot_employment_data) > 0) {
-    date_range <- range(c(plot_employment_data[[time_col]], 
+    date_range <- range(c(plot_employment_data[[time_col]],
                          plot_employment_data[[end_col]]), na.rm = TRUE)
-    timeline_start <- date_range[1]
-    timeline_end <- date_range[2]
+    timeline_start_date <- date_range[1]
+    timeline_end_date <- date_range[2]
   } else {
     # Fallback if no employment data
-    timeline_start <- as.Date("2020-01-01")
-    timeline_end <- as.Date("2024-12-31")
+    timeline_start_date <- as.Date("2020-01-01")
+    timeline_end_date <- as.Date("2024-12-31")
   }
-  
+
+  # Convert dates to numeric for plotting (days since epoch)
+  timeline_start <- as.numeric(timeline_start_date)
+  timeline_end <- as.numeric(timeline_end_date)
+
   # Calculate timeline duration and metrics section positioning
-  timeline_duration <- as.numeric(timeline_end - timeline_start)
+  timeline_duration <- timeline_end - timeline_start
   gap_duration <- timeline_duration * 0.05  # 5% gap between sections
   metrics_start <- timeline_end + gap_duration
   metrics_section_width <- timeline_duration * (metrics_width / timeline_width)
@@ -2400,8 +2404,8 @@ plot_integrated_employment_metrics <- function(employment_data,
     p <- p + ggplot2::geom_rect(
       data = timeline_plot_data,
       ggplot2::aes(
-        xmin = get(time_col),
-        xmax = get(end_col),
+        xmin = as.numeric(get(time_col)),
+        xmax = as.numeric(get(end_col)),
         ymin = y_pos - 0.4,
         ymax = y_pos + 0.4,
         fill = get(status_col)
@@ -2440,7 +2444,10 @@ plot_integrated_employment_metrics <- function(employment_data,
   
   # Configure x-axis with custom breaks and labels
   timeline_breaks <- seq(timeline_start, timeline_end, length.out = 4)
-  
+
+  # Convert numeric breaks back to dates for formatting labels
+  timeline_dates <- as.Date(timeline_breaks, origin = "1970-01-01")
+
   # Metric x-positions for labels
   if (nrow(metrics_long) > 0) {
     metric_breaks <- unique(metrics_long$x_pos)
@@ -2452,9 +2459,9 @@ plot_integrated_employment_metrics <- function(employment_data,
     metric_breaks <- numeric(0)
     metric_labels <- character(0)
   }
-  
+
   all_x_breaks <- c(timeline_breaks, metric_breaks)
-  all_x_labels <- c(format(timeline_breaks, "%b %Y"), metric_labels)
+  all_x_labels <- c(format(timeline_dates, "%b %Y"), metric_labels)
   
   p <- p + ggplot2::scale_x_continuous(
     breaks = all_x_breaks,
