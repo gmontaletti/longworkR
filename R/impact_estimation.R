@@ -1267,22 +1267,22 @@ test_effect_heterogeneity <- function(effects) {
 print.did_results <- function(x, ...) {
   cat("Difference-in-Differences Results\n")
   cat("=================================\n\n")
-  
-  if (nrow(x$summary_table) > 0) {
+
+  if (!is.null(x$summary_table) && nrow(x$summary_table) > 0) {
     cat("Treatment Effects:\n")
     print(x$summary_table[, .(outcome, estimate, std_error, p_value, significant)])
-    
+
     cat("\nSignificant effects:", sum(x$summary_table$significant, na.rm = TRUE), "out of", nrow(x$summary_table), "\n")
   } else if (!is.null(x$estimates_table) && nrow(x$estimates_table) > 0) {
     # Fallback to estimates_table if summary_table is empty
     cat("Treatment Effects:\n")
     print(x$estimates_table[, .(outcome, treatment_effect, std_error, p_value, significant)])
-    
+
     cat("\nSignificant effects:", sum(x$estimates_table$significant, na.rm = TRUE), "out of", nrow(x$estimates_table), "\n")
   } else {
     cat("No treatment effects estimated.\n")
     cat("This may be due to collinearity issues or insufficient data variation.\n")
   }
-  
+
   invisible(x)
 }

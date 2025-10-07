@@ -22,7 +22,12 @@
       "Bash(git log:*)",
       "Bash(git stash push:*)",
       "Bash(git stash show:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git commit:*)",
+      "Read(///**)",
+      "Read(//tmp/**)",
+      "Bash(tee:*)",
+      "Read(//private/var/folders/**)"
     ],
     "deny": [],
     "ask": []

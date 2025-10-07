@@ -38,13 +38,13 @@ test_that("Advanced performance: Real-world dataset performance", {
   
   # Benchmark all consolidation modes
   performance_results <- microbenchmark::microbenchmark(
-    none = analyze_employment_transitions(real_data, consolidation_type = "none"),
-    temporal = analyze_employment_transitions(real_data, consolidation_type = "temporal"),
+    none = analyze_employment_transitions(real_data, consolidation_mode = "none"),
+    temporal = analyze_employment_transitions(real_data, consolidation_mode = "temporal"),
     employer = analyze_employment_transitions(
-      real_data, consolidation_type = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
+      real_data, consolidation_mode = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
     ),
     both = analyze_employment_transitions(
-      real_data, consolidation_type = "both", employer_var = "CODICE_FISCALE_AZIENDA"
+      real_data, consolidation_mode = "both", employer_var = "CODICE_FISCALE_AZIENDA"
     ),
     times = 3,
     unit = "ms"
@@ -84,10 +84,10 @@ test_that("Advanced performance: Memory efficiency with large datasets", {
   # Measure memory usage
   memory_benchmark <- bench::mark(
     temporal_consolidation = analyze_employment_transitions(
-      memory_test_data, consolidation_type = "temporal"
+      memory_test_data, consolidation_mode = "temporal"
     ),
     employer_consolidation = analyze_employment_transitions(
-      memory_test_data, consolidation_type = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
+      memory_test_data, consolidation_mode = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
     ),
     check = FALSE,  # Results won't be identical
     min_iterations = 2,
@@ -143,7 +143,7 @@ test_that("Advanced performance: Scalability analysis across dataset sizes", {
     
     # Benchmark temporal consolidation (fastest mode)
     benchmark <- microbenchmark::microbenchmark(
-      temporal = analyze_employment_transitions(test_data, consolidation_type = "temporal"),
+      temporal = analyze_employment_transitions(test_data, consolidation_mode = "temporal"),
       times = 3,
       unit = "ms"
     )
@@ -192,13 +192,13 @@ test_that("Advanced performance: Stress testing with pathological datasets", {
   # Should still complete in reasonable time even with complex data
   stress_benchmark <- microbenchmark::microbenchmark(
     temporal_stress = analyze_employment_transitions(
-      pathological_data, consolidation_type = "temporal"
+      pathological_data, consolidation_mode = "temporal"
     ),
     employer_stress = analyze_employment_transitions(
-      pathological_data, consolidation_type = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
+      pathological_data, consolidation_mode = "employer", employer_var = "CODICE_FISCALE_AZIENDA"
     ),
     both_stress = analyze_employment_transitions(
-      pathological_data, consolidation_type = "both", employer_var = "CODICE_FISCALE_AZIENDA"
+      pathological_data, consolidation_mode = "both", employer_var = "CODICE_FISCALE_AZIENDA"
     ),
     times = 3,
     unit = "ms"
@@ -242,17 +242,17 @@ test_that("Advanced performance: Parallel processing efficiency", {
     # Single thread
     data.table::setDTthreads(1)
     start_time <- Sys.time()
-    result_single <- analyze_employment_transitions(parallel_test_data, consolidation_type = "temporal")
+    result_single <- analyze_employment_transitions(parallel_test_data, consolidation_mode = "temporal")
     single_thread_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 
     # Multiple threads (if available)
     data.table::setDTthreads(0)  # Use all available
     start_time <- Sys.time()
-    result_multi <- analyze_employment_transitions(parallel_test_data, consolidation_type = "temporal")
+    result_multi <- analyze_employment_transitions(parallel_test_data, consolidation_mode = "temporal")
     multi_thread_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-    
+
     # Results should be identical regardless of threading
-    expect_equal(nrow(result_single$transition_data), nrow(result_multi$transition_data))
+    expect_equal(nrow(result_single), nrow(result_multi))
     
     # Multi-threaded should be at least as fast (or not significantly slower)
     speedup <- single_thread_time / multi_thread_time
@@ -313,7 +313,7 @@ test_that("Advanced performance: Edge case performance", {
     case_size <- nrow(case_data[arco > 0])
     
     benchmark <- microbenchmark::microbenchmark(
-      temporal = analyze_employment_transitions(case_data, consolidation_type = "temporal"),
+      temporal = analyze_employment_transitions(case_data, consolidation_mode = "temporal"),
       times = 3,
       unit = "ms"
     )
