@@ -1,3 +1,21 @@
+# longworkR 0.5.5
+
+## Bug Fixes
+
+* **Fixed memory_fraction parameter propagation in career clustering**: The `memory_fraction` parameter in `cluster_career_trajectories()` is now properly propagated to internal helper functions `.determine_optimal_clusters()` and `.compute_cluster_quality()`. This allows users to control the percentage of available RAM used for clustering operations, which is particularly important for large datasets or memory-constrained environments.
+
+---
+
+# longworkR 0.5.4
+
+## Bug Fixes
+
+* **Memory-aware clustering enhancements**: Improved memory management in clustering functions
+* **IDate/scale_x_continuous compatibility**: Resolved type mismatch issues in integrated employment metric plots
+* **Test suite stability**: Fixed 80 test failures from experimental branch merge
+
+---
+
 # longworkR 0.5.3
 
 ## New Features

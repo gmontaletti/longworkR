@@ -188,7 +188,8 @@ cluster_career_trajectories <- function(career_metrics,
                                        use_sampling = NULL,
                                        sample_size_k = 50000,
                                        sample_size_quality = 50000,
-                                       batch_size = 100000) {
+                                       batch_size = 100000,
+                                       memory_fraction = 0.33) {
 
   # Input validation
   if (!inherits(career_metrics, "data.table")) {
@@ -277,7 +278,8 @@ cluster_career_trajectories <- function(career_metrics,
       seed = seed,
       verbose = verbose,
       use_sampling = use_sampling,
-      sample_size = sample_size_k
+      sample_size = sample_size_k,
+      memory_fraction = memory_fraction
     )
 
     if (verbose) cat(sprintf("Selected %d clusters based on silhouette analysis\n\n", n_clusters))
@@ -349,7 +351,8 @@ cluster_career_trajectories <- function(career_metrics,
     cluster_assignments$cluster_id,
     method = method,
     use_sampling = use_sampling,
-    sample_size = sample_size_quality
+    sample_size = sample_size_quality,
+    memory_fraction = memory_fraction
   )
 
   # Compute feature importance
@@ -614,20 +617,22 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param verbose Logical
 #' @param use_sampling Logical. Use sampling for large datasets?
 #' @param sample_size Integer. Sample size for silhouette analysis
+#' @param memory_fraction Numeric. Fraction of available RAM to use (default 0.33)
 #' @return Optimal number of clusters
 #' @keywords internal
 .determine_optimal_clusters <- function(features_matrix, method, min_k = 3, max_k = 6,
                                        min_cluster_size = 10, nstart = 25,
                                        seed = 123, verbose = FALSE,
-                                       use_sampling = FALSE, sample_size = 50000) {
+                                       use_sampling = FALSE, sample_size = 50000,
+                                       memory_fraction = 0.33) {
 
   set.seed(seed)
 
   # Use sampling for large datasets
   # CRITICAL: Silhouette requires dist() which needs O(n²) memory
-  # Calculate memory-aware limit based on available RAM (33% of RAM, max 100K)
+  # Calculate memory-aware limit based on available RAM
   max_silhouette_sample <- .calculate_memory_aware_limit(
-    memory_fraction = 0.33,
+    memory_fraction = memory_fraction,
     p = ncol(features_matrix),
     verbose = verbose
   )
@@ -1048,16 +1053,18 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param method Clustering method
 #' @param use_sampling Logical. Use sampling for large datasets?
 #' @param sample_size Integer. Sample size for quality metrics
+#' @param memory_fraction Numeric. Fraction of available RAM to use (default 0.33)
 #' @return List with quality metrics
 #' @keywords internal
 .compute_cluster_quality <- function(features_matrix, clusters, method,
-                                     use_sampling = FALSE, sample_size = 50000) {
+                                     use_sampling = FALSE, sample_size = 50000,
+                                     memory_fraction = 0.33) {
 
   # Use sampling for large datasets
   # CRITICAL: Silhouette requires dist() which needs O(n²) memory
-  # Calculate memory-aware limit based on available RAM (33% of RAM, max 100K)
+  # Calculate memory-aware limit based on available RAM
   max_quality_sample <- .calculate_memory_aware_limit(
-    memory_fraction = 0.33,
+    memory_fraction = memory_fraction,
     p = ncol(features_matrix),
     verbose = FALSE  # Don't print during quality computation
   )
