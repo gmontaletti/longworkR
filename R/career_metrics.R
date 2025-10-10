@@ -1260,7 +1260,10 @@ calculate_comprehensive_career_metrics <- function(data,
   
   # OPTIMIZATION 2: Single-pass unified calculation for maximum efficiency
   # When calculating all metrics, do it in one pass to minimize data scanning
-  if (length(metrics) >= 3 && all(c("quality", "stability", "complexity") %in% metrics)) {
+  # Exclude optimized path when transitions are requested (they require separate calculation)
+  if (length(metrics) >= 3 &&
+      all(c("quality", "stability", "complexity") %in% metrics) &&
+      !("transitions" %in% metrics)) {
     # Ultra-optimized unified calculation for most common use case
     unified_result <- calculate_unified_career_metrics_optimized(
       data = data,
