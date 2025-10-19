@@ -4,12 +4,19 @@
 \alias{.calculate_memory_aware_limit}
 \title{Calculate Memory-Aware Sample Size Limit (Internal)}
 \usage{
-.calculate_memory_aware_limit(memory_fraction = 0.33, p = 10, verbose = FALSE)
+.calculate_memory_aware_limit(
+  memory_fraction = 0.33,
+  p = 10,
+  method = c("clustering", "silhouette"),
+  verbose = FALSE
+)
 }
 \arguments{
 \item{memory_fraction}{Numeric. Fraction of available RAM to use (default 0.33 = 33\%)}
 
 \item{p}{Integer. Number of features (for overhead calculation)}
+
+\item{method}{Character. Purpose: "clustering" (default) or "silhouette" (stricter limits)}
 
 \item{verbose}{Logical. Print memory info?}
 }

@@ -22,10 +22,22 @@ NULL
 #' @param career_metrics data.table. Output from calculate_comprehensive_career_metrics()
 #'   containing career quality, stability, and progression metrics
 #' @param n_clusters Integer or NULL. Number of clusters (3-6). If NULL, automatically
-#'   selects optimal number using silhouette analysis. Default: NULL
+#'   selects optimal number using hybrid method (Elbow + Silhouette). Default: NULL
 #' @param method Character. Clustering algorithm: "kmeans" (default), "pam", or "hierarchical"
 #' @param features Character vector. Metric categories to use: "stability", "employment",
 #'   "progression", "quality", "complexity". Default: c("stability", "employment", "progression")
+#' @param k_selection_method Character string specifying the method for automatic k selection
+#'   when n_clusters = NULL. Options:
+#'   \itemize{
+#'     \item \code{"hybrid"} (default): Uses Elbow method for initial estimate,
+#'       then validates with Silhouette on micro-sample. Best balance of accuracy
+#'       and memory efficiency.
+#'     \item \code{"elbow"}: Uses only Within-cluster Sum of Squares (WSS) to
+#'       identify the "elbow" point. Most memory efficient, works on full dataset.
+#'     \item \code{"silhouette"}: Uses only Silhouette coefficient on micro-sample.
+#'       Most statistically rigorous but slower.
+#'   }
+#'   Ignored if n_clusters is specified manually.
 #' @param id_column Character. Name of person identifier column. Default: "cf"
 #' @param min_cluster_size Integer. Minimum workers per cluster (filters small clusters). Default: 10
 #' @param standardize Logical. Standardize features before clustering? Default: TRUE
@@ -40,6 +52,26 @@ NULL
 #'   Note: Automatically capped based on available system memory (typically 1K-100K).
 #' @param batch_size Integer. Batch size for distance calculations. Default: 100,000.
 #'   Reduces memory spikes for large datasets.
+#' @param memory_fraction Numeric (0-1). Fraction of available RAM to use for distance matrix
+#'   calculations. Default: 0.33 (33% of available RAM).
+#'
+#'   **How it works:**
+#'   \itemize{
+#'     \item Function detects available (free) system RAM
+#'     \item Calculates maximum safe sample size: max_n = sqrt(available_RAM * memory_fraction / 8 bytes)
+#'     \item Automatically limits silhouette computation to max_n observations
+#'     \item Prevents memory overflow for large datasets
+#'   }
+#'
+#'   **Recommendations:**
+#'   \itemize{
+#'     \item Normal use: 0.25-0.33 (balanced)
+#'     \item Conservative: 0.10-0.20 (safer for limited RAM)
+#'     \item Aggressive: 0.40-0.50 (for systems with abundant RAM)
+#'   }
+#'
+#'   Lower values reduce memory risk but may limit silhouette validation sample size.
+#'   If you experience memory errors, reduce this value first.
 #'
 #' @return A list with clustering results:
 #'   \item{cluster_assignments}{data.table with worker-level cluster assignments and labels}
@@ -47,6 +79,31 @@ NULL
 #'   \item{cluster_quality}{list with validation metrics (silhouette, Dunn, Calinski-Harabasz)}
 #'   \item{feature_importance}{data.table with feature discrimination statistics}
 #'   \item{cluster_labels}{data.table mapping cluster IDs to bilingual labels}
+#'
+#'   When n_clusters = NULL, the following diagnostic attributes are attached to the result:
+#'   \describe{
+#'     \item{wss_values}{Named numeric vector of Within-cluster Sum of Squares
+#'       for each k tested (if elbow or hybrid method used). Lower values indicate
+#'       tighter clusters. Names are "k3", "k4", "k5", "k6".}
+#'     \item{silhouette_values}{Named numeric vector of average silhouette width
+#'       for each k tested (if silhouette or hybrid method used). Range: -1 to 1.
+#'       Values > 0.5 indicate strong cluster structure. Names are "k3", "k4", "k5", "k6".}
+#'     \item{k_selection_method}{Character string indicating which method was used:
+#'       "hybrid", "elbow", or "silhouette".}
+#'     \item{decision_rule}{Character string describing how the final k was chosen.
+#'       Possible values:
+#'       \itemize{
+#'         \item "agreement": Both elbow and silhouette agreed on the same k
+#'         \item "adjacent_prefer_silhouette": Methods differed by 1, silhouette chosen
+#'         \item "disagreement_prefer_elbow": Methods differed by >1, elbow chosen
+#'         \item "elbow_only": Only elbow method was used
+#'         \item "silhouette_only": Only silhouette method was used
+#'       }}
+#'   }
+#'
+#'   Access these attributes using \code{attr(result, "wss_values")},
+#'   \code{attr(result, "silhouette_values")}, \code{attr(result, "k_selection_method")},
+#'   and \code{attr(result, "decision_rule")}.
 #'
 #' @details
 #' **Feature Selection Strategy:**
@@ -76,12 +133,51 @@ NULL
 #'     - IT: "Traiettorie in Declino"
 #' }
 #'
-#' **Optimal Cluster Selection (when n_clusters = NULL):**
+#' @section Optimal k Selection Methods:
 #'
-#' Tests 3-6 clusters and selects the number with:
-#' 1. Highest average silhouette width
-#' 2. Minimum cluster size requirement met
-#' 3. Statistically significant feature discrimination (ANOVA p < 0.05)
+#' When n_clusters = NULL, the function automatically determines the optimal number
+#' of clusters using one of three methods:
+#'
+#' **Hybrid Method (Recommended)**
+#'
+#' The hybrid approach combines two complementary techniques:
+#' \enumerate{
+#'   \item \strong{Elbow Method}: Computes Within-cluster Sum of Squares (WSS) for
+#'     k in 3:6 on the full dataset. Memory efficient (O(n*p)). Identifies the
+#'     "elbow" point where WSS decrease rate slows down.
+#'   \item \strong{Silhouette Validation}: Computes average silhouette width on a
+#'     micro-sample (max 10,000 observations) to validate the elbow result.
+#'     Memory bounded (O(n^2) but n <= 10K).
+#'   \item \strong{Decision Rule}:
+#'     \itemize{
+#'       \item If both methods agree -> use that k
+#'       \item If differ by 1 -> prefer silhouette (more statistically rigorous)
+#'       \item If differ by >1 -> prefer elbow (computed on larger sample)
+#'     }
+#' }
+#'
+#' **Elbow Method Only**
+#'
+#' Uses only WSS analysis. Fastest and most memory efficient. Suitable for very
+#' large datasets (>100K observations) or when silhouette computation is too slow.
+#'
+#' **Silhouette Method Only**
+#'
+#' Uses only average silhouette width on micro-sample. Most accurate but slower
+#' than hybrid. Suitable when you prioritize statistical rigor over speed.
+#'
+#' **Memory Management**
+#'
+#' The function automatically limits the sample size for silhouette calculations
+#' to prevent memory overflow:
+#' \itemize{
+#'   \item Maximum sample: 10,000 observations (hard cap)
+#'   \item Safety factor: 0.5x the theoretical memory limit
+#'   \item For 24GB RAM: typically limits to ~8,000 observations
+#' }
+#'
+#' This ensures the function can handle datasets with millions of observations
+#' without exceeding available memory.
 #'
 #' **Scalability for Large Datasets:**
 #'
@@ -107,6 +203,97 @@ NULL
 #'   \item K-means: ~8 bytes × n × p (features) + overhead
 #'   \item For 2.7M workers × 11 features: ~240MB peak usage (manageable)
 #'   \item Hierarchical/PAM: ~8 bytes × n² (distance matrix) - fails for large n
+#' }
+#'
+#' @section Memory Management and Troubleshooting:
+#'
+#' **Understanding Memory Requirements**
+#'
+#' The clustering function uses different memory approaches for different operations:
+#' \itemize{
+#'   \item **K-means clustering**: O(n × p) memory - scales linearly with dataset size
+#'   \item **Elbow method**: O(n × p) memory - works efficiently on full datasets
+#'   \item **Silhouette validation**: O(n²) memory - requires distance matrix, most memory-intensive
+#' }
+#'
+#' **Automatic Memory Management**
+#'
+#' The function automatically manages memory through several mechanisms:
+#' \enumerate{
+#'   \item **Available memory detection**: Detects actual free RAM (not just total)
+#'   \item **Micro-sampling for silhouette**: Automatically limits silhouette computation
+#'     to memory-safe sample sizes (typically 3K-10K observations)
+#'   \item **Automatic fallback**: Switches to elbow-only method if memory insufficient
+#'   \item **Graceful degradation**: Quality metrics return NA instead of crashing
+#' }
+#'
+#' **When Memory Errors Occur**
+#'
+#' If you see "vector memory limit reached" or allocation errors, try these solutions
+#' in order:
+#'
+#' 1. **Reduce memory_fraction** (default 0.33):
+#'    ```r
+#'    cluster_career_trajectories(
+#'      career_metrics,
+#'      memory_fraction = 0.15  # More conservative
+#'    )
+#'    ```
+#'
+#' 2. **Use elbow-only method** (fastest, no silhouette):
+#'    ```r
+#'    cluster_career_trajectories(
+#'      career_metrics,
+#'      k_selection_method = "elbow"  # Skip silhouette
+#'    )
+#'    ```
+#'
+#' 3. **Manually specify n_clusters** (skip optimization):
+#'    ```r
+#'    cluster_career_trajectories(
+#'      career_metrics,
+#'      n_clusters = 4  # Direct clustering, no k-selection
+#'    )
+#'    ```
+#'
+#' 4. **Limit sample sizes** (for very large datasets):
+#'    ```r
+#'    cluster_career_trajectories(
+#'      career_metrics,
+#'      sample_size_k = 10000,        # Limit k-selection sample
+#'      sample_size_quality = 5000    # Limit quality metrics sample
+#'    )
+#'    ```
+#'
+#' 5. **Close other applications** to free system RAM
+#'
+#' 6. **Use a machine with more RAM** for very large datasets (>500K observations)
+#'
+#' **Dataset Size Guidelines**
+#'
+#' \describe{
+#'   \item{< 10K observations}{All methods work with default settings}
+#'   \item{10K - 100K observations}{Hybrid method recommended, automatic micro-sampling active}
+#'   \item{100K - 500K observations}{Hybrid or elbow method, conservative memory_fraction (0.15-0.2)}
+#'   \item{> 500K observations}{Elbow-only method or manually specify n_clusters}
+#' }
+#'
+#' **Verbose Mode for Debugging**
+#'
+#' Enable verbose output to see memory decisions:
+#' ```r
+#' result <- cluster_career_trajectories(
+#'   career_metrics,
+#'   verbose = TRUE  # Shows memory limits, sample sizes, fallback decisions
+#' )
+#' ```
+#'
+#' This will display:
+#' \itemize{
+#'   \item Available system RAM
+#'   \item Memory-aware sample limits
+#'   \item Whether micro-sampling is triggered
+#'   \item Automatic fallback decisions
 #' }
 #'
 #' @examples
@@ -156,6 +343,30 @@ NULL
 #'   features = c("stability", "employment", "progression", "quality")
 #' )
 #'
+#' # Automatic k selection with hybrid method (default)
+#' clustered <- cluster_career_trajectories(
+#'   career_metrics,
+#'   features = c("stability", "employment"),
+#'   n_clusters = NULL,  # Auto-detect
+#'   k_selection_method = "hybrid"
+#' )
+#'
+#' # Inspect k selection diagnostics
+#' cat("Selected k:", length(unique(clustered$cluster_assignments$cluster_id)), "\n")
+#' cat("Method:", attr(clustered, "k_selection_method"), "\n")
+#' cat("Decision rule:", attr(clustered, "decision_rule"), "\n")
+#' cat("\nWSS values:\n")
+#' print(attr(clustered, "wss_values"))
+#' cat("\nSilhouette values:\n")
+#' print(attr(clustered, "silhouette_values"))
+#'
+#' # Use elbow-only for very large datasets
+#' clustered_fast <- cluster_career_trajectories(
+#'   career_metrics,
+#'   n_clusters = NULL,
+#'   k_selection_method = "elbow"  # Fastest, most memory efficient
+#' )
+#'
 #' # Large dataset example (> 1M workers)
 #' large_clusters <- cluster_career_trajectories(
 #'   career_metrics = large_career_metrics,  # 2.7M workers
@@ -168,6 +379,54 @@ NULL
 #' )
 #' # Processing time: ~2-3 minutes for 2.7M workers
 #' # Memory usage: ~500MB peak
+#'
+#' # Example: Handling memory constraints for large datasets
+#' \dontrun{
+#' # If you encounter memory errors, try these approaches:
+#'
+#' # Approach 1: Reduce memory fraction
+#' clusters_conservative <- cluster_career_trajectories(
+#'   career_metrics,
+#'   n_clusters = NULL,
+#'   memory_fraction = 0.15,  # More conservative
+#'   verbose = TRUE           # See memory decisions
+#' )
+#'
+#' # Approach 2: Use elbow-only (fastest, most memory efficient)
+#' clusters_elbow <- cluster_career_trajectories(
+#'   career_metrics,
+#'   n_clusters = NULL,
+#'   k_selection_method = "elbow",  # Skip silhouette computation
+#'   verbose = TRUE
+#' )
+#'
+#' # Approach 3: Manually specify k (skip optimization)
+#' clusters_manual <- cluster_career_trajectories(
+#'   career_metrics,
+#'   n_clusters = 4,  # Based on domain knowledge or preliminary analysis
+#'   verbose = FALSE
+#' )
+#'
+#' # Approach 4: Limit sample sizes explicitly
+#' clusters_limited <- cluster_career_trajectories(
+#'   career_metrics,
+#'   n_clusters = NULL,
+#'   k_selection_method = "hybrid",
+#'   sample_size_k = 10000,       # Max 10K for k-selection
+#'   sample_size_quality = 5000,  # Max 5K for quality metrics
+#'   memory_fraction = 0.2,
+#'   verbose = TRUE
+#' )
+#'
+#' # Very large dataset (500K+ observations) - recommended approach
+#' clusters_very_large <- cluster_career_trajectories(
+#'   very_large_career_metrics,
+#'   n_clusters = 4,              # Specify k directly
+#'   method = "kmeans",           # Only kmeans scales to millions
+#'   sample_size_quality = 5000,  # Limit quality sample
+#'   verbose = TRUE
+#' )
+#' }
 #' }
 #'
 #' @seealso
@@ -179,6 +438,7 @@ cluster_career_trajectories <- function(career_metrics,
                                        n_clusters = NULL,
                                        method = "kmeans",
                                        features = c("stability", "employment", "progression"),
+                                       k_selection_method = c("hybrid", "elbow", "silhouette"),
                                        id_column = "cf",
                                        min_cluster_size = 10,
                                        standardize = TRUE,
@@ -190,6 +450,8 @@ cluster_career_trajectories <- function(career_metrics,
                                        sample_size_quality = 50000,
                                        batch_size = 100000,
                                        memory_fraction = 0.33) {
+
+  k_selection_method <- match.arg(k_selection_method)
 
   # Input validation
   if (!inherits(career_metrics, "data.table")) {
@@ -258,6 +520,7 @@ cluster_career_trajectories <- function(career_metrics,
   )
 
   # Determine optimal number of clusters if not specified
+  optimal_result <- NULL
   if (is.null(n_clusters)) {
     if (verbose) {
       if (use_sampling) {
@@ -268,7 +531,7 @@ cluster_career_trajectories <- function(career_metrics,
       }
     }
 
-    n_clusters <- .determine_optimal_clusters(
+    optimal_result <- .determine_optimal_clusters(
       clustering_data$features_matrix,
       method = method,
       min_k = 3,
@@ -279,10 +542,16 @@ cluster_career_trajectories <- function(career_metrics,
       verbose = verbose,
       use_sampling = use_sampling,
       sample_size = sample_size_k,
-      memory_fraction = memory_fraction
+      memory_fraction = memory_fraction,
+      k_selection_method = k_selection_method
     )
 
-    if (verbose) cat(sprintf("Selected %d clusters based on silhouette analysis\n\n", n_clusters))
+    n_clusters <- optimal_result$optimal_k
+
+    if (verbose) {
+      cat(sprintf("Selected %d clusters (method: %s, decision: %s)\n\n",
+                  n_clusters, optimal_result$method_used, optimal_result$decision_rule))
+    }
   }
 
   # Perform clustering
@@ -393,7 +662,7 @@ cluster_career_trajectories <- function(career_metrics,
   }
 
   # Return comprehensive results
-  return(list(
+  result <- list(
     cluster_assignments = cluster_assignments,
     cluster_profiles = cluster_characterization$profiles,
     cluster_quality = cluster_quality,
@@ -402,7 +671,17 @@ cluster_career_trajectories <- function(career_metrics,
     clustering_features = clustering_features,
     method = method,
     n_clusters = n_clusters
-  ))
+  )
+
+  # Add diagnostic attributes if optimal k was determined
+  if (!is.null(optimal_result)) {
+    attr(result, "wss_values") <- optimal_result$wss_values
+    attr(result, "silhouette_values") <- optimal_result$silhouette_values
+    attr(result, "k_selection_method") <- k_selection_method
+    attr(result, "decision_rule") <- optimal_result$decision_rule
+  }
+
+  return(result)
 }
 
 
@@ -520,6 +799,67 @@ cluster_career_trajectories <- function(career_metrics,
 }
 
 
+#' Get Available (Free) RAM in GB
+#'
+#' Detects available/free memory on the system (not just total).
+#' More accurate than total RAM for determining safe sample sizes.
+#'
+#' @return Numeric. Available RAM in GB, or NULL if detection fails
+#' @keywords internal
+.get_available_memory_gb <- function() {
+
+  available_gb <- tryCatch({
+    os_type <- Sys.info()["sysname"]
+
+    if (os_type == "Darwin") {
+      # Mac: use vm_stat to get free + inactive pages
+      vm_output <- system("vm_stat", intern = TRUE)
+
+      # Extract free and inactive pages
+      free_line <- grep("Pages free", vm_output, value = TRUE)
+      inactive_line <- grep("Pages inactive", vm_output, value = TRUE)
+
+      free_pages <- as.numeric(gsub(".*:\\s*(\\d+).*", "\\1", free_line))
+      inactive_pages <- as.numeric(gsub(".*:\\s*(\\d+).*", "\\1", inactive_line))
+
+      # Page size is typically 4096 bytes on Mac
+      page_size <- 4096
+      available_bytes <- (free_pages + inactive_pages) * page_size
+      available_bytes / (1024^3)
+
+    } else if (os_type == "Linux") {
+      # Linux: read MemAvailable from /proc/meminfo
+      mem_info <- readLines("/proc/meminfo")
+      avail_line <- grep("MemAvailable", mem_info, value = TRUE)
+
+      if (length(avail_line) > 0) {
+        # Extract value in KB
+        avail_kb <- as.numeric(sub("MemAvailable:\\s+(\\d+).*", "\\1", avail_line))
+        avail_kb / (1024^2)
+      } else {
+        # Fallback: free + cached
+        free_line <- grep("MemFree", mem_info, value = TRUE)
+        cached_line <- grep("^Cached", mem_info, value = TRUE)
+
+        free_kb <- as.numeric(sub("MemFree:\\s+(\\d+).*", "\\1", free_line))
+        cached_kb <- as.numeric(sub("Cached:\\s+(\\d+).*", "\\1", cached_line))
+
+        (free_kb + cached_kb) / (1024^2)
+      }
+
+    } else if (.Platform$OS.type == "windows") {
+      # Windows: Try to use system command
+      # Note: This is a basic implementation
+      NULL  # Fall back to total memory approach
+    } else {
+      NULL
+    }
+  }, error = function(e) NULL)
+
+  return(available_gb)
+}
+
+
 #' Calculate Memory-Aware Sample Size Limit (Internal)
 #'
 #' Determines the maximum sample size for distance matrix calculations based on
@@ -528,49 +868,57 @@ cluster_career_trajectories <- function(career_metrics,
 #'
 #' @param memory_fraction Numeric. Fraction of available RAM to use (default 0.33 = 33%)
 #' @param p Integer. Number of features (for overhead calculation)
+#' @param method Character. Purpose: "clustering" (default) or "silhouette" (stricter limits)
 #' @param verbose Logical. Print memory info?
 #' @return Integer. Maximum safe sample size for distance matrix calculations
 #' @keywords internal
-.calculate_memory_aware_limit <- function(memory_fraction = 0.33, p = 10, verbose = FALSE) {
+.calculate_memory_aware_limit <- function(memory_fraction = 0.33, p = 10,
+                                          method = c("clustering", "silhouette"),
+                                          verbose = FALSE) {
 
-  # Try to determine available RAM in GB
-  available_ram_gb <- tryCatch({
-    if (.Platform$OS.type == "windows") {
-      # Windows: use memory.limit() which returns MB
-      memory.limit() / 1024
-    } else {
-      # Unix/Mac: try different approaches
+  method <- match.arg(method)
 
-      # Try memuse package if available
-      if (requireNamespace("memuse", quietly = TRUE)) {
-        as.numeric(memuse::Sys.meminfo()$totalram) / (1024^3)
+  # Try to determine available RAM first (more accurate)
+  available_ram_gb <- .get_available_memory_gb()
+  using_total <- FALSE
+
+  # If available RAM detection failed, fall back to total RAM
+  if (is.null(available_ram_gb) || is.na(available_ram_gb) || available_ram_gb <= 0) {
+    # Fall back to total RAM
+    total_ram_gb <- tryCatch({
+      if (.Platform$OS.type == "windows") {
+        memory.limit() / 1024
       } else {
-        # Fallback: try system commands
-        os_type <- Sys.info()["sysname"]
-
-        if (os_type == "Darwin") {
-          # Mac: use sysctl
-          mem_bytes <- as.numeric(system("sysctl -n hw.memsize", intern = TRUE))
-          mem_bytes / (1024^3)
-        } else if (os_type == "Linux") {
-          # Linux: read /proc/meminfo
-          mem_info <- readLines("/proc/meminfo", n = 1)
-          mem_kb <- as.numeric(sub("MemTotal:\\s+(\\d+).*", "\\1", mem_info))
-          mem_kb / (1024^2)
+        # Try memuse package or system commands (existing code)
+        if (requireNamespace("memuse", quietly = TRUE)) {
+          as.numeric(memuse::Sys.meminfo()$totalram) / (1024^3)
         } else {
-          # Unknown system - use conservative default
-          NULL
+          os_type <- Sys.info()["sysname"]
+
+          if (os_type == "Darwin") {
+            mem_bytes <- as.numeric(system("sysctl -n hw.memsize", intern = TRUE))
+            mem_bytes / (1024^3)
+          } else if (os_type == "Linux") {
+            mem_info <- readLines("/proc/meminfo", n = 1)
+            mem_kb <- as.numeric(sub("MemTotal:\\s+(\\d+).*", "\\1", mem_info))
+            mem_kb / (1024^2)
+          } else {
+            NULL
+          }
         }
       }
-    }
-  }, error = function(e) NULL)
+    }, error = function(e) NULL)
 
-  # If we couldn't determine RAM, use conservative default
-  if (is.null(available_ram_gb) || is.na(available_ram_gb) || available_ram_gb <= 0) {
-    if (verbose) {
-      cat("Unable to determine system RAM, using conservative default (20K sample limit)\n")
+    if (is.null(total_ram_gb) || is.na(total_ram_gb) || total_ram_gb <= 0) {
+      if (verbose) {
+        cat("Unable to determine system RAM, using conservative default (5K sample limit)\n")
+      }
+      return(5000L)  # More conservative default
     }
-    return(20000L)
+
+    # Use total RAM with conservative fraction
+    available_ram_gb <- total_ram_gb * 0.5  # Assume 50% is available
+    using_total <- TRUE
   }
 
   # Calculate maximum sample size based on memory constraints
@@ -594,9 +942,25 @@ cluster_career_trajectories <- function(career_metrics,
   max_n <- max(1000, min(max_n, 100000))  # Between 1K and 100K
   max_n <- floor(max_n)
 
-  if (verbose) {
-    cat(sprintf("System RAM: %.1f GB\n", available_ram_gb))
-    cat(sprintf("Using %.0f%% of RAM for distance calculations\n", memory_fraction * 100))
+  # Apply stricter limits for silhouette (requires O(n²) distance matrix)
+  if (method == "silhouette") {
+    # Silhouette needs much more conservative limits due to distance matrix
+    # Apply 0.5x safety factor and hard cap at 10,000
+    max_n <- min(max_n * 0.5, 10000)
+
+    if (verbose) {
+      cat(sprintf("    Silhouette micro-sample limit: %d observations\n", floor(max_n)))
+    }
+  }
+
+  if (verbose && method == "clustering") {
+    if (using_total) {
+      cat(sprintf("System RAM (total): %.1f GB (estimated %.1f GB available)\n",
+                  total_ram_gb, available_ram_gb))
+    } else {
+      cat(sprintf("System RAM (available): %.1f GB\n", available_ram_gb))
+    }
+    cat(sprintf("Using %.0f%% of available RAM for distance calculations\n", memory_fraction * 100))
     cat(sprintf("Memory-aware sample limit: %s observations\n",
                 format(max_n, big.mark = ",")))
   }
@@ -605,106 +969,302 @@ cluster_career_trajectories <- function(career_metrics,
 }
 
 
-#' Determine Optimal Number of Clusters (Internal)
+# 1. Elbow method for optimal k selection -----
+
+#' Elbow Method for Optimal k Selection
 #'
-#' @param features_matrix Numeric matrix of features
-#' @param method Clustering method
+#' Identifies the optimal number of clusters by finding the "elbow" point in the
+#' Within-cluster Sum of Squares (WSS) curve. The elbow represents the k value
+#' where increasing k provides diminishing returns in reducing WSS.
+#'
+#' @param features_matrix Numeric matrix of features (n observations x p features)
+#' @param k_range Integer vector of k values to test (default: 3:6)
+#' @param seed Random seed for reproducibility (default: NULL)
+#' @param verbose Logical, if TRUE prints progress messages (default: TRUE)
+#'
+#' @return A list with three elements:
+#' \describe{
+#'   \item{optimal_k}{Integer, the suggested optimal k value}
+#'   \item{wss_values}{Named numeric vector of WSS for each k tested}
+#'   \item{knee_point}{Integer, same as optimal_k (the detected elbow)}
+#' }
+#'
+#' @details
+#' The function uses the gradient method to detect the elbow:
+#' \enumerate{
+#'   \item Computes WSS for each k using k-means clustering
+#'   \item Calculates first derivative (rate of WSS decrease)
+#'   \item Calculates second derivative (rate of change of slope)
+#'   \item Identifies the k where the second derivative is maximum (sharpest bend)
+#' }
+#'
+#' Memory complexity: O(n*p) - linear in dataset size, suitable for large data.
+#'
+#' @keywords internal
+.elbow_method <- function(features_matrix, k_range = 3:6, seed = NULL, verbose = TRUE) {
+
+  if (!is.null(seed)) set.seed(seed)
+
+  if (verbose) cat("  Running Elbow method (WSS analysis)...\n")
+
+  # Calculate WSS for each k
+  wss_values <- sapply(k_range, function(k) {
+    if (verbose) cat(sprintf("    Testing k=%d... ", k))
+
+    km <- kmeans(features_matrix, centers = k, nstart = 10, iter.max = 100)
+    wss <- km$tot.withinss
+
+    if (verbose) cat(sprintf("WSS=%.2f\n", wss))
+
+    return(wss)
+  })
+
+  names(wss_values) <- paste0("k", k_range)
+
+  # Detect elbow using gradient method
+  # The elbow is where the rate of WSS decrease slows down significantly
+  if (length(k_range) >= 3) {
+    # Calculate second derivative (rate of change of slope)
+    gradients <- diff(wss_values)
+    second_deriv <- diff(gradients)
+
+    # Elbow is where second derivative is maximum (sharpest bend)
+    elbow_idx <- which.max(abs(second_deriv)) + 1  # +1 because diff() reduces length
+    optimal_k <- k_range[elbow_idx]
+  } else {
+    # Fallback: choose k with steepest gradient
+    gradients <- diff(wss_values)
+    optimal_k <- k_range[which.max(abs(gradients))]
+  }
+
+  if (verbose) {
+    cat(sprintf("  Elbow method suggests k=%d (WSS=%.2f)\n",
+                optimal_k, wss_values[paste0("k", optimal_k)]))
+  }
+
+  return(list(
+    optimal_k = optimal_k,
+    wss_values = wss_values,
+    knee_point = optimal_k
+  ))
+}
+
+
+#' Determine Optimal Number of Clusters (Hybrid Approach)
+#'
+#' Uses hybrid approach: Elbow method (primary) + Silhouette validation (micro-sample).
+#' This avoids memory overflow while maintaining clustering quality.
+#'
+#' @param features_matrix Numeric matrix
+#' @param k_range Range of k to test
+#' @param sample_size Sample size for silhouette
+#' @param memory_fraction Fraction of RAM for distance calculations
+#' @param use_sampling Whether to use sampling
+#' @param seed Random seed
+#' @param verbose Print progress
+#' @param k_selection_method Selection method: "hybrid", "elbow", or "silhouette"
+#' @param method Clustering method (for compatibility, currently only kmeans supported)
 #' @param min_k Minimum number of clusters
 #' @param max_k Maximum number of clusters
 #' @param min_cluster_size Minimum cluster size
 #' @param nstart Number of random starts for k-means
-#' @param seed Random seed
-#' @param verbose Logical
-#' @param use_sampling Logical. Use sampling for large datasets?
-#' @param sample_size Integer. Sample size for silhouette analysis
-#' @param memory_fraction Numeric. Fraction of available RAM to use (default 0.33)
-#' @return Optimal number of clusters
+#'
+#' @return List with optimal_k, wss_values, silhouette_values, method_used
+#'
 #' @keywords internal
-.determine_optimal_clusters <- function(features_matrix, method, min_k = 3, max_k = 6,
-                                       min_cluster_size = 10, nstart = 25,
-                                       seed = 123, verbose = FALSE,
-                                       use_sampling = FALSE, sample_size = 50000,
-                                       memory_fraction = 0.33) {
+.determine_optimal_clusters <- function(features_matrix,
+                                        method = "kmeans",
+                                        min_k = 3,
+                                        max_k = 6,
+                                        min_cluster_size = 10,
+                                        nstart = 25,
+                                        seed = 123,
+                                        verbose = FALSE,
+                                        use_sampling = FALSE,
+                                        sample_size = 50000,
+                                        memory_fraction = 0.33,
+                                        k_selection_method = c("hybrid", "elbow", "silhouette")) {
 
-  set.seed(seed)
+  k_selection_method <- match.arg(k_selection_method)
+  k_range <- min_k:max_k
 
-  # Use sampling for large datasets
-  # CRITICAL: Silhouette requires dist() which needs O(n²) memory
-  # Calculate memory-aware limit based on available RAM
-  max_silhouette_sample <- .calculate_memory_aware_limit(
-    memory_fraction = memory_fraction,
-    p = ncol(features_matrix),
-    verbose = verbose
-  )
+  if (verbose) {
+    cat("\nDetermining optimal number of clusters...\n")
+    cat(sprintf("Method: %s\n", k_selection_method))
+  }
 
-  if (use_sampling && nrow(features_matrix) > max_silhouette_sample) {
-    # Use smaller sample for silhouette due to O(n²) distance matrix requirement
-    effective_sample_size <- min(sample_size, max_silhouette_sample)
+  n <- nrow(features_matrix)
 
-    # Stratified sampling to preserve variance structure
-    sample_indices <- .stratified_sample(features_matrix, effective_sample_size, seed)
-    features_sample <- features_matrix[sample_indices, , drop = FALSE]
+  # === PHASE 1: ELBOW METHOD (if method != "silhouette") ===
+  elbow_result <- NULL
+  if (k_selection_method %in% c("hybrid", "elbow")) {
+    elbow_result <- .elbow_method(
+      features_matrix = features_matrix,
+      k_range = k_range,
+      seed = seed,
+      verbose = verbose
+    )
+  }
 
-    if (verbose) {
-      if (sample_size > max_silhouette_sample) {
-        cat(sprintf("  Silhouette analysis capped at %s observations (dist() memory limit)\n",
-                    format(max_silhouette_sample, big.mark = ",")))
+  # === PHASE 2: SILHOUETTE VALIDATION (if method != "elbow") ===
+  silhouette_result <- NULL
+  if (k_selection_method %in% c("hybrid", "silhouette")) {
+
+    # Calculate conservative limit for silhouette micro-sample
+    # ALWAYS check memory regardless of use_sampling flag
+    max_silhouette_sample <- .calculate_memory_aware_limit(
+      memory_fraction = memory_fraction,
+      p = ncol(features_matrix),
+      method = "silhouette",
+      verbose = verbose
+    )
+
+    # NEW: Pre-flight safety check
+    effective_sample_size <- min(sample_size, max_silhouette_sample, n)
+    required_gb <- (effective_sample_size^2 * 8) / (1024^3)  # Estimate distance matrix size
+
+    # Get available memory for comparison
+    available_mem <- .get_available_memory_gb()
+    if (is.null(available_mem) || is.na(available_mem)) {
+      # Fall back to conservative estimate
+      available_mem <- 8.0  # Assume 8GB available
+    }
+
+    # Check if we have enough memory (with 20% safety margin)
+    if (required_gb > available_mem * 0.8) {
+      if (verbose) {
+        cat(sprintf("\nWARNING: Silhouette computation would require %.1f GB but only %.1f GB available.\n",
+                    required_gb, available_mem))
+        cat("Automatically switching to elbow-only method for safety.\n\n")
       }
-      cat(sprintf("  Using stratified sample of %s/%s observations\n",
-                  format(nrow(features_sample), big.mark = ","),
-                  format(nrow(features_matrix), big.mark = ",")))
+
+      # Force elbow-only method
+      k_selection_method <- "elbow"
+
+      # Skip silhouette computation entirely
+      silhouette_result <- NULL
+
+      # Continue to Phase 3 (decision) which will handle elbow-only case
+    } else {
+      # Memory OK, proceed with silhouette
+
+      # CRITICAL FIX: Always use micro-sample when n exceeds memory-safe limit
+      # This is independent of use_sampling flag (which is for clustering, not silhouette)
+      if (n > max_silhouette_sample) {
+        if (verbose) {
+          cat(sprintf("  Silhouette validation on micro-sample (n=%d, memory-limited)...\n",
+                      effective_sample_size))
+        }
+
+        # Stratified sampling to preserve feature distribution
+        sample_indices <- .stratified_sample(features_matrix, effective_sample_size, seed)
+        features_sample <- features_matrix[sample_indices, , drop = FALSE]
+      } else {
+        features_sample <- features_matrix
+        if (verbose) cat("  Silhouette validation on full dataset (n within memory limits)...\n")
+      }
+
+      # Compute silhouette for each k with error handling
+      sil_values <- numeric(length(k_range))
+      names(sil_values) <- paste0("k", k_range)
+
+      for (i in seq_along(k_range)) {
+        k <- k_range[i]
+        if (verbose) cat(sprintf("    Testing k=%d... ", k))
+
+        # Cluster the sample
+        km_sample <- kmeans(features_sample, centers = k, nstart = 10, iter.max = 100)
+        clusters <- km_sample$cluster
+
+        # Calculate silhouette with error handling
+        avg_sil <- tryCatch({
+          sil <- silhouette(clusters, dist(features_sample))
+          mean(sil[, "sil_width"])
+        }, error = function(e) {
+          if (verbose) {
+            cat(sprintf("\nERROR during silhouette computation for k=%d:\n", k))
+            cat(sprintf("  %s\n\n", e$message))
+          }
+
+          # Check if it's a memory error
+          if (grepl("memory|vector|allocation|limit", e$message, ignore.case = TRUE)) {
+            stop(sprintf(
+              "Memory overflow during silhouette computation:\n  %s\n\nThis typically happens when the sample size is too large for available RAM.\n\nSolutions (try in order):\n  1. Reduce memory_fraction parameter (try 0.15 or 0.1)\n  2. Use k_selection_method='elbow' (faster, no silhouette)\n  3. Manually specify n_clusters to skip automatic optimization\n  4. Close other applications to free system RAM\n  5. Use a machine with more RAM for large datasets\n\nCurrent settings:\n  - Dataset size: %s observations\n  - Sample size for silhouette: %s observations\n  - Estimated memory needed: %.1f GB\n  - Memory fraction: %.0f%%",
+              e$message,
+              format(n, big.mark = ","),
+              format(nrow(features_sample), big.mark = ","),
+              required_gb,
+              memory_fraction * 100
+            ))
+          } else {
+            # Re-throw non-memory errors
+            stop(e)
+          }
+        })
+
+        sil_values[i] <- avg_sil
+
+        if (verbose) cat(sprintf("avg_sil=%.3f\n", avg_sil))
+      }
+
+      # Optimal k is the one with highest average silhouette
+      optimal_k_sil <- k_range[which.max(sil_values)]
+
+      if (verbose) {
+        cat(sprintf("  Silhouette suggests k=%d (avg_sil=%.3f)\n",
+                    optimal_k_sil, max(sil_values)))
+      }
+
+      silhouette_result <- list(
+        optimal_k = optimal_k_sil,
+        silhouette_values = sil_values
+      )
     }
+  }
+
+  # === PHASE 3: FINAL DECISION ===
+  if (k_selection_method == "elbow") {
+    final_k <- elbow_result$optimal_k
+    decision_rule <- "elbow_only"
+  } else if (k_selection_method == "silhouette") {
+    final_k <- silhouette_result$optimal_k
+    decision_rule <- "silhouette_only"
   } else {
-    features_sample <- features_matrix
-  }
+    # Hybrid: combine both methods
+    k_elbow <- elbow_result$optimal_k
+    k_sil <- silhouette_result$optimal_k
 
-  # Test different numbers of clusters
-  k_values <- min_k:max_k
-  silhouette_scores <- numeric(length(k_values))
-
-  for (i in seq_along(k_values)) {
-    k <- k_values[i]
-
-    # Perform clustering
-    if (method == "kmeans") {
-      cluster_result <- kmeans(features_sample, centers = k, nstart = nstart)
-      clusters <- cluster_result$cluster
-    } else if (method == "pam") {
-      cluster_result <- pam(features_sample, k = k)
-      clusters <- cluster_result$clustering
-    } else { # hierarchical
-      hc <- hclust(dist(features_sample), method = "ward.D2")
-      clusters <- cutree(hc, k = k)
-    }
-
-    # Check cluster sizes
-    cluster_sizes <- table(clusters)
-    if (any(cluster_sizes < min_cluster_size)) {
-      silhouette_scores[i] <- -1  # Penalize small clusters
-      next
-    }
-
-    # Compute silhouette score
-    sil <- silhouette(clusters, dist(features_sample))
-    silhouette_scores[i] <- mean(sil[, "sil_width"])
-
-    if (verbose) {
-      cat(sprintf("k=%d: silhouette=%.3f, min_cluster_size=%d\n",
-                  k, silhouette_scores[i], min(cluster_sizes)))
+    if (k_elbow == k_sil) {
+      final_k <- k_elbow
+      decision_rule <- "agreement"
+      if (verbose) cat(sprintf("\nBoth methods agree: k=%d\n", final_k))
+    } else if (abs(k_elbow - k_sil) == 1) {
+      # Adjacent values: prefer silhouette (more statistically rigorous)
+      final_k <- k_sil
+      decision_rule <- "adjacent_prefer_silhouette"
+      if (verbose) {
+        cat(sprintf("\nMethods differ by 1 (elbow=%d, sil=%d), using silhouette: k=%d\n",
+                    k_elbow, k_sil, final_k))
+      }
+    } else {
+      # Substantial difference: prefer elbow (computed on larger sample)
+      final_k <- k_elbow
+      decision_rule <- "disagreement_prefer_elbow"
+      if (verbose) {
+        cat(sprintf("\nMethods disagree (elbow=%d, sil=%d), using elbow: k=%d\n",
+                    k_elbow, k_sil, final_k))
+      }
     }
   }
 
-  # Select k with highest silhouette score
-  valid_scores <- silhouette_scores[silhouette_scores > 0]
-
-  if (length(valid_scores) == 0) {
-    warning("No valid clustering found with min_cluster_size requirement. Using k=4 as default.")
-    return(4)
-  }
-
-  optimal_k <- k_values[which.max(silhouette_scores)]
-
-  return(optimal_k)
+  # Return comprehensive results
+  return(list(
+    optimal_k = final_k,
+    wss_values = if (!is.null(elbow_result)) elbow_result$wss_values else NULL,
+    silhouette_values = if (!is.null(silhouette_result)) silhouette_result$silhouette_values else NULL,
+    method_used = k_selection_method,
+    decision_rule = decision_rule
+  ))
 }
 
 
@@ -1066,6 +1626,7 @@ cluster_career_trajectories <- function(career_metrics,
   max_quality_sample <- .calculate_memory_aware_limit(
     memory_fraction = memory_fraction,
     p = ncol(features_matrix),
+    method = "silhouette",
     verbose = FALSE  # Don't print during quality computation
   )
 
@@ -1089,11 +1650,28 @@ cluster_career_trajectories <- function(career_metrics,
     approx_note <- NULL
   }
 
-  # Silhouette analysis
-  sil <- silhouette(clusters_sample, dist(features_sample))
-  overall_silhouette <- mean(sil[, "sil_width"])
+  # Silhouette analysis (with error handling)
+  overall_silhouette <- tryCatch({
+    sil <- silhouette(clusters_sample, dist(features_sample))
+    mean(sil[, "sil_width"])
+  }, error = function(e) {
+    warning(sprintf(
+      "Could not compute silhouette quality metric due to memory constraints.\nThis is not critical - other quality metrics are still available.\nError: %s",
+      e$message
+    ))
 
-  cluster_silhouettes <- tapply(sil[, "sil_width"], clusters_sample, mean)
+    # Return NA instead of crashing
+    NA_real_
+  })
+
+  # Only compute per-cluster silhouettes if overall succeeded
+  if (!is.na(overall_silhouette)) {
+    sil <- silhouette(clusters_sample, dist(features_sample))
+    cluster_silhouettes <- tapply(sil[, "sil_width"], clusters_sample, mean)
+  } else {
+    cluster_silhouettes <- rep(NA_real_, length(unique(clusters_sample)))
+    names(cluster_silhouettes) <- sort(unique(clusters_sample))
+  }
 
   # Dunn index (ratio of minimum inter-cluster distance to maximum intra-cluster distance)
   dunn_index <- .compute_dunn_index(features_sample, clusters_sample)

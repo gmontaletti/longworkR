@@ -2,11 +2,11 @@
 % Please edit documentation in R/career_clustering.R
 \name{.determine_optimal_clusters}
 \alias{.determine_optimal_clusters}
-\title{Determine Optimal Number of Clusters (Internal)}
+\title{Determine Optimal Number of Clusters (Hybrid Approach)}
 \usage{
 .determine_optimal_clusters(
   features_matrix,
-  method,
+  method = "kmeans",
   min_k = 3,
   max_k = 6,
   min_cluster_size = 10,
@@ -14,13 +14,15 @@
   seed = 123,
   verbose = FALSE,
   use_sampling = FALSE,
-  sample_size = 50000
+  sample_size = 50000,
+  memory_fraction = 0.33,
+  k_selection_method = c("hybrid", "elbow", "silhouette")
 )
 }
 \arguments{
-\item{features_matrix}{Numeric matrix of features}
+\item{features_matrix}{Numeric matrix}
 
-\item{method}{Clustering method}
+\item{method}{Clustering method (for compatibility, currently only kmeans supported)}
 
 \item{min_k}{Minimum number of clusters}
 
@@ -32,16 +34,23 @@
 
 \item{seed}{Random seed}
 
-\item{verbose}{Logical}
+\item{verbose}{Print progress}
 
-\item{use_sampling}{Logical. Use sampling for large datasets?}
+\item{use_sampling}{Whether to use sampling}
 
-\item{sample_size}{Integer. Sample size for silhouette analysis}
+\item{sample_size}{Sample size for silhouette}
+
+\item{memory_fraction}{Fraction of RAM for distance calculations}
+
+\item{k_selection_method}{Selection method: "hybrid", "elbow", or "silhouette"}
+
+\item{k_range}{Range of k to test}
 }
 \value{
-Optimal number of clusters
+List with optimal_k, wss_values, silhouette_values, method_used
 }
 \description{
-Determine Optimal Number of Clusters (Internal)
+Uses hybrid approach: Elbow method (primary) + Silhouette validation (micro-sample).
+This avoids memory overflow while maintaining clustering quality.
 }
 \keyword{internal}

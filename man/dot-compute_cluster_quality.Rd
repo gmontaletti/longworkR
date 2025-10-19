@@ -9,7 +9,8 @@
   clusters,
   method,
   use_sampling = FALSE,
-  sample_size = 50000
+  sample_size = 50000,
+  memory_fraction = 0.33
 )
 }
 \arguments{
@@ -22,6 +23,8 @@
 \item{use_sampling}{Logical. Use sampling for large datasets?}
 
 \item{sample_size}{Integer. Sample size for quality metrics}
+
+\item{memory_fraction}{Numeric. Fraction of available RAM to use (default 0.33)}
 }
 \value{
 List with quality metrics

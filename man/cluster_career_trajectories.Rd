@@ -9,6 +9,7 @@ cluster_career_trajectories(
   n_clusters = NULL,
   method = "kmeans",
   features = c("stability", "employment", "progression"),
+  k_selection_method = c("hybrid", "elbow", "silhouette"),
   id_column = "cf",
   min_cluster_size = 10,
   standardize = TRUE,
@@ -18,7 +19,8 @@ cluster_career_trajectories(
   use_sampling = NULL,
   sample_size_k = 50000,
   sample_size_quality = 50000,
-  batch_size = 1e+05
+  batch_size = 1e+05,
+  memory_fraction = 0.33
 )
 }
 \arguments{
@@ -26,12 +28,25 @@ cluster_career_trajectories(
 containing career quality, stability, and progression metrics}
 
 \item{n_clusters}{Integer or NULL. Number of clusters (3-6). If NULL, automatically
-selects optimal number using silhouette analysis. Default: NULL}
+selects optimal number using hybrid method (Elbow + Silhouette). Default: NULL}
 
 \item{method}{Character. Clustering algorithm: "kmeans" (default), "pam", or "hierarchical"}
 
 \item{features}{Character vector. Metric categories to use: "stability", "employment",
 "progression", "quality", "complexity". Default: c("stability", "employment", "progression")}
+
+\item{k_selection_method}{Character string specifying the method for automatic k selection
+when n_clusters = NULL. Options:
+\itemize{
+\item \code{"hybrid"} (default): Uses Elbow method for initial estimate,
+then validates with Silhouette on micro-sample. Best balance of accuracy
+and memory efficiency.
+\item \code{"elbow"}: Uses only Within-cluster Sum of Squares (WSS) to
+identify the "elbow" point. Most memory efficient, works on full dataset.
+\item \code{"silhouette"}: Uses only Silhouette coefficient on micro-sample.
+Most statistically rigorous but slower.
+}
+Ignored if n_clusters is specified manually.}
 
 \item{id_column}{Character. Name of person identifier column. Default: "cf"}
 
@@ -56,6 +71,27 @@ Note: Automatically capped based on available system memory (typically 1K-100K).
 
 \item{batch_size}{Integer. Batch size for distance calculations. Default: 100,000.
 Reduces memory spikes for large datasets.}
+
+\item{memory_fraction}{Numeric (0-1). Fraction of available RAM to use for distance matrix
+calculations. Default: 0.33 (33\% of available RAM).
+
+\strong{How it works:}
+\itemize{
+\item Function detects available (free) system RAM
+\item Calculates maximum safe sample size: max_n = sqrt(available_RAM * memory_fraction / 8 bytes)
+\item Automatically limits silhouette computation to max_n observations
+\item Prevents memory overflow for large datasets
+}
+
+\strong{Recommendations:}
+\itemize{
+\item Normal use: 0.25-0.33 (balanced)
+\item Conservative: 0.10-0.20 (safer for limited RAM)
+\item Aggressive: 0.40-0.50 (for systems with abundant RAM)
+}
+
+Lower values reduce memory risk but may limit silhouette validation sample size.
+If you experience memory errors, reduce this value first.}
 }
 \value{
 A list with clustering results:
@@ -64,6 +100,31 @@ A list with clustering results:
 \item{cluster_quality}{list with validation metrics (silhouette, Dunn, Calinski-Harabasz)}
 \item{feature_importance}{data.table with feature discrimination statistics}
 \item{cluster_labels}{data.table mapping cluster IDs to bilingual labels}
+
+When n_clusters = NULL, the following diagnostic attributes are attached to the result:
+\describe{
+\item{wss_values}{Named numeric vector of Within-cluster Sum of Squares
+for each k tested (if elbow or hybrid method used). Lower values indicate
+tighter clusters. Names are "k3", "k4", "k5", "k6".}
+\item{silhouette_values}{Named numeric vector of average silhouette width
+for each k tested (if silhouette or hybrid method used). Range: -1 to 1.
+Values > 0.5 indicate strong cluster structure. Names are "k3", "k4", "k5", "k6".}
+\item{k_selection_method}{Character string indicating which method was used:
+"hybrid", "elbow", or "silhouette".}
+\item{decision_rule}{Character string describing how the final k was chosen.
+Possible values:
+\itemize{
+\item "agreement": Both elbow and silhouette agreed on the same k
+\item "adjacent_prefer_silhouette": Methods differed by 1, silhouette chosen
+\item "disagreement_prefer_elbow": Methods differed by >1, elbow chosen
+\item "elbow_only": Only elbow method was used
+\item "silhouette_only": Only silhouette method was used
+}}
+}
+
+Access these attributes using \code{attr(result, "wss_values")},
+\code{attr(result, "silhouette_values")}, \code{attr(result, "k_selection_method")},
+and \code{attr(result, "decision_rule")}.
 }
 \description{
 Segments workers into 3-6 distinct career trajectory groups based on employment
@@ -98,15 +159,53 @@ The function uses different metric combinations based on the features parameter:
 \item \strong{Declining Trajectories}: Decreasing quality + low progression
 - IT: "Traiettorie in Declino"
 }
-
-\strong{Optimal Cluster Selection (when n_clusters = NULL):}
-
-Tests 3-6 clusters and selects the number with:
-\enumerate{
-\item Highest average silhouette width
-\item Minimum cluster size requirement met
-\item Statistically significant feature discrimination (ANOVA p < 0.05)
 }
+\section{Optimal k Selection Methods}{
+
+
+When n_clusters = NULL, the function automatically determines the optimal number
+of clusters using one of three methods:
+
+\strong{Hybrid Method (Recommended)}
+
+The hybrid approach combines two complementary techniques:
+\enumerate{
+\item \strong{Elbow Method}: Computes Within-cluster Sum of Squares (WSS) for
+k in 3:6 on the full dataset. Memory efficient (O(n*p)). Identifies the
+"elbow" point where WSS decrease rate slows down.
+\item \strong{Silhouette Validation}: Computes average silhouette width on a
+micro-sample (max 10,000 observations) to validate the elbow result.
+Memory bounded (O(n^2) but n <= 10K).
+\item \strong{Decision Rule}:
+\itemize{
+\item If both methods agree -> use that k
+\item If differ by 1 -> prefer silhouette (more statistically rigorous)
+\item If differ by >1 -> prefer elbow (computed on larger sample)
+}
+}
+
+\strong{Elbow Method Only}
+
+Uses only WSS analysis. Fastest and most memory efficient. Suitable for very
+large datasets (>100K observations) or when silhouette computation is too slow.
+
+\strong{Silhouette Method Only}
+
+Uses only average silhouette width on micro-sample. Most accurate but slower
+than hybrid. Suitable when you prioritize statistical rigor over speed.
+
+\strong{Memory Management}
+
+The function automatically limits the sample size for silhouette calculations
+to prevent memory overflow:
+\itemize{
+\item Maximum sample: 10,000 observations (hard cap)
+\item Safety factor: 0.5x the theoretical memory limit
+\item For 24GB RAM: typically limits to ~8,000 observations
+}
+
+This ensures the function can handle datasets with millions of observations
+without exceeding available memory.
 
 \strong{Scalability for Large Datasets:}
 
@@ -134,6 +233,96 @@ The function automatically adapts to dataset size:
 \item Hierarchical/PAM: ~8 bytes × n² (distance matrix) - fails for large n
 }
 }
+
+\section{Memory Management and Troubleshooting}{
+
+
+\strong{Understanding Memory Requirements}
+
+The clustering function uses different memory approaches for different operations:
+\itemize{
+\item \strong{K-means clustering}: O(n × p) memory - scales linearly with dataset size
+\item \strong{Elbow method}: O(n × p) memory - works efficiently on full datasets
+\item \strong{Silhouette validation}: O(n²) memory - requires distance matrix, most memory-intensive
+}
+
+\strong{Automatic Memory Management}
+
+The function automatically manages memory through several mechanisms:
+\enumerate{
+\item \strong{Available memory detection}: Detects actual free RAM (not just total)
+\item \strong{Micro-sampling for silhouette}: Automatically limits silhouette computation
+to memory-safe sample sizes (typically 3K-10K observations)
+\item \strong{Automatic fallback}: Switches to elbow-only method if memory insufficient
+\item \strong{Graceful degradation}: Quality metrics return NA instead of crashing
+}
+
+\strong{When Memory Errors Occur}
+
+If you see "vector memory limit reached" or allocation errors, try these solutions
+in order:
+\enumerate{
+\item \strong{Reduce memory_fraction} (default 0.33):
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{cluster_career_trajectories(
+  career_metrics,
+  memory_fraction = 0.15  # More conservative
+)
+}\if{html}{\out{</div>}}
+\item \strong{Use elbow-only method} (fastest, no silhouette):
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{cluster_career_trajectories(
+  career_metrics,
+  k_selection_method = "elbow"  # Skip silhouette
+)
+}\if{html}{\out{</div>}}
+\item \strong{Manually specify n_clusters} (skip optimization):
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{cluster_career_trajectories(
+  career_metrics,
+  n_clusters = 4  # Direct clustering, no k-selection
+)
+}\if{html}{\out{</div>}}
+\item \strong{Limit sample sizes} (for very large datasets):
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{cluster_career_trajectories(
+  career_metrics,
+  sample_size_k = 10000,        # Limit k-selection sample
+  sample_size_quality = 5000    # Limit quality metrics sample
+)
+}\if{html}{\out{</div>}}
+\item \strong{Close other applications} to free system RAM
+\item \strong{Use a machine with more RAM} for very large datasets (>500K observations)
+}
+
+\strong{Dataset Size Guidelines}
+
+\describe{
+\item{< 10K observations}{All methods work with default settings}
+\item{10K - 100K observations}{Hybrid method recommended, automatic micro-sampling active}
+\item{100K - 500K observations}{Hybrid or elbow method, conservative memory_fraction (0.15-0.2)}
+\item{> 500K observations}{Elbow-only method or manually specify n_clusters}
+}
+
+\strong{Verbose Mode for Debugging}
+
+Enable verbose output to see memory decisions:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{result <- cluster_career_trajectories(
+  career_metrics,
+  verbose = TRUE  # Shows memory limits, sample sizes, fallback decisions
+)
+}\if{html}{\out{</div>}}
+
+This will display:
+\itemize{
+\item Available system RAM
+\item Memory-aware sample limits
+\item Whether micro-sampling is triggered
+\item Automatic fallback decisions
+}
+}
+
 \examples{
 \dontrun{
 # Calculate career metrics
@@ -181,6 +370,30 @@ clusters_4 <- cluster_career_trajectories(
   features = c("stability", "employment", "progression", "quality")
 )
 
+# Automatic k selection with hybrid method (default)
+clustered <- cluster_career_trajectories(
+  career_metrics,
+  features = c("stability", "employment"),
+  n_clusters = NULL,  # Auto-detect
+  k_selection_method = "hybrid"
+)
+
+# Inspect k selection diagnostics
+cat("Selected k:", length(unique(clustered$cluster_assignments$cluster_id)), "\n")
+cat("Method:", attr(clustered, "k_selection_method"), "\n")
+cat("Decision rule:", attr(clustered, "decision_rule"), "\n")
+cat("\nWSS values:\n")
+print(attr(clustered, "wss_values"))
+cat("\nSilhouette values:\n")
+print(attr(clustered, "silhouette_values"))
+
+# Use elbow-only for very large datasets
+clustered_fast <- cluster_career_trajectories(
+  career_metrics,
+  n_clusters = NULL,
+  k_selection_method = "elbow"  # Fastest, most memory efficient
+)
+
 # Large dataset example (> 1M workers)
 large_clusters <- cluster_career_trajectories(
   career_metrics = large_career_metrics,  # 2.7M workers
@@ -193,6 +406,54 @@ large_clusters <- cluster_career_trajectories(
 )
 # Processing time: ~2-3 minutes for 2.7M workers
 # Memory usage: ~500MB peak
+
+# Example: Handling memory constraints for large datasets
+\dontrun{
+# If you encounter memory errors, try these approaches:
+
+# Approach 1: Reduce memory fraction
+clusters_conservative <- cluster_career_trajectories(
+  career_metrics,
+  n_clusters = NULL,
+  memory_fraction = 0.15,  # More conservative
+  verbose = TRUE           # See memory decisions
+)
+
+# Approach 2: Use elbow-only (fastest, most memory efficient)
+clusters_elbow <- cluster_career_trajectories(
+  career_metrics,
+  n_clusters = NULL,
+  k_selection_method = "elbow",  # Skip silhouette computation
+  verbose = TRUE
+)
+
+# Approach 3: Manually specify k (skip optimization)
+clusters_manual <- cluster_career_trajectories(
+  career_metrics,
+  n_clusters = 4,  # Based on domain knowledge or preliminary analysis
+  verbose = FALSE
+)
+
+# Approach 4: Limit sample sizes explicitly
+clusters_limited <- cluster_career_trajectories(
+  career_metrics,
+  n_clusters = NULL,
+  k_selection_method = "hybrid",
+  sample_size_k = 10000,       # Max 10K for k-selection
+  sample_size_quality = 5000,  # Max 5K for quality metrics
+  memory_fraction = 0.2,
+  verbose = TRUE
+)
+
+# Very large dataset (500K+ observations) - recommended approach
+clusters_very_large <- cluster_career_trajectories(
+  very_large_career_metrics,
+  n_clusters = 4,              # Specify k directly
+  method = "kmeans",           # Only kmeans scales to millions
+  sample_size_quality = 5000,  # Limit quality sample
+  verbose = TRUE
+)
+}
 }
 
 }
