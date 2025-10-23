@@ -4,20 +4,24 @@
 \alias{consolidate_short_gaps}
 \title{Consolidate Employment Periods with Short Gaps}
 \usage{
-consolidate_short_gaps(data, max_gap_days = 30)
+consolidate_short_gaps(data, max_gap_days = 8, variable_handling = "first")
 }
 \arguments{
 \item{data}{data.table with employment records. Must contain columns:
 \code{cf}, \code{inizio}, \code{fine}, \code{durata}. The \code{arco} column
 is used if present to identify employment vs unemployment periods.}
 
-\item{max_gap_days}{Maximum gap in days to consolidate across (default: 30).
+\item{max_gap_days}{Maximum gap in days to consolidate across (default: 8).
 Common values:
 \itemize{
-\item 7-14 days: Short breaks between jobs
-\item 30 days: Monthly gaps (default)
+\item 7-8 days: Very short breaks, weekly consolidation (default)
+\item 14 days: Bi-weekly consolidation
+\item 30 days: Monthly gaps
 \item 90 days: Quarterly employment analysis
 }}
+
+\item{variable_handling}{Character string specifying aggregation strategy for variables:
+\code{"first"} takes first non-NA value (default), \code{"weight"} uses weighted mean/mode}
 }
 \value{
 data.table with periods consolidated across short gaps. Includes all
@@ -36,11 +40,15 @@ useful for analyzing labor market attachment and employment stability.
 \strong{How gaps are bridged:}
 
 This function consolidates employment periods when they are separated by
-unemployment gaps of \code{max_gap_days} or fewer. For example, with
+gaps of \code{max_gap_days} or fewer. \strong{Important:} Unemployment periods
+with duration > \code{max_gap_days} act as consolidation barriers. Short
+unemployment periods (<= threshold) can be bridged. For example, with
 \code{max_gap_days = 30}:
 \itemize{
 \item Employment (Jan 1-15) → Gap (10 days) → Employment (Jan 26-31) = CONSOLIDATED
 \item Employment (Jan 1-15) → Gap (50 days) → Employment (Mar 6-31) = NOT consolidated
+\item Employment (Jan 1-15) → Unemployment (20 days) → Employment = CONSOLIDATED
+\item Employment (Jan 1-15) → Unemployment (40 days) → Employment = NOT consolidated
 }
 
 \strong{What non_working_days represents:}
@@ -61,8 +69,9 @@ the "quality" of employment continuity even after consolidation.
 \strong{Difference from other consolidation functions:}
 \itemize{
 \item \code{\link{consolidate_overlapping}}: Merges concurrent employment (same time)
-\item \code{\link{consolidate_adjacent}}: Merges touching periods (no gap at all)
-\item \code{consolidate_short_gaps}: Bridges gaps up to threshold (includes unemployment)
+\item \code{\link{consolidate_adjacent}}: Merges touching periods (no gap, employment only)
+\item \code{consolidate_short_gaps}: Bridges short gaps and brief unemployment periods;
+long unemployment (> threshold) acts as barrier
 }
 
 \strong{Aggregation rules:}

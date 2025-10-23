@@ -215,17 +215,17 @@ test_that("chaining is idempotent", {
 
   dt <- make_complex_test_data()
 
-  # Apply chain once
+  # Apply chain once with explicit variable_handling for consistent behavior
   result1 <- dt |>
-    consolidate_overlapping() |>
-    consolidate_adjacent() |>
-    consolidate_short_gaps(30)
+    consolidate_overlapping(variable_handling = "weight") |>
+    consolidate_adjacent(variable_handling = "weight") |>
+    consolidate_short_gaps(30, variable_handling = "weight")
 
   # Apply chain again to result
   result2 <- result1 |>
-    consolidate_overlapping() |>
-    consolidate_adjacent() |>
-    consolidate_short_gaps(30)
+    consolidate_overlapping(variable_handling = "weight") |>
+    consolidate_adjacent(variable_handling = "weight") |>
+    consolidate_short_gaps(30, variable_handling = "weight")
 
   # Should be identical (no further consolidation possible)
   expect_equal(nrow(result1), nrow(result2))
@@ -344,12 +344,13 @@ test_that("chaining: no temporal gaps within consolidated groups", {
 test_that("chaining: non_working_days is accurate", {
   skip_if_not_installed("data.table")
 
+  # Test with short unemployment (should bridge)
   dt <- data.table::data.table(
     cf = c(1, 1, 1),
-    inizio = as.Date(c("2023-01-01", "2023-01-20", "2023-02-01")),
-    fine = as.Date(c("2023-01-15", "2023-01-25", "2023-02-15")),
-    durata = c(15, 6, 15),
-    arco = c(1, 0, 1),  # Middle is unemployment
+    inizio = as.Date(c("2023-01-01", "2023-01-16", "2023-01-23")),
+    fine = as.Date(c("2023-01-15", "2023-01-22", "2023-02-15")),
+    durata = c(15, 7, 24),
+    arco = c(1, 0, 1),  # 7-day unemployment (all adjacent, gap=0)
     over_id = c(0, 0, 0)
   )
 
@@ -358,7 +359,9 @@ test_that("chaining: non_working_days is accurate", {
     consolidate_adjacent() |>
     consolidate_short_gaps(30)
 
-  expect_equal(result$non_working_days, 6)  # Only the unemployment period
+  # Short unemployment (7 days <= 30) is bridged
+  expect_equal(nrow(result), 1)
+  expect_equal(result$non_working_days, 7)
 })
 
 

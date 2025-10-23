@@ -4,12 +4,15 @@
 \alias{consolidate_adjacent}
 \title{Consolidate Adjacent Employment Periods}
 \usage{
-consolidate_adjacent(data)
+consolidate_adjacent(data, variable_handling = "weight")
 }
 \arguments{
 \item{data}{data.table with employment records. Must contain columns:
 \code{cf}, \code{inizio}, \code{fine}, \code{durata}. The \code{arco} column
 is used if present to identify employment vs unemployment periods.}
+
+\item{variable_handling}{Character string specifying aggregation strategy for variables:
+\code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value}
 }
 \value{
 data.table with adjacent employment periods consolidated. Includes all

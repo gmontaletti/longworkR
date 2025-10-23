@@ -8,13 +8,16 @@
 #' @param data data.table with employment records. Must contain columns:
 #'   \code{cf}, \code{inizio}, \code{fine}, \code{durata}. The \code{arco} column
 #'   is used if present to identify employment vs unemployment periods.
-#' @param max_gap_days Maximum gap in days to consolidate across (default: 30).
+#' @param max_gap_days Maximum gap in days to consolidate across (default: 8).
 #'   Common values:
 #'   \itemize{
-#'     \item 7-14 days: Short breaks between jobs
-#'     \item 30 days: Monthly gaps (default)
+#'     \item 7-8 days: Very short breaks, weekly consolidation (default)
+#'     \item 14 days: Bi-weekly consolidation
+#'     \item 30 days: Monthly gaps
 #'     \item 90 days: Quarterly employment analysis
 #'   }
+#' @param variable_handling Character string specifying aggregation strategy for variables:
+#'   \code{"first"} takes first non-NA value (default), \code{"weight"} uses weighted mean/mode
 #'
 #' @return data.table with periods consolidated across short gaps. Includes all
 #'   original columns plus:
@@ -27,10 +30,14 @@
 #' **How gaps are bridged:**
 #'
 #' This function consolidates employment periods when they are separated by
-#' unemployment gaps of \code{max_gap_days} or fewer. For example, with
+#' gaps of \code{max_gap_days} or fewer. **Important:** Unemployment periods
+#' with duration > \code{max_gap_days} act as consolidation barriers. Short
+#' unemployment periods (<= threshold) can be bridged. For example, with
 #' \code{max_gap_days = 30}:
 #' - Employment (Jan 1-15) → Gap (10 days) → Employment (Jan 26-31) = CONSOLIDATED
 #' - Employment (Jan 1-15) → Gap (50 days) → Employment (Mar 6-31) = NOT consolidated
+#' - Employment (Jan 1-15) → Unemployment (20 days) → Employment = CONSOLIDATED
+#' - Employment (Jan 1-15) → Unemployment (40 days) → Employment = NOT consolidated
 #'
 #' **What non_working_days represents:**
 #'
@@ -50,8 +57,9 @@
 #' **Difference from other consolidation functions:**
 #'
 #' - \code{\link{consolidate_overlapping}}: Merges concurrent employment (same time)
-#' - \code{\link{consolidate_adjacent}}: Merges touching periods (no gap at all)
-#' - \code{consolidate_short_gaps}: Bridges gaps up to threshold (includes unemployment)
+#' - \code{\link{consolidate_adjacent}}: Merges touching periods (no gap, employment only)
+#' - \code{consolidate_short_gaps}: Bridges short gaps and brief unemployment periods;
+#'   long unemployment (> threshold) acts as barrier
 #'
 #' **Aggregation rules:**
 #'
@@ -169,7 +177,7 @@
 #' \code{\link{consolidation_helpers}} for internal aggregation functions
 #'
 #' @export
-consolidate_short_gaps <- function(data, max_gap_days = 30) {
+consolidate_short_gaps <- function(data, max_gap_days = 8, variable_handling = "first") {
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
@@ -178,6 +186,11 @@ consolidate_short_gaps <- function(data, max_gap_days = 30) {
   # Validate max_gap_days
   if (!is.numeric(max_gap_days) || max_gap_days < 0) {
     stop("max_gap_days must be a non-negative number")
+  }
+
+  # Validate variable_handling
+  if (!variable_handling %in% c("weight", "first")) {
+    stop("variable_handling must be 'weight' or 'first'")
   }
 
   # Check required columns
@@ -235,8 +248,10 @@ consolidate_short_gaps <- function(data, max_gap_days = 30) {
 
   # Process multi-period workers only
   if (nrow(process_records) > 0) {
-    # Create shift columns to calculate gaps
+    # Create shift columns to calculate gaps and detect unemployment barriers
     process_records[, prev_fine := data.table::shift(fine, 1L, type = "lag"), by = cf]
+    process_records[, prev_arco := data.table::shift(arco, 1L, type = "lag"), by = cf]
+    process_records[, prev_durata := data.table::shift(durata, 1L, type = "lag"), by = cf]
 
     # Calculate gap in days
     process_records[, gap_days := data.table::fifelse(
@@ -249,9 +264,13 @@ consolidate_short_gaps <- function(data, max_gap_days = 30) {
     # New group when:
     # - First record for person (prev_fine is NA)
     # - Gap exceeds max_gap_days
+    # - Previous period was unemployment with duration > max_gap_days (acts as barrier)
+    # - Current period is unemployment with duration > max_gap_days (acts as barrier)
     process_records[, new_group := is.na(prev_fine) |
                       is.na(gap_days) |
-                      gap_days > max_gap_days]
+                      gap_days > max_gap_days |
+                      (!is.na(prev_arco) & prev_arco == 0L & prev_durata > max_gap_days) |
+                      (arco == 0L & durata > max_gap_days)]
 
     # Create consolidation group IDs
     process_records[, consolidation_group := paste(cf, cumsum(new_group), sep = "_"), by = cf]
@@ -266,10 +285,10 @@ consolidate_short_gaps <- function(data, max_gap_days = 30) {
     ), by = .(cf, consolidation_group)]
 
     # Clean temporary columns before consolidation
-    process_records[, c("prev_fine", "gap_days", "new_group", "non_working_days_temp") := NULL]
+    process_records[, c("prev_fine", "prev_arco", "prev_durata", "gap_days", "new_group", "non_working_days_temp") := NULL]
 
     # Call shared consolidation helper
-    consolidated <- .consolidate_groups(process_records, remove_group_col = FALSE)
+    consolidated <- .consolidate_groups(process_records, remove_group_col = FALSE, variable_handling = variable_handling)
 
     # Merge non_working_days back to result
     consolidated <- merge(consolidated, non_working_summary,

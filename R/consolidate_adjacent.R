@@ -9,6 +9,8 @@
 #' @param data data.table with employment records. Must contain columns:
 #'   \code{cf}, \code{inizio}, \code{fine}, \code{durata}. The \code{arco} column
 #'   is used if present to identify employment vs unemployment periods.
+#' @param variable_handling Character string specifying aggregation strategy for variables:
+#'   \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value
 #'
 #' @return data.table with adjacent employment periods consolidated. Includes all
 #'   original columns plus \code{n_periods_consolidated} indicating how many
@@ -152,10 +154,15 @@
 #' \code{\link{consolidation_helpers}} for internal aggregation functions
 #'
 #' @export
-consolidate_adjacent <- function(data) {
+consolidate_adjacent <- function(data, variable_handling = "weight") {
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
+  }
+
+  # Validate variable_handling
+  if (!variable_handling %in% c("weight", "first")) {
+    stop("variable_handling must be 'weight' or 'first'")
   }
 
   # Check required columns
@@ -243,7 +250,7 @@ consolidate_adjacent <- function(data) {
     process_records[, c("prev_fine", "prev_arco", "gap_days", "new_group") := NULL]
 
     # Call shared consolidation helper
-    consolidated <- .consolidate_groups(process_records, remove_group_col = TRUE)
+    consolidated <- .consolidate_groups(process_records, remove_group_col = TRUE, variable_handling = variable_handling)
   } else {
     # No multi-period workers to process
     consolidated <- data.table::data.table()

@@ -32,6 +32,8 @@ NULL
 #' @param data A data.table with employment periods and a `consolidation_group` column
 #' @param remove_group_col Logical, whether to remove the `consolidation_group` column
 #'   from the result (default: TRUE)
+#' @param variable_handling Character string specifying aggregation strategy for variables:
+#'   \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value
 #'
 #' @return A data.table with consolidated employment periods
 #'
@@ -75,7 +77,7 @@ NULL
 #'
 #' @keywords internal
 #' @noRd
-.consolidate_groups <- function(data, remove_group_col = TRUE) {
+.consolidate_groups <- function(data, remove_group_col = TRUE, variable_handling = "weight") {
 
   # OPTIMIZED VERSION - Phase 3 Performance Optimization
   # Achieves 9x speedup via pre-aggregation strategy for weighted mode
@@ -84,6 +86,11 @@ NULL
   # Validate inputs
   if (!data.table::is.data.table(data)) {
     stop("Input must be a data.table")
+  }
+
+  # Validate variable_handling parameter
+  if (!variable_handling %in% c("weight", "first")) {
+    stop("variable_handling must be 'weight' or 'first'")
   }
 
   required_cols <- c("cf", "inizio", "fine", "durata", "consolidation_group")
@@ -154,10 +161,8 @@ NULL
       character_cols <- other_cols[sapply(col_data, function(x) is.character(x) || is.factor(x))]
       logical_cols <- other_cols[sapply(col_data, is.logical)]
 
-      # Process numeric columns (weighted mean)
+      # Process numeric columns
       if (length(numeric_cols) > 0) {
-        weights <- durata
-        total_weight <- sum(weights, na.rm = TRUE)
         numeric_data <- col_data[, numeric_cols, with = FALSE]
 
         # Pre-determine result types for consistency
@@ -170,22 +175,8 @@ NULL
           }
         })
 
-        # Vectorized weighted means
-        if (total_weight > 0 && .N > 1) {
-          numeric_results <- Map(function(x, col_name, result_type) {
-            if (all(is.na(x))) {
-              if (result_type == "integer") NA_integer_ else NA_real_
-            } else {
-              weighted_mean <- sum(x * weights, na.rm = TRUE) / total_weight
-              if (result_type == "integer") {
-                as.integer(round(weighted_mean))
-              } else {
-                as.numeric(weighted_mean)
-              }
-            }
-          }, numeric_data, numeric_cols, numeric_result_types)
-        } else {
-          # Single value or no weight - take first non-NA
+        if (variable_handling == "first") {
+          # First non-NA strategy
           numeric_results <- Map(function(x, col_name, result_type) {
             non_na_vals <- x[!is.na(x)]
             if (length(non_na_vals) > 0) {
@@ -195,6 +186,37 @@ NULL
               if (result_type == "integer") NA_integer_ else NA_real_
             }
           }, numeric_data, numeric_cols, numeric_result_types)
+        } else {
+          # Weighted mean strategy
+          weights <- durata
+          total_weight <- sum(weights, na.rm = TRUE)
+
+          # Vectorized weighted means
+          if (total_weight > 0 && .N > 1) {
+            numeric_results <- Map(function(x, col_name, result_type) {
+              if (all(is.na(x))) {
+                if (result_type == "integer") NA_integer_ else NA_real_
+              } else {
+                weighted_mean <- sum(x * weights, na.rm = TRUE) / total_weight
+                if (result_type == "integer") {
+                  as.integer(round(weighted_mean))
+                } else {
+                  as.numeric(weighted_mean)
+                }
+              }
+            }, numeric_data, numeric_cols, numeric_result_types)
+          } else {
+            # Single value or no weight - take first non-NA
+            numeric_results <- Map(function(x, col_name, result_type) {
+              non_na_vals <- x[!is.na(x)]
+              if (length(non_na_vals) > 0) {
+                val <- non_na_vals[1L]
+                if (result_type == "integer") as.integer(val) else as.numeric(val)
+              } else {
+                if (result_type == "integer") NA_integer_ else NA_real_
+              }
+            }, numeric_data, numeric_cols, numeric_result_types)
+          }
         }
 
         # Add numeric results
@@ -203,74 +225,102 @@ NULL
         }
       }
 
-      # Process character/factor columns (weighted mode)
+      # Process character/factor columns
       if (length(character_cols) > 0) {
-        char_results <- lapply(character_cols, function(col) {
-          col_vals <- .SD[[col]]
-          non_na_vals <- col_vals[!is.na(col_vals)]
-          orig_class <- original_classes[[col]]
+        if (variable_handling == "first") {
+          # First non-NA strategy
+          char_results <- lapply(character_cols, function(col) {
+            col_vals <- .SD[[col]]
+            non_na_vals <- col_vals[!is.na(col_vals)]
+            orig_class <- original_classes[[col]]
 
-          if (length(non_na_vals) > 0) {
-            if (length(non_na_vals) == 1) {
+            if (length(non_na_vals) > 0) {
               selected_val <- non_na_vals[1L]
-            } else {
-              # Special handling for 'stato' column
-              if (col == "stato" && "arco" %in% names(.SD)) {
-                dominant_arco <- max(arco, na.rm = TRUE)
 
-                if (dominant_arco > 0) {
-                  # Employment group: filter to employment states only
-                  employment_mask <- arco > 0
-                  employment_states <- col_vals[employment_mask]
-                  employment_states <- employment_states[!is.na(employment_states)]
-
-                  if (length(employment_states) > 0) {
-                    if (length(employment_states) == 1) {
-                      selected_val <- employment_states[1L]
-                    } else {
-                      # Weighted mode by duration
-                      employment_durations <- durata[employment_mask]
-                      state_weights <- tapply(employment_durations, employment_states, sum)
-                      selected_val <- names(state_weights)[which.max(state_weights)]
-                    }
-                  } else {
-                    selected_val <- non_na_vals[1L]
-                  }
-                } else {
-                  # Unemployment group
-                  selected_val <- if (any(grepl("disoccupato", col_vals, ignore.case = TRUE))) {
-                    col_vals[grep("disoccupato", col_vals, ignore.case = TRUE)][1L]
-                  } else {
-                    "disoccupato"
-                  }
-                }
+              # Preserve original type
+              if (!is.null(orig_class) && "factor" %in% orig_class) {
+                factor(selected_val, levels = levels(col_vals))
               } else {
-                # Weighted mode for other columns
-                if (length(unique(non_na_vals)) == 1) {
-                  selected_val <- non_na_vals[1L]
-                } else {
-                  # Sum durations by unique value, pick max
-                  value_weights <- tapply(durata[!is.na(col_vals)], non_na_vals, sum)
-                  selected_val <- names(value_weights)[which.max(value_weights)]
-                }
+                as.character(selected_val)
+              }
+            } else {
+              # Handle NA with proper type
+              if (!is.null(orig_class) && "factor" %in% orig_class) {
+                factor(NA, levels = levels(col_vals))
+              } else {
+                NA_character_
               }
             }
+          })
+        } else {
+          # Weighted mode strategy
+          char_results <- lapply(character_cols, function(col) {
+            col_vals <- .SD[[col]]
+            non_na_vals <- col_vals[!is.na(col_vals)]
+            orig_class <- original_classes[[col]]
 
-            # Preserve original type
-            if (!is.null(orig_class) && "factor" %in% orig_class) {
-              factor(selected_val, levels = levels(col_vals))
+            if (length(non_na_vals) > 0) {
+              if (length(non_na_vals) == 1) {
+                selected_val <- non_na_vals[1L]
+              } else {
+                # Special handling for 'stato' column
+                if (col == "stato" && "arco" %in% names(.SD)) {
+                  dominant_arco <- max(arco, na.rm = TRUE)
+
+                  if (dominant_arco > 0) {
+                    # Employment group: filter to employment states only
+                    employment_mask <- arco > 0
+                    employment_states <- col_vals[employment_mask]
+                    employment_states <- employment_states[!is.na(employment_states)]
+
+                    if (length(employment_states) > 0) {
+                      if (length(employment_states) == 1) {
+                        selected_val <- employment_states[1L]
+                      } else {
+                        # Weighted mode by duration
+                        employment_durations <- durata[employment_mask]
+                        state_weights <- tapply(employment_durations, employment_states, sum)
+                        selected_val <- names(state_weights)[which.max(state_weights)]
+                      }
+                    } else {
+                      selected_val <- non_na_vals[1L]
+                    }
+                  } else {
+                    # Unemployment group
+                    selected_val <- if (any(grepl("disoccupato", col_vals, ignore.case = TRUE))) {
+                      col_vals[grep("disoccupato", col_vals, ignore.case = TRUE)][1L]
+                    } else {
+                      "disoccupato"
+                    }
+                  }
+                } else {
+                  # Weighted mode for other columns
+                  if (length(unique(non_na_vals)) == 1) {
+                    selected_val <- non_na_vals[1L]
+                  } else {
+                    # Sum durations by unique value, pick max
+                    value_weights <- tapply(durata[!is.na(col_vals)], non_na_vals, sum)
+                    selected_val <- names(value_weights)[which.max(value_weights)]
+                  }
+                }
+              }
+
+              # Preserve original type
+              if (!is.null(orig_class) && "factor" %in% orig_class) {
+                factor(selected_val, levels = levels(col_vals))
+              } else {
+                as.character(selected_val)
+              }
             } else {
-              as.character(selected_val)
+              # Handle NA with proper type
+              if (!is.null(orig_class) && "factor" %in% orig_class) {
+                factor(NA, levels = levels(col_vals))
+              } else {
+                NA_character_
+              }
             }
-          } else {
-            # Handle NA with proper type
-            if (!is.null(orig_class) && "factor" %in% orig_class) {
-              factor(NA, levels = levels(col_vals))
-            } else {
-              NA_character_
-            }
-          }
-        })
+          })
+        }
 
         # Add character results
         for (i in seq_along(character_cols)) {
@@ -278,17 +328,31 @@ NULL
         }
       }
 
-      # Process logical columns (majority rule)
+      # Process logical columns
       if (length(logical_cols) > 0) {
         logical_data <- col_data[, logical_cols, with = FALSE]
-        logical_results <- lapply(logical_data, function(x) {
-          non_na_vals <- x[!is.na(x)]
-          if (length(non_na_vals) > 0) {
-            as.logical(mean(non_na_vals) >= 0.5)
-          } else {
-            NA
-          }
-        })
+
+        if (variable_handling == "first") {
+          # First non-NA strategy
+          logical_results <- lapply(logical_data, function(x) {
+            non_na_vals <- x[!is.na(x)]
+            if (length(non_na_vals) > 0) {
+              as.logical(non_na_vals[1L])
+            } else {
+              NA
+            }
+          })
+        } else {
+          # Majority rule strategy
+          logical_results <- lapply(logical_data, function(x) {
+            non_na_vals <- x[!is.na(x)]
+            if (length(non_na_vals) > 0) {
+              as.logical(mean(non_na_vals) >= 0.5)
+            } else {
+              NA
+            }
+          })
+        }
 
         # Add logical results
         for (i in seq_along(logical_cols)) {

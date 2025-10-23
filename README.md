@@ -129,14 +129,14 @@ For detailed documentation, see:
 
 To cite longworkR in publications, please use:
 
-Montaletti, G. (2025). *longworkR: Longitudinal Employment Analytics for vecshift Data* (Version 0.6.0) [R package]. https://github.com/gmontaletti/longworkR
+Montaletti, G. (2025). *longworkR: Longitudinal Employment Analytics for vecshift Data* (Version 0.7.0) [R package]. https://github.com/gmontaletti/longworkR
 
 BibTeX entry:
 ```bibtex
 @software{montaletti2025longworkr,
   author = {Montaletti, Giampaolo},
   title = {longworkR: Longitudinal Employment Analytics for vecshift Data},
-  version = {0.6.0},
+  version = {0.7.0},
   year = {2025},
   url = {https://github.com/gmontaletti/longworkR}
 }

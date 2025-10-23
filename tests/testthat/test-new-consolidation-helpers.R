@@ -507,3 +507,190 @@ test_that(".consolidate_groups handles empty groups correctly", {
   expect_equal(nrow(result), 0)
   expect_true("n_periods_consolidated" %in% names(result))
 })
+
+
+# 4. Tests for variable_handling parameter -----
+
+test_that(".consolidate_groups validates variable_handling parameter", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(31, 28, 31),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  expect_error(
+    longworkR:::.consolidate_groups(dt, variable_handling = "invalid"),
+    "variable_handling must be 'weight' or 'first'"
+  )
+})
+
+test_that(".consolidate_groups uses first non-NA for numeric with 'first' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 20, 30),
+    salary = c(1000, 2000, 3000),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "first")
+
+  # Should take first value (1000), not weighted mean
+  expect_equal(result$salary, 1000)
+})
+
+test_that(".consolidate_groups uses weighted mean for numeric with 'weight' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 20, 30),
+    salary = c(1000, 2000, 3000),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "weight")
+
+  # Should use weighted mean: (1000*10 + 2000*20 + 3000*30) / 60 = 2333.33
+  expect_equal(result$salary, (1000*10 + 2000*20 + 3000*30) / 60, tolerance = 0.01)
+})
+
+test_that(".consolidate_groups uses first non-NA for character with 'first' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 50, 10),  # Second has longest duration
+    contract = c("A", "B", "C"),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "first")
+
+  # Should take first value (A), not weighted mode (B)
+  expect_equal(result$contract, "A")
+})
+
+test_that(".consolidate_groups uses weighted mode for character with 'weight' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 50, 10),  # Second has longest duration
+    contract = c("A", "B", "C"),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "weight")
+
+  # Should use weighted mode: B has duration 50, others have 10
+  expect_equal(result$contract, "B")
+})
+
+test_that(".consolidate_groups uses first non-NA for logical with 'first' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 20, 30),
+    flag = c(FALSE, TRUE, TRUE),  # Majority is TRUE
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "first")
+
+  # Should take first value (FALSE), not majority (TRUE)
+  expect_equal(result$flag, FALSE)
+})
+
+test_that(".consolidate_groups uses majority rule for logical with 'weight' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 20, 30),
+    flag = c(FALSE, TRUE, TRUE),  # Majority is TRUE
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "weight")
+
+  # Should use majority rule: 2 out of 3 are TRUE
+  expect_equal(result$flag, TRUE)
+})
+
+test_that(".consolidate_groups preserves integer type with 'first' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1L, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 20, 30),
+    count = c(5L, 10L, 15L),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "first")
+
+  # Should preserve integer type
+  expect_type(result$count, "integer")
+  expect_equal(result$count, 5L)
+})
+
+test_that(".consolidate_groups handles NA values correctly with 'first' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 20, 30),
+    salary = c(NA_real_, 2000, 3000),
+    contract = c(NA_character_, "B", "C"),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "first")
+
+  # Should skip NA and take first non-NA value
+  expect_equal(result$salary, 2000)
+  expect_equal(result$contract, "B")
+})
+
+test_that(".consolidate_groups uses first non-NA for factors with 'first' mode", {
+  skip_if_not_installed("data.table")
+
+  dt <- data.table::data.table(
+    cf = rep(1, 3),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
+    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
+    durata = c(10, 50, 10),
+    contract = factor(c("TypeA", "TypeB", "TypeC"), levels = c("TypeA", "TypeB", "TypeC")),
+    consolidation_group = rep("1_1", 3)
+  )
+
+  result <- longworkR:::.consolidate_groups(dt, variable_handling = "first")
+
+  # Should take first value and preserve factor type
+  expect_s3_class(result$contract, "factor")
+  expect_equal(as.character(result$contract), "TypeA")
+  expect_equal(levels(result$contract), c("TypeA", "TypeB", "TypeC"))
+})

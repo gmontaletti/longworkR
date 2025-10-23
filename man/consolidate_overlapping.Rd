@@ -4,13 +4,16 @@
 \alias{consolidate_overlapping}
 \title{Consolidate Overlapping Employment Periods}
 \usage{
-consolidate_overlapping(data)
+consolidate_overlapping(data, variable_handling = "weight")
 }
 \arguments{
 \item{data}{A data.table containing employment periods processed by vecshift,
 with columns: \code{cf} (person ID), \code{inizio} (start date), \code{fine} (end date),
 \code{durata} (duration), \code{over_id} (overlapping period identifier), and optionally
 \code{arco} (employment indicator).}
+
+\item{variable_handling}{Character string specifying aggregation strategy for variables:
+\code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value}
 }
 \value{
 A data.table with consolidated employment periods, where:

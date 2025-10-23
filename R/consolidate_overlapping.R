@@ -9,6 +9,8 @@
 #'   with columns: `cf` (person ID), `inizio` (start date), `fine` (end date),
 #'   `durata` (duration), `over_id` (overlapping period identifier), and optionally
 #'   `arco` (employment indicator).
+#' @param variable_handling Character string specifying aggregation strategy for variables:
+#'   \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value
 #'
 #' @return A data.table with consolidated employment periods, where:
 #'   - Periods with the same `over_id > 0` are merged into single periods
@@ -108,11 +110,16 @@
 #' \code{\link{consolidate_short_gaps}} to bridge short unemployment gaps
 #'
 #' @export
-consolidate_overlapping <- function(data) {
+consolidate_overlapping <- function(data, variable_handling = "weight") {
 
   # 1. Input validation
   if (!data.table::is.data.table(data)) {
     stop("Input must be a data.table. Use data.table::as.data.table() to convert.")
+  }
+
+  # Validate variable_handling
+  if (!variable_handling %in% c("weight", "first")) {
+    stop("variable_handling must be 'weight' or 'first'")
   }
 
   required_cols <- c("cf", "inizio", "fine", "durata")
@@ -184,7 +191,7 @@ consolidate_overlapping <- function(data) {
     }, by = .(cf, over_id)]
 
     # 7. Call shared consolidation helper
-    consolidated <- .consolidate_groups(process_records, remove_group_col = TRUE)
+    consolidated <- .consolidate_groups(process_records, remove_group_col = TRUE, variable_handling = variable_handling)
   } else {
     # No records to process
     consolidated <- data.table::data.table()

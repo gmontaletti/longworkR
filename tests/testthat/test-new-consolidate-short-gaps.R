@@ -57,19 +57,20 @@ test_that("consolidate_short_gaps validates max_gap_days parameter", {
 test_that("consolidate_short_gaps merges when gap <= max_gap_days", {
   skip_if_not_installed("data.table")
 
+  # Test with employment periods only (no unemployment barriers)
   dt <- data.table::data.table(
     cf = c(1, 1, 1),
     inizio = as.Date(c("2023-01-01", "2023-01-20", "2023-02-01")),
     fine = as.Date(c("2023-01-15", "2023-01-25", "2023-02-15")),
     durata = c(15, 6, 15),
-    arco = c(1, 0, 1)  # Gap of 4 days before middle, 6 days after
+    arco = c(1, 1, 1)  # All employment - gaps of 4 and 6 days
   )
 
   result <- consolidate_short_gaps(dt, max_gap_days = 30)
 
   expect_equal(nrow(result), 1)  # All consolidated
   expect_true("non_working_days" %in% names(result))
-  expect_equal(result$non_working_days, 6)  # Only the unemployment period
+  expect_equal(result$non_working_days, 0)  # No unemployment periods
 })
 
 test_that("consolidate_short_gaps does NOT merge when gap > max_gap_days", {
@@ -92,18 +93,20 @@ test_that("consolidate_short_gaps does NOT merge when gap > max_gap_days", {
 test_that("consolidate_short_gaps calculates non_working_days correctly", {
   skip_if_not_installed("data.table")
 
+  # Test with short unemployment periods (all adjacent, no gaps)
   dt <- data.table::data.table(
     cf = c(1, 1, 1, 1),
-    inizio = as.Date(c("2023-01-01", "2023-01-20", "2023-02-01", "2023-02-20")),
-    fine = as.Date(c("2023-01-15", "2023-01-25", "2023-02-15", "2023-02-28")),
-    durata = c(15, 6, 15, 9),
-    arco = c(1, 0, 1, 0)  # Two unemployment periods: 6 and 9 days
+    inizio = as.Date(c("2023-01-01", "2023-01-16", "2023-01-23", "2023-02-08")),
+    fine = as.Date(c("2023-01-15", "2023-01-22", "2023-02-07", "2023-02-28")),
+    durata = c(15, 7, 16, 21),
+    arco = c(1, 0, 1, 0)  # Two unemployment periods: 7 and 21 days
   )
 
   result <- consolidate_short_gaps(dt, max_gap_days = 30)
 
+  # All consolidate because unemployment durations <= 30 days
   expect_equal(nrow(result), 1)
-  expect_equal(result$non_working_days, 15)  # 6 + 9 unemployment days
+  expect_equal(result$non_working_days, 28)  # 7 + 21 unemployment days
 })
 
 test_that("consolidate_short_gaps handles different thresholds", {
@@ -241,20 +244,20 @@ test_that("consolidate_short_gaps preserves column types", {
 test_that("consolidate_short_gaps uses weighted aggregation", {
   skip_if_not_installed("data.table")
 
+  # Test with employment periods only
   dt <- data.table::data.table(
     cf = c(1, 1, 1),
     inizio = as.Date(c("2023-01-01", "2023-01-20", "2023-02-01")),
     fine = as.Date(c("2023-01-15", "2023-01-25", "2023-02-15")),
     durata = c(15, 6, 15),
-    salary = c(1000, 0, 2000),  # Middle is unemployment
-    arco = c(1, 0, 1)
+    salary = c(1000, 1500, 2000),
+    arco = c(1, 1, 1)  # All employment periods
   )
 
-  result <- consolidate_short_gaps(dt, max_gap_days = 30)
+  result <- consolidate_short_gaps(dt, max_gap_days = 30, variable_handling = "weight")
 
-  # Weighted mean includes ALL periods (unemployment included with salary=0)
-  # (1000*15 + 0*6 + 2000*15) / 36 = 1250
-  expected_salary <- (1000*15 + 0*6 + 2000*15) / 36
+  # Weighted mean: (1000*15 + 1500*6 + 2000*15) / 36 = 1417
+  expected_salary <- (1000*15 + 1500*6 + 2000*15) / 36
   expect_equal(result$salary, expected_salary, tolerance = 0.01)
 })
 
@@ -332,18 +335,58 @@ test_that("consolidate_short_gaps handles consecutive unemployment periods", {
 
   dt <- data.table::data.table(
     cf = c(1, 1, 1, 1),
-    inizio = as.Date(c("2023-01-01", "2023-01-20", "2023-02-01", "2023-02-20")),
-    fine = as.Date(c("2023-01-15", "2023-01-31", "2023-02-15", "2023-02-28")),
-    durata = c(15, 12, 15, 9),
-    arco = c(1, 0, 0, 1)  # Two consecutive unemployment periods
+    inizio = as.Date(c("2023-01-01", "2023-01-16", "2023-01-29", "2023-02-14")),
+    fine = as.Date(c("2023-01-15", "2023-01-28", "2023-02-13", "2023-02-28")),
+    durata = c(15, 13, 16, 15),
+    arco = c(1, 0, 0, 1)  # Two consecutive short unemployment periods
   )
 
   result <- consolidate_short_gaps(dt, max_gap_days = 30)
 
-  expect_equal(nrow(result), 1)  # All consolidated
-  # non_working_days includes unemployment durations plus gaps
-  # Unemployment periods: 12 + 15 = 27 days
-  expect_equal(result$non_working_days, 27)
+  # All consolidate because unemployment durations <= 30 days
+  expect_equal(nrow(result), 1)
+  # Unemployment periods: 13 + 16 = 29 days
+  expect_equal(result$non_working_days, 29)
+})
+
+test_that("consolidate_short_gaps treats long unemployment as barrier", {
+  skip_if_not_installed("data.table")
+
+  # Test that long unemployment periods (duration > threshold) block consolidation
+  dt <- data.table::data.table(
+    cf = c(1, 1, 1),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-04-01")),
+    fine = as.Date(c("2023-01-31", "2023-03-31", "2023-04-30")),
+    durata = c(31, 59, 30),
+    arco = c(1, 0, 1)  # 59-day unemployment (all adjacent, gap=0)
+  )
+
+  result <- consolidate_short_gaps(dt, max_gap_days = 30)
+
+  # Long unemployment (59 days > 30) blocks consolidation
+  expect_equal(nrow(result), 3)
+  expect_equal(result$arco, c(1, 0, 1))
+  expect_equal(result$non_working_days, c(0, 59, 0))
+})
+
+test_that("consolidate_short_gaps bridges short unemployment", {
+  skip_if_not_installed("data.table")
+
+  # Test that short unemployment (duration <= threshold) is bridged
+  dt <- data.table::data.table(
+    cf = c(1, 1, 1),
+    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-02-11")),
+    fine = as.Date(c("2023-01-31", "2023-02-10", "2023-02-28")),
+    durata = c(31, 10, 18),
+    arco = c(1, 0, 1)  # 10-day unemployment (all adjacent)
+  )
+
+  result <- consolidate_short_gaps(dt, max_gap_days = 30)
+
+  # Short unemployment (10 days <= 30) is bridged
+  expect_equal(nrow(result), 1)
+  expect_equal(result$arco, 1)  # Consolidated as employment
+  expect_equal(result$non_working_days, 10)  # Tracks bridged unemployment
 })
 
 test_that("consolidate_short_gaps returns all original columns", {

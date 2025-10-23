@@ -1,3 +1,77 @@
+# longworkR 0.7.0
+
+## BREAKING CHANGES ⚠️
+
+**Default consolidation behavior has changed.** The `consolidate_short_gaps()` function now uses more conservative defaults that better align with short-term employment analysis.
+
+### Changed Defaults
+
+- **`max_gap_days`**: Default changed from 30 to 8 days
+  - Old behavior: Bridged gaps up to one month
+  - New behavior: Bridges only very short gaps (weekly consolidation)
+  - **Migration**: To restore old behavior, explicitly set `max_gap_days = 30`
+
+### New Features
+
+- **`variable_handling` parameter**: All consolidation functions now support a `variable_handling` parameter to control aggregation strategy:
+  - `"first"` (default): Takes first non-NA value from consolidated periods
+  - `"weight"`: Uses weighted mean for numeric variables, weighted mode for categorical
+  - Provides explicit control over how variables are aggregated during consolidation
+
+### Bug Fixes
+
+- **Fixed unemployment barrier logic in `consolidate_short_gaps()`**:
+  - **Problem**: Unemployment periods were incorrectly treated as simple gaps, allowing consolidation across long unemployment spells
+  - **Fix**: Unemployment periods with `duration > max_gap_days` now act as consolidation barriers
+  - **Impact**: Short unemployment periods (≤ threshold) can be bridged, but long unemployment (> threshold) prevents consolidation
+  - **Example**: With `max_gap_days = 8`:
+    - Employment → 5-day unemployment → Employment = **CONSOLIDATED** ✓
+    - Employment → 20-day unemployment → Employment = **NOT consolidated** ✓ (barrier)
+  - This ensures that significant unemployment spells are preserved in consolidated career histories
+
+### Migration Guide
+
+**Before (0.6.x):**
+```r
+# Default bridged gaps up to 30 days
+consolidated <- data |>
+  consolidate_short_gaps()  # max_gap_days = 30 (old default)
+```
+
+**After (0.7.0+):**
+```r
+# New default: only bridges very short gaps (8 days)
+consolidated <- data |>
+  consolidate_short_gaps()  # max_gap_days = 8 (new default)
+
+# To restore old behavior, explicitly set max_gap_days
+consolidated <- data |>
+  consolidate_short_gaps(max_gap_days = 30)
+
+# Use variable_handling for explicit aggregation control
+consolidated <- data |>
+  consolidate_short_gaps(
+    max_gap_days = 8,
+    variable_handling = "first"  # or "weight"
+  )
+```
+
+### Technical Details
+
+- **Files modified**:
+  - `R/consolidate_short_gaps.R`: Unemployment barrier logic and default change
+  - `R/consolidate_adjacent.R`: Added `variable_handling` parameter
+  - `R/consolidate_overlapping.R`: Added `variable_handling` parameter
+  - `R/consolidation_helpers.R`: Enhanced aggregation functions
+  - Documentation updated across all consolidation functions
+
+- **Test coverage**:
+  - New tests for unemployment barrier detection
+  - New tests for `variable_handling` parameter
+  - All consolidation tests updated for new defaults
+
+---
+
 # longworkR 0.6.0
 
 ## BREAKING CHANGES ⚠️
