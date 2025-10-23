@@ -1,7 +1,7 @@
 Package: longworkR
 Title: Longitudinal Employment Analytics for vecshift Data
-Version: 0.5.6
-Date: 2025-10-19
+Version: 0.6.0
+Date: 2025-10-23
 Authors@R: 
     person("Giampaolo", "Montaletti", , "giampaolo.montaletti@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0002-5327-1122"))
@@ -37,7 +37,8 @@ Imports:
     collapse,
     ggalluvial,
     Matrix,
-    cluster
+    cluster,
+    matrixStats
 Suggests:
     g6r,
     networkD3,

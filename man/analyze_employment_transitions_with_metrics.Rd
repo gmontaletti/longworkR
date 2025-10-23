@@ -41,46 +41,6 @@ to consider a transition. If NULL (default), no upper limit is applied. When not
 NULL, only transitions with unemployment duration between min_unemployment_duration
 and max_unemployment_duration (inclusive) are included.}
 
-\item{consolidation_type}{Character string specifying consolidation approach when
-consolidation_mode is "temporal" or "both" (default: "both"). Options:
-\itemize{
-\item{\code{"both"}}: First consolidate overlapping periods (same over_id > 0),
-then merge consecutive periods. Provides complete employment history consolidation.
-\item{\code{"overlapping"}}: Only consolidate segments with same over_id > 0.
-Merges simultaneous/overlapping contracts into single periods.
-\item{\code{"consecutive"}}: Only merge periods that are contiguous in time,
-regardless of over_id. Traditional consecutive period merging.
-}
-Ignored when consolidation_mode is "employer" or "none".}
-
-\item{consolidation_mode}{Character string specifying consolidation strategy (default: "none"). Options:
-\itemize{
-\item{\code{"none"}}: No consolidation - analyze transitions using original employment periods
-\item{\code{"temporal"}}: Uses vecshift package temporal consolidation based on over_id
-and time proximity. Consolidates overlapping/consecutive periods regardless of employer
-using the consolidation_type parameter ("both", "overlapping", "consecutive").
-\item{\code{"employer"}}: Uses employer-based consolidation that respects employer boundaries.
-Only consolidates consecutive contracts from the same employer (identified by employer_var)
-if they are separated by ≤ min_lag days. Never consolidates across different
-employers, ensuring transitions represent true job changes. Requires employer_var parameter.
-\item{\code{"both"}}: Sequential consolidation combining both approaches. First applies
-employer-based consolidation to respect employer boundaries, then applies temporal
-consolidation to the result. Requires both employer_var and consolidation_type parameters.
-}}
-
-\item{employer_var}{Character string specifying the column name containing employer identifiers
-(default: NULL). Required when consolidation_mode = "employer". This column should contain
-unique identifiers for each employer (e.g., company IDs, tax codes, or standardized company names).
-Contracts with the same employer_var value will be considered for consolidation if within
-min_lag days. Ignored and produces a warning when consolidation_mode = "temporal".}
-
-\item{min_lag}{Numeric value specifying the maximum gap in days between consecutive
-contracts from the same employer to be consolidated when consolidation_mode = "employer"
-(default: 8). Contracts from the same employer separated by more than this number of days
-will remain as separate employment periods, allowing for detection of re-hiring patterns.
-Lower values (e.g., 7) provide stricter consolidation, while higher values (e.g., 90) are
-more permissive for employers with seasonal or project-based hiring patterns.}
-
 \item{output_transition_matrix}{Logical. If TRUE, returns a square transition matrix
 instead of the normal aggregated data.table. Rows represent "from" states, columns
 represent "to" states, and values are transition weights (counts). Non-populated

@@ -18,6 +18,13 @@ devtools::install_local(".")  # from longworkR directory
 
 ## Features
 
+### Employment Consolidation (New in v0.6.0)
+- **Progressive consolidation**: Three composable functions
+- **9x performance improvement**: Handles 10M+ records efficiently
+- **Focused functions**: `consolidate_overlapping()`, `consolidate_adjacent()`, `consolidate_short_gaps()`
+- **Type-safe**: Preserves all column types
+- See `vignette("consolidation-strategies")` for comprehensive guide
+
 ### Survival Analysis
 - Contract survival curves and hazard functions
 - Comparative survival analysis across groups
@@ -52,22 +59,25 @@ library(longworkR)
 # Process data with vecshift
 data <- vecshift(employment_records)
 
+# Consolidate employment periods (new in v0.6.0)
+consolidated <- data |>
+  consolidate_overlapping() |>  # Merge concurrent jobs
+  consolidate_adjacent() |>     # Merge touching periods
+  consolidate_short_gaps(30)    # Bridge 30-day gaps
+
 # Analyze transitions
-transitions <- analyze_employment_transitions(
-  data,
-  consolidation_type = "both"
-)
+transitions <- analyze_employment_transitions(consolidated)
 
 # Create visualizations
 plot_transitions_network(transitions)
 
 # Survival analysis
-survival_results <- estimate_contract_survival(data)
+survival_results <- estimate_contract_survival(consolidated)
 plot_survival_comparison(survival_results)
 
 # Impact evaluation
 treatment_events <- identify_treatment_events(
-  data,
+  consolidated,
   treatment_conditions = list("contract_type == 'permanent'")
 )
 
@@ -79,8 +89,13 @@ did_results <- difference_in_differences(
 
 ## Key Functions
 
+### Consolidation Functions (New in v0.6.0)
+- `consolidate_overlapping()` - Merge concurrent employment periods
+- `consolidate_adjacent()` - Merge touching employment periods
+- `consolidate_short_gaps()` - Bridge short unemployment gaps
+
 ### Analysis Functions
-- `analyze_employment_transitions()` - Transition analysis with consolidation
+- `analyze_employment_transitions()` - Transition analysis on consolidated data
 - `analyze_consolidated_periods()` - Period analysis using over_id
 - `create_consolidated_transition_matrix()` - Transition matrices
 
@@ -114,14 +129,14 @@ For detailed documentation, see:
 
 To cite longworkR in publications, please use:
 
-Montaletti, G. (2025). *longworkR: Longitudinal Employment Analytics for vecshift Data* (Version 0.5.6) [R package]. https://github.com/gmontaletti/longworkR
+Montaletti, G. (2025). *longworkR: Longitudinal Employment Analytics for vecshift Data* (Version 0.6.0) [R package]. https://github.com/gmontaletti/longworkR
 
 BibTeX entry:
 ```bibtex
 @software{montaletti2025longworkr,
   author = {Montaletti, Giampaolo},
   title = {longworkR: Longitudinal Employment Analytics for vecshift Data},
-  version = {0.5.6},
+  version = {0.6.0},
   year = {2025},
   url = {https://github.com/gmontaletti/longworkR}
 }
