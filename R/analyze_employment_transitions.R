@@ -807,43 +807,6 @@ analyze_employment_transitions <- function(pipeline_result,
     stop("Parameter 'show_progress' must be a logical value (TRUE or FALSE).")
   }
   
-  # Validate consolidation_mode
-  valid_consolidation_modes <- c("employer", "temporal", "none", "both")
-  if (!consolidation_mode %in% valid_consolidation_modes) {
-    stop("Parameter 'consolidation_mode' must be one of: ", paste(valid_consolidation_modes, collapse = ", "))
-  }
-  
-  # Mode-specific parameter validation
-  if (consolidation_mode %in% c("employer", "both")) {
-    if (is.null(employer_var)) {
-      stop("Parameter 'employer_var' is required when consolidation_mode = '", consolidation_mode, "'")
-    }
-    if (!is.character(employer_var) || length(employer_var) != 1) {
-      stop("Parameter 'employer_var' must be a single character string")
-    }
-    if (!employer_var %in% names(pipeline_result)) {
-      stop(paste("Column", employer_var, "not found in pipeline_result"))
-    }
-    if (!is.numeric(min_lag) || min_lag < 0) {
-      stop("Parameter 'min_lag' must be a non-negative numeric value")
-    }
-  }
-  
-  if (consolidation_mode %in% c("temporal", "both")) {
-    # Validate consolidation_type for temporal modes
-    valid_consolidation_types <- c("both", "overlapping", "consecutive")
-    if (!consolidation_type %in% valid_consolidation_types) {
-      stop(paste("Parameter 'consolidation_type' must be one of:", 
-                 paste(valid_consolidation_types, collapse = ", "), 
-                 "when consolidation_mode includes temporal consolidation"))
-    }
-  }
-  
-  # Warn if employer_var provided but not needed
-  if (!is.null(employer_var) && !consolidation_mode %in% c("employer", "both")) {
-    warning("Parameter 'employer_var' is ignored when consolidation_mode = '", consolidation_mode, "'")
-  }
-  
   # Handle output_transition_matrix interaction with statistics_variables
   if (output_transition_matrix && length(statistics_variables) > 0) {
     if (show_progress) {
@@ -859,21 +822,6 @@ analyze_employment_transitions <- function(pipeline_result,
   if (!eval_chain %in% valid_eval_chain) {
     stop(paste("Parameter 'eval_chain' must be one of:", 
                paste(valid_eval_chain, collapse = ", ")))
-  }
-  
-  # Check for over_id column if temporal consolidation is requested  
-  if (consolidation_mode %in% c("temporal", "both")) {
-    if (!"over_id" %in% names(pipeline_result)) {
-      if (show_progress) {
-        message("Note: 'over_id' column not found in data. Temporal consolidation disabled.")
-      }
-      # Adjust consolidation_mode if over_id is missing
-      if (consolidation_mode == "temporal") {
-        consolidation_mode <- "none"
-      } else if (consolidation_mode == "both") {
-        consolidation_mode <- "employer"
-      }
-    }
   }
   
   # Identify available columns (exclude standard vecshift columns)
@@ -963,88 +911,8 @@ analyze_employment_transitions <- function(pipeline_result,
     message("Starting employment transition analysis...")
   }
   
-  # Apply period consolidation based on consolidation_mode
-  if (consolidation_mode != "none") {
-    # Check if consolidation has already been done
-    if ("collapsed" %in% names(pipeline_result)) {
-      if (show_progress) {
-        message("Data already contains 'collapsed' column - skipping consolidation step")
-      }
-      dt <- copy(pipeline_result)
-    } else {
-      if (show_progress) {
-        if (consolidation_mode == "employer") {
-          message(sprintf("Consolidating employment periods by employer using '%s' variable and %d-day lag...", 
-                         employer_var, min_lag))
-        } else if (consolidation_mode == "temporal") {
-          message(sprintf("Consolidating employment periods using '%s' temporal strategy...", consolidation_type))
-        } else if (consolidation_mode == "both") {
-          message(sprintf("Consolidating employment periods: first by employer ('%s', %d-day lag), then temporal ('%s')...", 
-                         employer_var, min_lag, consolidation_type))
-        }
-      }
-      
-      # Execute consolidation based on mode
-      if (consolidation_mode == "employer") {
-        # Use employer-based consolidation only
-        dt <- consolidate_by_employer(pipeline_result, employer_var, min_lag)
-        
-      } else if (consolidation_mode == "temporal") {
-        # Use temporal consolidation only (original vecshift method)
-        dt <- .apply_temporal_consolidation(pipeline_result, consolidation_type, show_progress)
-        
-      } else if (consolidation_mode == "both") {
-        # Sequential consolidation: employer first, then temporal
-        if (show_progress) {
-          message("Step 1: Applying employer-based consolidation...")
-        }
-        
-        # Step 1: Employer consolidation
-        dt_employer <- consolidate_by_employer(pipeline_result, employer_var, min_lag)
-        
-        if (show_progress) {
-          n_original <- nrow(pipeline_result)
-          n_employer <- nrow(dt_employer)
-          reduction_pct <- round((1 - n_employer/n_original) * 100, 1)
-          message(sprintf("Employer consolidation: %d → %d periods (%.1f%% reduction)", 
-                         n_original, n_employer, reduction_pct))
-          message("Step 2: Applying temporal consolidation...")
-        }
-        
-        # Step 2: Temporal consolidation on employer-consolidated data
-        dt <- .apply_temporal_consolidation(dt_employer, consolidation_type, show_progress)
-        
-        if (show_progress) {
-          n_final <- nrow(dt)
-          total_reduction_pct <- round((1 - n_final/n_original) * 100, 1)
-          message(sprintf("Combined consolidation: %d → %d periods (%.1f%% total reduction)", 
-                         n_original, n_final, total_reduction_pct))
-        }
-      }
-      
-      # Update statistics variables list to only include columns that still exist after consolidation
-      missing_after_consolidation <- setdiff(statistics_variables, names(dt))
-      if (length(missing_after_consolidation) > 0) {
-        if (show_progress) {
-          message(sprintf("Removing %d statistics variables that were dropped during consolidation: %s", 
-                         length(missing_after_consolidation),
-                         paste(missing_after_consolidation, collapse = ", ")))
-        }
-        statistics_variables <- intersect(statistics_variables, names(dt))
-      }
-      
-      if (show_progress && consolidation_mode != "both") {
-        n_original <- nrow(pipeline_result)
-        n_consolidated <- nrow(dt)
-        reduction_pct <- round((1 - n_consolidated/n_original) * 100, 1)
-        message(sprintf("Consolidated %d periods to %d (%.1f%% reduction)", 
-                       n_original, n_consolidated, reduction_pct))
-      }
-    }
-  } else {
-    # Work with a copy to avoid modifying original data
-    dt <- copy(pipeline_result)
-  }
+  # Work with a copy to avoid modifying original data
+  dt <- copy(pipeline_result)
   
   # Ensure proper ordering by person and time
   setorder(dt, cf, inizio)
