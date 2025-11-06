@@ -1,7 +1,7 @@
 Package: longworkR
 Title: Longitudinal Employment Analytics for vecshift Data
-Version: 0.7.0
-Date: 2025-10-23
+Version: 0.7.1
+Date: 2025-11-06
 Authors@R: 
     person("Giampaolo", "Montaletti", , "giampaolo.montaletti@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0002-5327-1122"))
@@ -13,6 +13,7 @@ Description: Analytics and visualization tools for longitudinal employment data
     privacy of real employment records.
 License: MIT + file LICENSE
 Encoding: UTF-8
+LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Depends:
