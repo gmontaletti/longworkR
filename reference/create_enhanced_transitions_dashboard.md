@@ -1,0 +1,92 @@
+# Create Enhanced Employment Transitions Dashboard with Consolidation
+
+Creates a comprehensive Shiny application for exploring employment
+transitions with advanced consolidation features, over_id awareness, and
+real-time comparison between consolidated and raw transition patterns.
+
+## Usage
+
+``` r
+create_enhanced_transitions_dashboard(
+  pipeline_result,
+  transition_variable = NULL,
+  statistics_variables = NULL,
+  app_title = "Employment Transitions Explorer",
+  default_layout = "force",
+  enable_export = TRUE,
+  theme = "default"
+)
+```
+
+## Arguments
+
+- pipeline_result:
+
+  Reactive or static data.table from process_employment_pipeline()
+  containing over_id column for consolidation features
+
+- transition_variable:
+
+  Character string specifying the variable for transition analysis.
+  Default: NULL (uses first non-standard attribute)
+
+- statistics_variables:
+
+  Character vector of variables for summary statistics. Default: NULL
+  (uses all non-standard attributes except transition variable)
+
+- app_title:
+
+  Character string for the dashboard title. Default: "Employment
+  Transitions Explorer"
+
+- default_layout:
+
+  Character string for default layout algorithm. Default: "force"
+
+- enable_export:
+
+  Logical. Whether to enable data export features. Default: TRUE
+
+- theme:
+
+  Character string specifying UI theme. Options: "default", "dark",
+  "accessible". Default: "default"
+
+## Value
+
+Shiny application object that can be run with runApp()
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+library(shiny)
+library(data.table)
+
+# Process employment data with over_id
+employment_data <- data.table(
+  id = 1:6,
+  cf = c("PERSON001", "PERSON001", "PERSON001", "PERSON002", "PERSON002", "PERSON002"),
+  INIZIO = as.Date(c("2023-01-01", "2023-04-01", "2023-08-01", 
+                     "2023-02-01", "2023-06-01", "2023-10-01")),
+  FINE = as.Date(c("2023-02-28", "2023-05-31", "2023-12-31", 
+                   "2023-04-30", "2023-08-31", "2023-12-31")),
+  prior = c(1, 0, 1, 1, 1, 0),
+  company = c("CompanyA", "CompanyB", "CompanyC", "CompanyD", "CompanyE", "CompanyF")
+)
+
+# Process through pipeline to get over_id
+pipeline_result <- process_employment_pipeline(employment_data, merge_columns = "company")
+
+# Create enhanced dashboard
+app <- create_enhanced_transitions_dashboard(
+  pipeline_result = pipeline_result,
+  transition_variable = "company",
+  app_title = "Company Transitions Analysis"
+)
+
+# Run the dashboard
+runApp(app)
+} # }
+```

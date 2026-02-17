@@ -1,0 +1,12 @@
+pandoc: 3.1.11
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  consolidation-strategies: consolidation-strategies.html
+  impact-metrics-integration: impact-metrics-integration.html
+  multiple-treatment-groups-evaluation: multiple-treatment-groups-evaluation.html
+  performance-optimizations: performance-optimizations.html
+last_built: 2026-02-17T14:34Z
+urls:
+  reference: https://gmontaletti.github.io/longworkR/reference
+  article: https://gmontaletti.github.io/longworkR/articles

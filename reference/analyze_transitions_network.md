@@ -1,0 +1,84 @@
+# Analyze Network Structure from Transitions Data
+
+Analyzes the network structure of employment transitions to provide
+insights about connectivity, centrality, and community structure. Useful
+for understanding employment flow patterns and identifying key states.
+
+## Usage
+
+``` r
+analyze_transitions_network(
+  transitions_data,
+  input_format = "data.table",
+  min_edge_weight = 1,
+  directed = TRUE,
+  compute_communities = TRUE,
+  return_tidygraph = FALSE,
+  consolidation_mode = "temporal",
+  consolidation_type = "both",
+  transition_variable = "prior"
+)
+```
+
+## Arguments
+
+- transitions_data:
+
+  Data.table output from analyze_employment_transitions()
+
+- input_format:
+
+  Character. Format of input data: "data.table" or "matrix" (default:
+  "data.table")
+
+- min_edge_weight:
+
+  Numeric. Minimum edge weight to include (default: 1)
+
+- directed:
+
+  Logical. Treat as directed network (default: TRUE)
+
+- compute_communities:
+
+  Logical. Compute community structure (default: TRUE)
+
+- return_tidygraph:
+
+  Logical. Return tidygraph object instead of summary (default: FALSE)
+
+- consolidation_mode:
+
+  Character. Consolidation mode: "temporal", "employer", or "none"
+  (default: "temporal")
+
+- consolidation_type:
+
+  Character. Type of consolidation when consolidation_mode != "none"
+  (default: "both")
+
+- transition_variable:
+
+  Character. Variable for transitions (default: "prior")
+
+## Value
+
+List with network analysis results or tidygraph object
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# Analyze consolidated network structure (default)
+network_analysis <- analyze_transitions_network(pipeline_result)
+print(network_analysis)
+
+# Get tidygraph object for further analysis with overlapping consolidation only
+tg <- analyze_transitions_network(pipeline_result, return_tidygraph = TRUE,
+                                 consolidation_type = "overlapping")
+
+# Analyze pre-computed transitions without consolidation
+transitions <- analyze_employment_transitions(pipeline_result, consolidation_mode = "none")
+network_analysis_raw <- analyze_transitions_network(transitions, consolidation_mode = "none")
+} # }
+```

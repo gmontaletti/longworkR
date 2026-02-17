@@ -1,0 +1,220 @@
+# Analyze Consolidated Employment Periods Using over_id
+
+Provides comprehensive analysis of consolidated employment periods
+leveraging the over_id functionality from vecshift() output. This
+function analyzes employment periods grouped by over_id to understand
+the benefits and patterns of employment consolidation, comparing
+individual contracts to consolidated employment episodes.
+
+## Usage
+
+``` r
+analyze_consolidated_periods(
+  segments,
+  level = "both",
+  include_unemployment = TRUE,
+  consolidation_type = "both",
+  min_employment_duration = 1,
+  include_details = TRUE
+)
+```
+
+## Arguments
+
+- segments:
+
+  Input data from vecshift() with over_id column. Must be a data.table
+  with required columns: cf, inizio, fine, arco, durata, over_id, and
+  optionally additional employment attributes for detailed analysis.
+
+- level:
+
+  Character string specifying analysis granularity:
+
+  - `"person"`: Person-level analysis with individual statistics
+
+  - `"aggregate"`: Population-level aggregate statistics
+
+  - `"both"`: Both person and aggregate analysis (default)
+
+- include_unemployment:
+
+  Logical. If TRUE (default), includes unemployment periods (over_id
+  = 0) in the analysis. If FALSE, focuses only on employment
+  consolidation.
+
+- consolidation_type:
+
+  Character string specifying consolidation approach for comparison:
+
+  - `"both"`: Compare against both overlapping and consecutive
+    consolidation (default)
+
+  - `"overlapping"`: Compare against overlapping consolidation only
+
+  - `"employment_only"`: Focus on employment periods only, ignore
+    unemployment
+
+- min_employment_duration:
+
+  Minimum duration (days) for employment periods to include in analysis
+  (default: 1). Helps filter out very short-term contracts.
+
+- include_details:
+
+  Logical. If TRUE (default), includes detailed breakdowns and
+  comparisons. If FALSE, returns only summary statistics for
+  performance.
+
+## Value
+
+When `level` is "person" or "both", returns a list containing:
+
+- `person_analysis`: data.table with person-level statistics including:
+
+  - `cf`: Person identifier
+
+  - `total_periods_original`: Count of original vecshift segments
+
+  - `total_periods_consolidated`: Count of consolidated periods (unique
+    over_id)
+
+  - `employment_periods_original`: Employment segments (arco \>= 1)
+
+  - `employment_periods_consolidated`: Consolidated employment periods
+    (over_id \> 0)
+
+  - `unemployment_periods`: Unemployment segments (over_id = 0)
+
+  - `consolidation_ratio`: Reduction in period count (1 -
+    consolidated/original)
+
+  - `employment_complexity_avg`: Average arco for employment periods
+
+  - `max_simultaneous_jobs`: Maximum concurrent employment (max arco)
+
+  - `total_employment_days_original`: Sum of original employment
+    durations
+
+  - `total_employment_days_consolidated`: Sum of consolidated employment
+    durations
+
+  - `avg_employment_duration_original`: Mean duration of original
+    employment segments
+
+  - `avg_employment_duration_consolidated`: Mean duration of
+    consolidated periods
+
+  - `duration_efficiency`: Duration consistency (consolidated/original
+    ratio)
+
+  - `overlapping_episodes`: Count of over_id periods with multiple
+    contracts
+
+- `aggregate_analysis`: data.table with population-level summary
+  statistics
+
+- `consolidation_benefits`: data.table showing consolidation impact
+  analysis
+
+- `employment_complexity`: data.table with employment complexity
+  patterns
+
+When `level` is "aggregate", returns only the aggregate analysis
+components.
+
+All results include attributes:
+
+- `analysis_parameters`: Analysis configuration used
+
+- `validation_results`: Data validation and quality checks
+
+- `computation_time`: Time taken for analysis
+
+## Details
+
+The over_id column from vecshift() identifies continuous overlapping
+employment periods:
+
+- **over_id = 0**: Unemployment periods (no active contracts)
+
+- **over_id \> 0**: Employment periods with same value for
+  overlapping/continuous contracts
+
+- **Same over_id**: All contracts belonging to same continuous
+  overlapping time period
+
+This function provides insights into:
+
+- **Consolidation Benefits**: How much employment history is simplified
+
+- **Employment Complexity**: Patterns of multiple simultaneous jobs
+
+- **Administrative Efficiency**: Time savings from consolidated view
+
+- **Employment Patterns**: Duration and frequency of consolidated vs
+  individual periods
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+library(data.table)
+
+# Create sample employment data with overlapping periods
+employment_data <- data.table(
+  id = 1:8,
+  cf = c(rep("PERSON001", 5), rep("PERSON002", 3)),
+  INIZIO = as.Date(c("2023-01-01", "2023-03-01", "2023-03-15", "2023-06-01", "2023-08-01",
+                     "2023-02-01", "2023-05-01", "2023-07-01")),
+  FINE = as.Date(c("2023-02-28", "2023-03-31", "2023-05-31", "2023-07-31", "2023-12-31",
+                   "2023-04-30", "2023-06-30", "2023-12-31")),
+  prior = c(1, 0, 1, 1, 1, 1, 0, 1),
+  company = c("CompanyA", "CompanyB", "CompanyA", "CompanyC", "CompanyD",
+              "CompanyE", "CompanyF", "CompanyG"),
+  salary = c(50000, 25000, 52000, 60000, 55000, 45000, 30000, 65000)
+)
+
+# Apply vecshift to get segments with over_id
+segments <- vecshift(employment_data)
+
+# Comprehensive analysis with both person and aggregate levels
+analysis_full <- analyze_consolidated_periods(
+  segments = segments,
+  level = "both",
+  include_unemployment = TRUE,
+  consolidation_type = "both",
+  include_details = TRUE
+)
+
+# View person-level results
+print(analysis_full$person_analysis)
+print(analysis_full$consolidation_benefits)
+
+# View aggregate statistics
+print(analysis_full$aggregate_analysis)
+print(analysis_full$employment_complexity)
+
+# Focus on employment consolidation only
+analysis_employment <- analyze_consolidated_periods(
+  segments = segments,
+  level = "aggregate",
+  include_unemployment = FALSE,
+  consolidation_type = "employment_only",
+  min_employment_duration = 7
+)
+print(analysis_employment$aggregate_analysis)
+
+# Person-level analysis for detailed insights
+analysis_person <- analyze_consolidated_periods(
+  segments = segments,
+  level = "person",
+  consolidation_type = "overlapping"
+)
+print(analysis_person$person_analysis)
+
+# Check analysis parameters and validation
+print(attr(analysis_full, "analysis_parameters"))
+print(attr(analysis_full, "validation_results"))
+} # }
+```

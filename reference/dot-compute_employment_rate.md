@@ -1,0 +1,73 @@
+# Compute Employment Rate for Temporal Periods
+
+Calculates employment rates (proportion of time employed) within each
+temporal period based on vecshift employment data with overlapping
+contract handling.
+
+## Usage
+
+``` r
+.compute_employment_rate(
+  data,
+  period_type = "quarterly",
+  id_var = "cf",
+  start_date_var = "inizio",
+  end_date_var = "fine",
+  duration_var = "durata",
+  employment_var = "arco",
+  over_id_var = "over_id",
+  use_consolidation = TRUE,
+  reference_date = NULL,
+  employment_threshold = 1
+)
+```
+
+## Arguments
+
+- data:
+
+  data.table with employment records (vecshift format)
+
+- period_type:
+
+  Character. "quarterly" or "monthly"
+
+- id_var:
+
+  Character. Individual identifier column. Default: "cf"
+
+- start_date_var:
+
+  Character. Contract start date column. Default: "inizio"
+
+- end_date_var:
+
+  Character. Contract end date column. Default: "fine"
+
+- duration_var:
+
+  Character. Contract duration column. Default: "durata"
+
+- employment_var:
+
+  Character. Employment status column (arco). Default: "arco"
+
+- over_id_var:
+
+  Character. Consolidation period identifier. Default: "over_id"
+
+- use_consolidation:
+
+  Logical. Use over_id for consolidation? Default: TRUE
+
+- reference_date:
+
+  Date. Reference date for period calculation. Default: NULL (min date)
+
+- employment_threshold:
+
+  Numeric. Minimum days to consider employed in period. Default: 1
+
+## Value
+
+data.table with employment rates by person and temporal period

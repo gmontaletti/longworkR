@@ -1,0 +1,161 @@
+# Plot Employment Transitions - Hierarchical Layout
+
+Creates hierarchical network visualizations using tree-like layouts.
+Particularly effective for showing career progression, advancement
+patterns, or directional flow between employment states.
+
+## Usage
+
+``` r
+plot_transitions_hierarchical(
+  transitions_data,
+  input_format = "data.table",
+  hierarchy_type = "sugiyama",
+  root_nodes = NULL,
+  layout_direction = "vertical",
+  level_separation = 1,
+  node_separation = 1,
+  show_levels = TRUE,
+  min_edge_weight = 1,
+  node_size_var = "strength",
+  edge_width_var = "weight",
+  node_color_var = "level",
+  node_size_range = c(3, 12),
+  edge_width_range = c(0.5, 3),
+  palette = "viridis",
+  use_bw = FALSE,
+  accessibility_mode = FALSE,
+  consolidation_mode = "temporal",
+  consolidation_type = "both",
+  show_edge_labels = FALSE,
+  show_node_labels = TRUE,
+  label_angle = 0,
+  title = NULL,
+  subtitle = NULL
+)
+```
+
+## Arguments
+
+- transitions_data:
+
+  Data.table output from analyze_employment_transitions()
+
+- input_format:
+
+  Character. Format of input data: "data.table" or "matrix" (default:
+  "data.table")
+
+- hierarchy_type:
+
+  Character. Type of hierarchical layout: "tree", "dendrogram",
+  "sugiyama", "davidson_harel" (default: "sugiyama")
+
+- root_nodes:
+
+  Character vector. Nodes to use as roots (default: auto-detect)
+
+- layout_direction:
+
+  Character. Direction of hierarchy: "vertical", "horizontal" (default:
+  "vertical")
+
+- level_separation:
+
+  Numeric. Separation between hierarchy levels (default: 1)
+
+- node_separation:
+
+  Numeric. Separation between nodes at same level (default: 1)
+
+- show_levels:
+
+  Logical. Highlight hierarchy levels with background colors (default:
+  TRUE)
+
+- min_edge_weight:
+
+  Numeric. Minimum edge weight to display (default: 1)
+
+- node_size_var:
+
+  Character. Variable for node sizing (default: "strength")
+
+- edge_width_var:
+
+  Character. Variable for edge width (default: "weight")
+
+- node_color_var:
+
+  Character. Variable for node coloring (default: "level")
+
+- node_size_range:
+
+  Numeric vector. Size range for nodes (default: c(3, 12))
+
+- edge_width_range:
+
+  Numeric vector. Width range for edges (default: c(0.5, 3))
+
+- palette:
+
+  Character. Color palette (default: "viridis")
+
+- use_bw:
+
+  Logical. Use black and white version (default: FALSE)
+
+- accessibility_mode:
+
+  Logical. Enable accessibility mode (default: FALSE)
+
+- consolidation_mode:
+
+  Character. Consolidation mode: "temporal", "employer", or "none"
+  (default: "temporal")
+
+- consolidation_type:
+
+  Character. Type of consolidation (default: "both")
+
+- show_edge_labels:
+
+  Logical. Show edge weight labels (default: FALSE)
+
+- show_node_labels:
+
+  Logical. Show node labels (default: TRUE)
+
+- label_angle:
+
+  Numeric. Angle for node labels in degrees (default: 0)
+
+- title:
+
+  Character. Plot title (default: auto-generated)
+
+- subtitle:
+
+  Character. Plot subtitle (default: auto-generated)
+
+## Value
+
+A ggplot2 object showing the hierarchical network
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# Basic consolidated hierarchical tree
+plot_transitions_hierarchical(pipeline_result)
+
+# Sugiyama layout with level highlighting, both consolidation types
+plot_transitions_hierarchical(pipeline_result, hierarchy_type = "sugiyama", 
+                             show_levels = TRUE, consolidation_type = "both")
+
+# Horizontal dendrogram with no consolidation
+plot_transitions_hierarchical(pipeline_result, hierarchy_type = "dendrogram", 
+                             layout_direction = "horizontal", 
+                             consolidation_mode = "none")
+} # }
+```
