@@ -44,7 +44,7 @@ Imports:
     cluster,
     matrixStats
 Suggests:
-    g6r,
+    g6R,
     networkD3,
     plotly,
     gganimate,
