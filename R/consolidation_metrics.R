@@ -130,13 +130,14 @@ NULL
 #' }
 #'
 #' @export
-extract_consolidation_metrics <- function(original_data,
-                                        consolidated_data = NULL,
-                                        consolidation_mode = "none",
-                                        employer_var = NULL,
-                                        min_lag = 8,
-                                        consolidation_type = "both") {
-
+extract_consolidation_metrics <- function(
+  original_data,
+  consolidated_data = NULL,
+  consolidation_mode = "none",
+  employer_var = NULL,
+  min_lag = 8,
+  consolidation_type = "both"
+) {
   # Input validation
   if (!inherits(original_data, "data.table")) {
     stop("original_data must be a data.table object")
@@ -144,22 +145,31 @@ extract_consolidation_metrics <- function(original_data,
 
   # EMERGENCY PHASE 4: Handle massive datasets with shortcuts
   dataset_size <- nrow(original_data)
-  is_massive_dataset <- dataset_size > 10000000  # 10M+ records trigger emergency mode
+  is_massive_dataset <- dataset_size > 10000000 # 10M+ records trigger emergency mode
 
   if (is_massive_dataset) {
-    message(sprintf("EMERGENCY MODE: Processing %d records. Using simplified consolidation analysis.", dataset_size))
+    message(sprintf(
+      "EMERGENCY MODE: Processing %d records. Using simplified consolidation analysis.",
+      dataset_size
+    ))
   }
 
   # PHASE 2 OPTIMIZATION: Handle missing consolidated data intelligently
   # If consolidated_data is NULL or same as original, generate it based on mode
-  if (is.null(consolidated_data) ||
-      (inherits(consolidated_data, "data.table") && identical(consolidated_data, original_data))) {
-
+  if (
+    is.null(consolidated_data) ||
+      (inherits(consolidated_data, "data.table") &&
+        identical(consolidated_data, original_data))
+  ) {
     if (consolidation_mode != "none" && !is_massive_dataset) {
       # Generate consolidated data on-demand using the same logic as main function
       # Skip for massive datasets to prevent memory explosion
       consolidated_data <- .generate_consolidated_data_for_metrics(
-        original_data, consolidation_mode, employer_var, min_lag, consolidation_type
+        original_data,
+        consolidation_mode,
+        employer_var,
+        min_lag,
+        consolidation_type
       )
     } else {
       consolidated_data <- original_data
@@ -170,13 +180,21 @@ extract_consolidation_metrics <- function(original_data,
 
   valid_modes <- c("none", "temporal", "employer", "both")
   if (!consolidation_mode %in% valid_modes) {
-    stop("consolidation_mode must be one of: ", paste(valid_modes, collapse = ", "))
+    stop(
+      "consolidation_mode must be one of: ",
+      paste(valid_modes, collapse = ", ")
+    )
   }
 
   # For "none" mode or massive datasets, return baseline metrics
-  if (consolidation_mode == "none" || (is_massive_dataset && consolidation_mode %in% c("employer", "both"))) {
+  if (
+    consolidation_mode == "none" ||
+      (is_massive_dataset && consolidation_mode %in% c("employer", "both"))
+  ) {
     if (is_massive_dataset && consolidation_mode != "none") {
-      message("EMERGENCY: Returning baseline metrics for massive dataset to prevent excessive runtime.")
+      message(
+        "EMERGENCY: Returning baseline metrics for massive dataset to prevent excessive runtime."
+      )
     }
     return(.create_baseline_metrics(original_data))
   }
@@ -239,7 +257,9 @@ extract_consolidation_metrics <- function(original_data,
   # Overall consolidation summary
   consolidation_ratio <- if (original_contracts > 0) {
     round(1 - (consolidated_periods / original_contracts), 4)
-  } else { 0 }
+  } else {
+    0
+  }
 
   contracts_eliminated <- original_contracts - consolidated_periods
 
@@ -251,9 +271,23 @@ extract_consolidation_metrics <- function(original_data,
     consolidation_percentage = round(consolidation_ratio * 100, 2),
     total_persons = total_persons_original,
     consolidation_mode = consolidation_mode,
-    consolidation_type = if (consolidation_mode %in% c("temporal", "both")) consolidation_type else NA_character_,
-    employer_variable = if (consolidation_mode %in% c("employer", "both")) employer_var else NA_character_,
-    employer_lag_threshold = if (consolidation_mode %in% c("employer", "both")) min_lag else NA_real_
+    consolidation_type = if (consolidation_mode %in% c("temporal", "both")) {
+      consolidation_type
+    } else {
+      NA_character_
+    },
+    employer_variable = if (consolidation_mode %in% c("employer", "both")) {
+      employer_var
+    } else {
+      NA_character_
+    },
+    employer_lag_threshold = if (
+      consolidation_mode %in% c("employer", "both")
+    ) {
+      min_lag
+    } else {
+      NA_real_
+    }
   )
 
   # PHASE 3 OPTIMIZATION: Advanced person-level aggregation with smart processing
@@ -265,110 +299,177 @@ extract_consolidation_metrics <- function(original_data,
 
   if (identical(orig_dt, cons_dt)) {
     # When no actual consolidation occurred, calculate once and duplicate efficiently
-    if (use_advanced_person_calc && requireNamespace("collapse", quietly = TRUE)) {
+    if (
+      use_advanced_person_calc && requireNamespace("collapse", quietly = TRUE)
+    ) {
       # Advanced calculation for large datasets using collapse functions
-      person_level <- orig_dt[, {
-        employment_mask <- arco > 0
-        employment_durations <- durata[employment_mask]
-        employment_duration_sum <- collapse::fsum(employment_durations, na.rm = TRUE)
-        employment_count <- collapse::fsum(employment_mask)
-        total_elapsed_time <- if (.N > 0) as.numeric(collapse::fmax(fine) - collapse::fmin(inizio) + 1) else 0
+      person_level <- orig_dt[,
+        {
+          employment_mask <- arco > 0
+          employment_durations <- durata[employment_mask]
+          employment_duration_sum <- collapse::fsum(
+            employment_durations,
+            na.rm = TRUE
+          )
+          employment_count <- collapse::fsum(employment_mask)
+          total_elapsed_time <- if (.N > 0) {
+            as.numeric(collapse::fmax(fine) - collapse::fmin(inizio) + 1)
+          } else {
+            0
+          }
 
-        .(
-          total_records = .N,
-          original_contracts = employment_count,
-          consolidated_records = .N,
-          consolidated_periods = employment_count,
-          total_duration = employment_duration_sum,
-          consolidated_duration = employment_duration_sum,
-          total_elapsed = total_elapsed_time,
-          first_date = if (.N > 0) collapse::fmin(inizio) else as.Date(NA),
-          last_date = if (.N > 0) collapse::fmax(fine) else as.Date(NA),
-          avg_contract_duration = if(employment_count > 0) round(collapse::fmean(employment_durations, na.rm = TRUE), 2) else 0,
-          avg_period_duration = if(employment_count > 0) round(collapse::fmean(employment_durations, na.rm = TRUE), 2) else 0
-        )
-      }, keyby = cf]
-
+          .(
+            total_records = .N,
+            original_contracts = employment_count,
+            consolidated_records = .N,
+            consolidated_periods = employment_count,
+            total_duration = employment_duration_sum,
+            consolidated_duration = employment_duration_sum,
+            total_elapsed = total_elapsed_time,
+            first_date = if (.N > 0) collapse::fmin(inizio) else as.Date(NA),
+            last_date = if (.N > 0) collapse::fmax(fine) else as.Date(NA),
+            avg_contract_duration = if (employment_count > 0) {
+              round(collapse::fmean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            },
+            avg_period_duration = if (employment_count > 0) {
+              round(collapse::fmean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            }
+          )
+        },
+        keyby = cf
+      ]
     } else {
       # Standard optimized calculation
-      person_level <- orig_dt[, {
-        employment_mask <- arco > 0
-        employment_durations <- durata[employment_mask]
-        employment_duration_sum <- sum(employment_durations, na.rm = TRUE)
-        employment_count <- sum(employment_mask)
-        total_elapsed_time <- if (.N > 0) as.numeric(max(fine) - min(inizio) + 1) else 0
+      person_level <- orig_dt[,
+        {
+          employment_mask <- arco > 0
+          employment_durations <- durata[employment_mask]
+          employment_duration_sum <- sum(employment_durations, na.rm = TRUE)
+          employment_count <- sum(employment_mask)
+          total_elapsed_time <- if (.N > 0) {
+            as.numeric(max(fine) - min(inizio) + 1)
+          } else {
+            0
+          }
 
-        .(
-          total_records = .N,
-          original_contracts = employment_count,
-          consolidated_records = .N,
-          consolidated_periods = employment_count,
-          total_duration = employment_duration_sum,
-          consolidated_duration = employment_duration_sum,
-          total_elapsed = total_elapsed_time,
-          first_date = if (.N > 0) min(inizio) else as.Date(NA),
-          last_date = if (.N > 0) max(fine) else as.Date(NA),
-          avg_contract_duration = if(employment_count > 0) round(mean(employment_durations, na.rm = TRUE), 2) else 0,
-          avg_period_duration = if(employment_count > 0) round(mean(employment_durations, na.rm = TRUE), 2) else 0
-        )
-      }, keyby = cf]
+          .(
+            total_records = .N,
+            original_contracts = employment_count,
+            consolidated_records = .N,
+            consolidated_periods = employment_count,
+            total_duration = employment_duration_sum,
+            consolidated_duration = employment_duration_sum,
+            total_elapsed = total_elapsed_time,
+            first_date = if (.N > 0) min(inizio) else as.Date(NA),
+            last_date = if (.N > 0) max(fine) else as.Date(NA),
+            avg_contract_duration = if (employment_count > 0) {
+              round(mean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            },
+            avg_period_duration = if (employment_count > 0) {
+              round(mean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            }
+          )
+        },
+        keyby = cf
+      ]
     }
-
   } else {
     # Different data sets - use optimized separate calculations then merge
-    if (use_advanced_person_calc && requireNamespace("collapse", quietly = TRUE)) {
+    if (
+      use_advanced_person_calc && requireNamespace("collapse", quietly = TRUE)
+    ) {
       # Advanced calculations using collapse functions for large datasets
-      person_metrics <- orig_dt[, {
-        employment_mask <- arco > 0
-        employment_durations <- durata[employment_mask]
-        .(
-          total_records = .N,
-          original_contracts = collapse::fsum(employment_mask),  # Ultra-fast sum of logical
-          total_duration = collapse::fsum(employment_durations, na.rm = TRUE),
-          total_elapsed = as.numeric(collapse::fmax(fine) - collapse::fmin(inizio) + 1),
-          first_date = collapse::fmin(inizio),
-          last_date = collapse::fmax(fine),
-          avg_contract_duration = if(length(employment_durations) > 0) round(collapse::fmean(employment_durations, na.rm = TRUE), 2) else 0
-        )
-      }, keyby = cf]
+      person_metrics <- orig_dt[,
+        {
+          employment_mask <- arco > 0
+          employment_durations <- durata[employment_mask]
+          .(
+            total_records = .N,
+            original_contracts = collapse::fsum(employment_mask), # Ultra-fast sum of logical
+            total_duration = collapse::fsum(employment_durations, na.rm = TRUE),
+            total_elapsed = as.numeric(
+              collapse::fmax(fine) - collapse::fmin(inizio) + 1
+            ),
+            first_date = collapse::fmin(inizio),
+            last_date = collapse::fmax(fine),
+            avg_contract_duration = if (length(employment_durations) > 0) {
+              round(collapse::fmean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            }
+          )
+        },
+        keyby = cf
+      ]
 
-      cons_person_metrics <- cons_dt[, {
-        employment_mask <- arco > 0
-        employment_durations <- durata[employment_mask]
-        .(
-          consolidated_records = .N,
-          consolidated_periods = collapse::fsum(employment_mask),
-          consolidated_duration = collapse::fsum(employment_durations, na.rm = TRUE),
-          avg_period_duration = if(length(employment_durations) > 0) round(collapse::fmean(employment_durations, na.rm = TRUE), 2) else 0
-        )
-      }, keyby = cf]
-
+      cons_person_metrics <- cons_dt[,
+        {
+          employment_mask <- arco > 0
+          employment_durations <- durata[employment_mask]
+          .(
+            consolidated_records = .N,
+            consolidated_periods = collapse::fsum(employment_mask),
+            consolidated_duration = collapse::fsum(
+              employment_durations,
+              na.rm = TRUE
+            ),
+            avg_period_duration = if (length(employment_durations) > 0) {
+              round(collapse::fmean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            }
+          )
+        },
+        keyby = cf
+      ]
     } else {
       # Standard optimized calculations for smaller datasets
-      person_metrics <- orig_dt[, {
-        employment_mask <- arco > 0
-        employment_durations <- durata[employment_mask]
-        .(
-          total_records = .N,
-          original_contracts = sum(employment_mask),  # Vectorized sum of logical
-          total_duration = sum(employment_durations, na.rm = TRUE),
-          total_elapsed = as.numeric(max(fine) - min(inizio) + 1),
-          first_date = min(inizio),
-          last_date = max(fine),
-          avg_contract_duration = if(length(employment_durations) > 0) round(mean(employment_durations, na.rm = TRUE), 2) else 0
-        )
-      }, keyby = cf]
+      person_metrics <- orig_dt[,
+        {
+          employment_mask <- arco > 0
+          employment_durations <- durata[employment_mask]
+          .(
+            total_records = .N,
+            original_contracts = sum(employment_mask), # Vectorized sum of logical
+            total_duration = sum(employment_durations, na.rm = TRUE),
+            total_elapsed = as.numeric(max(fine) - min(inizio) + 1),
+            first_date = min(inizio),
+            last_date = max(fine),
+            avg_contract_duration = if (length(employment_durations) > 0) {
+              round(mean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            }
+          )
+        },
+        keyby = cf
+      ]
 
-      cons_person_metrics <- cons_dt[, {
-        employment_mask <- arco > 0
-        employment_durations <- durata[employment_mask]
-        .(
-          consolidated_records = .N,
-          consolidated_periods = sum(employment_mask),
-          consolidated_duration = sum(employment_durations, na.rm = TRUE),
-          avg_period_duration = if(length(employment_durations) > 0) round(mean(employment_durations, na.rm = TRUE), 2) else 0
-        )
-      }, keyby = cf]
+      cons_person_metrics <- cons_dt[,
+        {
+          employment_mask <- arco > 0
+          employment_durations <- durata[employment_mask]
+          .(
+            consolidated_records = .N,
+            consolidated_periods = sum(employment_mask),
+            consolidated_duration = sum(employment_durations, na.rm = TRUE),
+            avg_period_duration = if (length(employment_durations) > 0) {
+              round(mean(employment_durations, na.rm = TRUE), 2)
+            } else {
+              0
+            }
+          )
+        },
+        keyby = cf
+      ]
     }
 
     # Efficient keyed merge using data.table's optimized join
@@ -379,17 +480,43 @@ extract_consolidation_metrics <- function(original_data,
   # Combine NA handling and metric calculation into one vectorized operation
   person_level[, `:=`(
     # Handle NAs and calculate all derived metrics in single operation
-    consolidated_periods = data.table::fifelse(is.na(consolidated_periods), 0L, consolidated_periods),
-    consolidated_duration = data.table::fifelse(is.na(consolidated_duration), 0, consolidated_duration),
-    consolidated_records = data.table::fifelse(is.na(consolidated_records), 0L, consolidated_records)
+    consolidated_periods = data.table::fifelse(
+      is.na(consolidated_periods),
+      0L,
+      consolidated_periods
+    ),
+    consolidated_duration = data.table::fifelse(
+      is.na(consolidated_duration),
+      0,
+      consolidated_duration
+    ),
+    consolidated_records = data.table::fifelse(
+      is.na(consolidated_records),
+      0L,
+      consolidated_records
+    )
   )][
     # Chain operations for memory efficiency - calculate all metrics at once
-    , `:=`(
-      person_consolidation_ratio = round(1 - (consolidated_periods / pmax(original_contracts, 1L)), 4),
+    ,
+    `:=`(
+      person_consolidation_ratio = round(
+        1 - (consolidated_periods / pmax(original_contracts, 1L)),
+        4
+      ),
       contracts_eliminated = original_contracts - consolidated_periods,
-      avg_consolidation_per_person = round((original_contracts - consolidated_periods) / pmax(original_contracts, 1L), 3),
-      duration_efficiency = round(consolidated_duration / pmax(total_duration, 1), 4),
-      employment_percentage = round(total_duration / pmax(total_elapsed, 1) * 100, 2),
+      avg_consolidation_per_person = round(
+        (original_contracts - consolidated_periods) /
+          pmax(original_contracts, 1L),
+        3
+      ),
+      duration_efficiency = round(
+        consolidated_duration / pmax(total_duration, 1),
+        4
+      ),
+      employment_percentage = round(
+        total_duration / pmax(total_elapsed, 1) * 100,
+        2
+      ),
       has_consolidation = (original_contracts - consolidated_periods) > 0L
     )
   ]
@@ -426,7 +553,12 @@ extract_consolidation_metrics <- function(original_data,
     }
 
     # Vectorized pattern creation
-    consolidation_distribution[, consolidation_pattern := paste0(contracts_eliminated, " contracts eliminated")]
+    consolidation_distribution[,
+      consolidation_pattern := paste0(
+        contracts_eliminated,
+        " contracts eliminated"
+      )
+    ]
     data.table::setkey(consolidation_distribution, contracts_eliminated)
   } else {
     # No consolidation occurred - avoid data.table operations for simple case
@@ -450,16 +582,32 @@ extract_consolidation_metrics <- function(original_data,
     persons_with_no_consolidation = sum(!has_consol),
     persons_with_consolidation = sum(has_consol),
     persons_with_multiple_contracts = sum(orig_contracts > 1L),
-    max_consolidation_per_person = if (length(consol_cases) > 0) max(consol_cases, na.rm = TRUE) else 0L,
-    avg_consolidation_per_person = if (length(consol_cases) > 0) round(mean(consol_cases, na.rm = TRUE), 2) else 0,
-    median_consolidation_per_person = if (length(consol_cases) > 0) median(consol_cases, na.rm = TRUE) else 0L,
+    max_consolidation_per_person = if (length(consol_cases) > 0) {
+      max(consol_cases, na.rm = TRUE)
+    } else {
+      0L
+    },
+    avg_consolidation_per_person = if (length(consol_cases) > 0) {
+      round(mean(consol_cases, na.rm = TRUE), 2)
+    } else {
+      0
+    },
+    median_consolidation_per_person = if (length(consol_cases) > 0) {
+      median(consol_cases, na.rm = TRUE)
+    } else {
+      0L
+    },
     avg_employment_percentage = round(mean(employment_pct, na.rm = TRUE), 2)
   )
 
   # EMERGENCY PHASE 4 OPTIMIZATION: Ultra-fast employer analysis for massive datasets
   employer_specific <- NULL
-  if (consolidation_mode %in% c("employer", "both") && !is.null(employer_var) && employer_var %in% names(orig_dt)) {
-
+  if (
+    consolidation_mode %in%
+      c("employer", "both") &&
+      !is.null(employer_var) &&
+      employer_var %in% names(orig_dt)
+  ) {
     # Pre-filter employment records once for all employer operations
     employment_dt <- orig_dt[arco > 0]
 
@@ -469,46 +617,63 @@ extract_consolidation_metrics <- function(original_data,
 
     # CRITICAL: For massive datasets (>5M records), use ultra-fast simplified analysis
     use_emergency_shortcuts <- n_employment_records > 5000000
-    use_advanced_aggregation <- n_employment_records > 50000 && !use_emergency_shortcuts
+    use_advanced_aggregation <- n_employment_records > 50000 &&
+      !use_emergency_shortcuts
 
     if (use_emergency_shortcuts) {
       # EMERGENCY MODE: Ultra-fast simplified analysis for massive datasets (>5M records)
       # Skip complex nested operations entirely to prevent 57+ minute runtimes
 
-      message(sprintf("EMERGENCY MODE: Simplifying employer analysis for %d records with %d employers",
-                      n_employment_records, n_unique_employers))
+      message(sprintf(
+        "EMERGENCY MODE: Simplifying employer analysis for %d records with %d employers",
+        n_employment_records,
+        n_unique_employers
+      ))
 
       # Ultra-fast unique employer extraction without complex aggregation
       unique_employers <- employment_dt[, sort(unique(get(employer_var)))]
       n_unique_employers <- length(unique_employers)
 
       # Simplified person-employer analysis - avoid expensive nested operations
-      employer_consolidation <- employment_dt[, .(
-        original_contracts = .N,
-        total_duration = sum(durata, na.rm = TRUE)
-      ), keyby = c("cf", employer_var)]
+      employer_consolidation <- employment_dt[,
+        .(
+          original_contracts = .N,
+          total_duration = sum(durata, na.rm = TRUE)
+        ),
+        keyby = c("cf", employer_var)
+      ]
 
       # Ultra-simplified employer details - top employers only
       if (n_unique_employers > 1000) {
         # For huge employer lists, only analyze top employers to prevent explosion
-        top_employers_only <- employment_dt[, .N, by = employer_var][order(-N)][1:min(1000, .N)]
-        employer_subset <- employment_dt[get(employer_var) %in% top_employers_only[[employer_var]]]
+        top_employers_only <- employment_dt[, .N, by = employer_var][order(-N)][
+          1:min(1000, .N)
+        ]
+        employer_subset <- employment_dt[
+          get(employer_var) %in% top_employers_only[[employer_var]]
+        ]
 
-        employer_details <- employer_subset[, .(
-          total_contracts = .N,
-          total_persons = data.table::uniqueN(cf),
-          avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
-          total_duration = sum(durata, na.rm = TRUE),
-          avg_duration_per_contract = round(mean(durata, na.rm = TRUE), 2)
-        ), keyby = employer_var]
+        employer_details <- employer_subset[,
+          .(
+            total_contracts = .N,
+            total_persons = data.table::uniqueN(cf),
+            avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
+            total_duration = sum(durata, na.rm = TRUE),
+            avg_duration_per_contract = round(mean(durata, na.rm = TRUE), 2)
+          ),
+          keyby = employer_var
+        ]
       } else {
-        employer_details <- employment_dt[, .(
-          total_contracts = .N,
-          total_persons = data.table::uniqueN(cf),
-          avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
-          total_duration = sum(durata, na.rm = TRUE),
-          avg_duration_per_contract = round(mean(durata, na.rm = TRUE), 2)
-        ), keyby = employer_var]
+        employer_details <- employment_dt[,
+          .(
+            total_contracts = .N,
+            total_persons = data.table::uniqueN(cf),
+            avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
+            total_duration = sum(durata, na.rm = TRUE),
+            avg_duration_per_contract = round(mean(durata, na.rm = TRUE), 2)
+          ),
+          keyby = employer_var
+        ]
       }
       data.table::setorder(employer_details, -total_contracts)
 
@@ -520,8 +685,9 @@ extract_consolidation_metrics <- function(original_data,
       )
       # Add employer_var column dynamically
       employer_person_stats[[employer_var]] <- character(0)
-
-    } else if (use_advanced_aggregation && requireNamespace("collapse", quietly = TRUE)) {
+    } else if (
+      use_advanced_aggregation && requireNamespace("collapse", quietly = TRUE)
+    ) {
       # Advanced aggregation using collapse package for large datasets
 
       # Set specialized indexing for employer operations
@@ -536,29 +702,40 @@ extract_consolidation_metrics <- function(original_data,
       n_unique_employers <- length(unique_employers)
 
       # Direct employer consolidation without nested operations
-      employer_consolidation <- employment_dt[, .(
-        original_contracts = .N,
-        total_duration = collapse::fsum(durata, na.rm = TRUE),
-        first_start = collapse::fmin(inizio, na.rm = TRUE),
-        last_end = collapse::fmax(fine, na.rm = TRUE)
-      ), keyby = c("cf", employer_var)]
+      employer_consolidation <- employment_dt[,
+        .(
+          original_contracts = .N,
+          total_duration = collapse::fsum(durata, na.rm = TRUE),
+          first_start = collapse::fmin(inizio, na.rm = TRUE),
+          last_end = collapse::fmax(fine, na.rm = TRUE)
+        ),
+        keyby = c("cf", employer_var)
+      ]
 
       # Direct employer details calculation
-      employer_details <- employment_dt[, .(
-        total_contracts = .N,
-        total_persons = data.table::uniqueN(cf),
-        avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
-        total_duration = collapse::fsum(durata, na.rm = TRUE),
-        avg_duration_per_contract = round(collapse::fmean(durata, na.rm = TRUE), 2)
-      ), keyby = employer_var]
+      employer_details <- employment_dt[,
+        .(
+          total_contracts = .N,
+          total_persons = data.table::uniqueN(cf),
+          avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
+          total_duration = collapse::fsum(durata, na.rm = TRUE),
+          avg_duration_per_contract = round(
+            collapse::fmean(durata, na.rm = TRUE),
+            2
+          )
+        ),
+        keyby = employer_var
+      ]
       data.table::setorder(employer_details, -total_contracts)
 
       # Direct person-employer statistics
-      employer_person_stats <- employment_dt[, .(
-        contracts_per_employer = .N,
-        has_multiple_contracts = .N > 1L
-      ), keyby = c("cf", employer_var)]
-
+      employer_person_stats <- employment_dt[,
+        .(
+          contracts_per_employer = .N,
+          has_multiple_contracts = .N > 1L
+        ),
+        keyby = c("cf", employer_var)
+      ]
     } else {
       # Standard optimized approach for smaller datasets (<50K employment records)
 
@@ -567,30 +744,39 @@ extract_consolidation_metrics <- function(original_data,
       n_unique_employers <- length(unique_employers)
 
       # Combined person-employer analysis with optimized grouping
-      employer_consolidation <- employment_dt[, .(
-        original_contracts = .N,
-        total_duration = sum(durata, na.rm = TRUE),
-        first_start = min(inizio, na.rm = TRUE),
-        last_end = max(fine, na.rm = TRUE)
-      ), keyby = c("cf", employer_var)]
+      employer_consolidation <- employment_dt[,
+        .(
+          original_contracts = .N,
+          total_duration = sum(durata, na.rm = TRUE),
+          first_start = min(inizio, na.rm = TRUE),
+          last_end = max(fine, na.rm = TRUE)
+        ),
+        keyby = c("cf", employer_var)
+      ]
 
       # Optimized per-employer details with single-pass calculations
-      employer_details <- employment_dt[, {
-        .(
-          total_contracts = .N,
-          total_persons = data.table::uniqueN(cf),
-          avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
-          total_duration = sum(durata, na.rm = TRUE),
-          avg_duration_per_contract = round(mean(durata, na.rm = TRUE), 2)
-        )
-      }, keyby = employer_var]
+      employer_details <- employment_dt[,
+        {
+          .(
+            total_contracts = .N,
+            total_persons = data.table::uniqueN(cf),
+            avg_contracts_per_person = round(.N / data.table::uniqueN(cf), 2),
+            total_duration = sum(durata, na.rm = TRUE),
+            avg_duration_per_contract = round(mean(durata, na.rm = TRUE), 2)
+          )
+        },
+        keyby = employer_var
+      ]
       data.table::setorder(employer_details, -total_contracts)
 
       # OPTIMIZATION: Streamlined employer-person statistics using pre-filtered data
-      employer_person_stats <- employment_dt[, .(
-        contracts_per_employer = .N,
-        has_multiple_contracts = .N > 1L
-      ), keyby = c("cf", employer_var)]
+      employer_person_stats <- employment_dt[,
+        .(
+          contracts_per_employer = .N,
+          has_multiple_contracts = .N > 1L
+        ),
+        keyby = c("cf", employer_var)
+      ]
     }
 
     # EMERGENCY PHASE 4: Ultra-fast employer summary with safety checks
@@ -602,10 +788,19 @@ extract_consolidation_metrics <- function(original_data,
       employer_summary <- list(
         total_unique_employers = n_unique_employers,
         total_person_employer_pairs = length(contracts_per_pair),
-        avg_contracts_per_employer = if (length(contracts_per_pair) > 0) round(mean(contracts_per_pair), 2) else 0,
+        avg_contracts_per_employer = if (length(contracts_per_pair) > 0) {
+          round(mean(contracts_per_pair), 2)
+        } else {
+          0
+        },
         person_employer_pairs_with_consolidation = sum(contracts_per_pair > 1L),
-        persons_with_same_employer_multiple_times = if (any(contracts_per_pair > 1L)) {
-          data.table::uniqueN(employer_consolidation[contracts_per_pair > 1L, cf])
+        persons_with_same_employer_multiple_times = if (
+          any(contracts_per_pair > 1L)
+        ) {
+          data.table::uniqueN(employer_consolidation[
+            contracts_per_pair > 1L,
+            cf
+          ])
         } else {
           0L
         }
@@ -643,8 +838,12 @@ extract_consolidation_metrics <- function(original_data,
   )
 
   # Add temporal-specific metrics if applicable (skip for massive datasets with employer consolidation)
-  if (consolidation_mode %in% c("temporal", "both") && "over_id" %in% names(orig_dt) &&
-      !(is_massive_dataset && consolidation_mode == "both")) {
+  if (
+    consolidation_mode %in%
+      c("temporal", "both") &&
+      "over_id" %in% names(orig_dt) &&
+      !(is_massive_dataset && consolidation_mode == "both")
+  ) {
     temporal_metrics <- .analyze_temporal_consolidation(orig_dt, cons_dt)
     result$temporal_specific <- temporal_metrics
   }
@@ -661,45 +860,34 @@ extract_consolidation_metrics <- function(original_data,
 #' @param consolidation_type Consolidation type (if applicable)
 #' @return Consolidated data.table
 #' @keywords internal
-.generate_consolidated_data_for_metrics <- function(original_data, consolidation_mode,
-                                                   employer_var, min_lag,
-                                                   consolidation_type) {
-
-  # PHASE 2 OPTIMIZATION: Efficient on-demand consolidation using new API
-  # Updated to use consolidate_employment() with mode parameter
-
+.generate_consolidated_data_for_metrics <- function(
+  original_data,
+  consolidation_mode,
+  employer_var,
+  min_lag,
+  consolidation_type
+) {
   if (consolidation_mode == "temporal") {
-    if (exists("consolidate_employment", mode = "function")) {
-      return(consolidate_employment(original_data, mode = "temporal",
-                                   consolidation_type = consolidation_type,
-                                   show_progress = FALSE))
-    } else {
-      return(.apply_temporal_consolidation_simple(original_data, consolidation_type))
-    }
-
+    return(.apply_temporal_consolidation_simple(
+      original_data,
+      consolidation_type
+    ))
   } else if (consolidation_mode == "employer") {
-    if (exists("consolidate_employment", mode = "function")) {
-      return(consolidate_employment(original_data, mode = "employer",
-                                   employer_var = employer_var,
-                                   min_lag = min_lag,
-                                   show_progress = FALSE))
-    } else {
-      return(.apply_employer_consolidation_simple(original_data, employer_var, min_lag))
-    }
-
+    return(.apply_employer_consolidation_simple(
+      original_data,
+      employer_var,
+      min_lag
+    ))
   } else if (consolidation_mode == "both") {
-    # Sequential consolidation: employer first, then temporal
-    if (exists("consolidate_employment", mode = "function")) {
-      return(consolidate_employment(original_data, mode = "both",
-                                   employer_var = employer_var,
-                                   min_lag = min_lag,
-                                   consolidation_type = consolidation_type,
-                                   show_progress = FALSE))
-    } else {
-      temp_data <- .apply_employer_consolidation_simple(original_data, employer_var, min_lag)
-      return(.apply_temporal_consolidation_simple(temp_data, consolidation_type))
-    }
-
+    temp_data <- .apply_employer_consolidation_simple(
+      original_data,
+      employer_var,
+      min_lag
+    )
+    return(.apply_temporal_consolidation_simple(
+      temp_data,
+      consolidation_type
+    ))
   } else {
     return(original_data)
   }
@@ -724,61 +912,85 @@ extract_consolidation_metrics <- function(original_data,
 
   # Use advanced optimizations for complex datasets with many persons
   use_advanced_baseline <- (total_persons > 5000 || complexity_factor > 0.15) &&
-                           requireNamespace("collapse", quietly = TRUE)
+    requireNamespace("collapse", quietly = TRUE)
 
   if (use_advanced_baseline) {
     # Ultra-fast baseline calculation for large datasets using collapse
-    person_metrics <- dt[, {
-      employment_mask <- arco > 0
-      employment_durations <- durata[employment_mask]
-      employment_duration_sum <- collapse::fsum(employment_durations, na.rm = TRUE)
-      total_elapsed_time <- if (.N > 0) as.numeric(collapse::fmax(fine) - collapse::fmin(inizio) + 1) else 0
+    person_metrics <- dt[,
+      {
+        employment_mask <- arco > 0
+        employment_durations <- durata[employment_mask]
+        employment_duration_sum <- collapse::fsum(
+          employment_durations,
+          na.rm = TRUE
+        )
+        total_elapsed_time <- if (.N > 0) {
+          as.numeric(collapse::fmax(fine) - collapse::fmin(inizio) + 1)
+        } else {
+          0
+        }
 
-      .(
-        total_records = .N,
-        original_contracts = collapse::fsum(employment_mask),
-        consolidated_periods = collapse::fsum(employment_mask),
-        consolidated_records = .N,
-        contracts_eliminated = 0L,
-        person_consolidation_ratio = 0.0,
-        avg_consolidation_per_person = 0.0,
-        total_duration = employment_duration_sum,
-        consolidated_duration = employment_duration_sum,
-        total_elapsed = total_elapsed_time,
-        first_date = if (.N > 0) collapse::fmin(inizio) else as.Date(NA),
-        last_date = if (.N > 0) collapse::fmax(fine) else as.Date(NA),
-        duration_efficiency = 1.0,
-        employment_percentage = if (.N > 0 && total_elapsed_time > 0) round(employment_duration_sum / total_elapsed_time * 100, 2) else 0,
-        has_consolidation = FALSE
-      )
-    }, keyby = cf]
-
+        .(
+          total_records = .N,
+          original_contracts = collapse::fsum(employment_mask),
+          consolidated_periods = collapse::fsum(employment_mask),
+          consolidated_records = .N,
+          contracts_eliminated = 0L,
+          person_consolidation_ratio = 0.0,
+          avg_consolidation_per_person = 0.0,
+          total_duration = employment_duration_sum,
+          consolidated_duration = employment_duration_sum,
+          total_elapsed = total_elapsed_time,
+          first_date = if (.N > 0) collapse::fmin(inizio) else as.Date(NA),
+          last_date = if (.N > 0) collapse::fmax(fine) else as.Date(NA),
+          duration_efficiency = 1.0,
+          employment_percentage = if (.N > 0 && total_elapsed_time > 0) {
+            round(employment_duration_sum / total_elapsed_time * 100, 2)
+          } else {
+            0
+          },
+          has_consolidation = FALSE
+        )
+      },
+      keyby = cf
+    ]
   } else {
     # Standard optimized person metrics with pre-computed employment filter
-    person_metrics <- dt[, {
-      employment_mask <- arco > 0
-      employment_durations <- durata[employment_mask]
-      employment_duration_sum <- sum(employment_durations, na.rm = TRUE)
-      total_elapsed_time <- if (.N > 0) as.numeric(max(fine) - min(inizio) + 1) else 0
+    person_metrics <- dt[,
+      {
+        employment_mask <- arco > 0
+        employment_durations <- durata[employment_mask]
+        employment_duration_sum <- sum(employment_durations, na.rm = TRUE)
+        total_elapsed_time <- if (.N > 0) {
+          as.numeric(max(fine) - min(inizio) + 1)
+        } else {
+          0
+        }
 
-      .(
-        total_records = .N,
-        original_contracts = sum(employment_mask),
-        consolidated_periods = sum(employment_mask),
-        consolidated_records = .N,
-        contracts_eliminated = 0L,
-        person_consolidation_ratio = 0.0,
-        avg_consolidation_per_person = 0.0,
-        total_duration = employment_duration_sum,
-        consolidated_duration = employment_duration_sum,
-        total_elapsed = total_elapsed_time,
-        first_date = if (.N > 0) min(inizio) else as.Date(NA),
-        last_date = if (.N > 0) max(fine) else as.Date(NA),
-        duration_efficiency = 1.0,
-        employment_percentage = if (.N > 0 && total_elapsed_time > 0) round(employment_duration_sum / total_elapsed_time * 100, 2) else 0,
-        has_consolidation = FALSE
-      )
-    }, keyby = cf]
+        .(
+          total_records = .N,
+          original_contracts = sum(employment_mask),
+          consolidated_periods = sum(employment_mask),
+          consolidated_records = .N,
+          contracts_eliminated = 0L,
+          person_consolidation_ratio = 0.0,
+          avg_consolidation_per_person = 0.0,
+          total_duration = employment_duration_sum,
+          consolidated_duration = employment_duration_sum,
+          total_elapsed = total_elapsed_time,
+          first_date = if (.N > 0) min(inizio) else as.Date(NA),
+          last_date = if (.N > 0) max(fine) else as.Date(NA),
+          duration_efficiency = 1.0,
+          employment_percentage = if (.N > 0 && total_elapsed_time > 0) {
+            round(employment_duration_sum / total_elapsed_time * 100, 2)
+          } else {
+            0
+          },
+          has_consolidation = FALSE
+        )
+      },
+      keyby = cf
+    ]
   }
 
   # OPTIMIZATION: Use pre-calculated employment count
@@ -804,11 +1016,16 @@ extract_consolidation_metrics <- function(original_data,
     distribution_summary = list(
       persons_with_no_consolidation = total_persons,
       persons_with_consolidation = 0L,
-      persons_with_multiple_contracts = sum(person_metrics$original_contracts > 1),
+      persons_with_multiple_contracts = sum(
+        person_metrics$original_contracts > 1
+      ),
       max_consolidation_per_person = 0L,
       avg_consolidation_per_person = 0.0,
       median_consolidation_per_person = 0L,
-      avg_employment_percentage = round(mean(person_metrics$employment_percentage, na.rm = TRUE), 2)
+      avg_employment_percentage = round(
+        mean(person_metrics$employment_percentage, na.rm = TRUE),
+        2
+      )
     )
   )
 
@@ -839,7 +1056,7 @@ extract_consolidation_metrics <- function(original_data,
   employment_dt <- original_data[arco > 0]
 
   if (nrow(employment_dt) == 0) {
-    return(NULL)  # Early return for edge case
+    return(NULL) # Early return for edge case
   }
 
   # PHASE 3: Specialized indexing for temporal operations
@@ -853,7 +1070,7 @@ extract_consolidation_metrics <- function(original_data,
   # PHASE 3: Dataset size-aware temporal analysis strategy
   # Choose optimal processing approach based on data characteristics
   use_advanced_temporal <- n_temporal_records > 50000 &&
-                          data.table::uniqueN(employment_dt, by = "over_id") > 1000
+    data.table::uniqueN(employment_dt, by = "over_id") > 1000
 
   if (use_advanced_temporal && requireNamespace("collapse", quietly = TRUE)) {
     # Advanced temporal analysis for large datasets
@@ -863,23 +1080,28 @@ extract_consolidation_metrics <- function(original_data,
     over_id_groups <- collapse::GRP(employment_dt, by = c("cf", "over_id"))
 
     # Ultra-fast aggregation using collapse
-    over_id_analysis <- employment_dt[, .(
-      contracts_in_period = .N,
-      total_duration = collapse::fsum(durata, na.rm = TRUE),
-      employment_intensity = collapse::fmax(arco, na.rm = TRUE),
-      period_start = collapse::fmin(inizio, na.rm = TRUE),
-      period_end = collapse::fmax(fine, na.rm = TRUE)
-    ), keyby = .(cf, over_id)]
-
+    over_id_analysis <- employment_dt[,
+      .(
+        contracts_in_period = .N,
+        total_duration = collapse::fsum(durata, na.rm = TRUE),
+        employment_intensity = collapse::fmax(arco, na.rm = TRUE),
+        period_start = collapse::fmin(inizio, na.rm = TRUE),
+        period_end = collapse::fmax(fine, na.rm = TRUE)
+      ),
+      keyby = .(cf, over_id)
+    ]
   } else {
     # Standard optimized approach for smaller datasets
-    over_id_analysis <- employment_dt[, .(
-      contracts_in_period = .N,
-      total_duration = sum(durata, na.rm = TRUE),
-      employment_intensity = max(arco, na.rm = TRUE),
-      period_start = min(inizio, na.rm = TRUE),
-      period_end = max(fine, na.rm = TRUE)
-    ), keyby = .(cf, over_id)]
+    over_id_analysis <- employment_dt[,
+      .(
+        contracts_in_period = .N,
+        total_duration = sum(durata, na.rm = TRUE),
+        employment_intensity = max(arco, na.rm = TRUE),
+        period_start = min(inizio, na.rm = TRUE),
+        period_end = max(fine, na.rm = TRUE)
+      ),
+      keyby = .(cf, over_id)
+    ]
   }
 
   # PHASE 3: Ultra-fast impact calculation with vectorized operations
@@ -891,28 +1113,33 @@ extract_consolidation_metrics <- function(original_data,
     # Use collapse for maximum performance on large datasets
     cf_groups <- collapse::GRP(over_id_analysis, by = "cf")
 
-    impact_summary <- over_id_analysis[, .(
-      original_segments = collapse::fsum(contracts_in_period),
-      consolidated_periods = .N,
-      avg_contracts_per_period = collapse::fmean(contracts_in_period)
-    ), keyby = cf][, `:=`(
+    impact_summary <- over_id_analysis[,
+      .(
+        original_segments = collapse::fsum(contracts_in_period),
+        consolidated_periods = .N,
+        avg_contracts_per_period = collapse::fmean(contracts_in_period)
+      ),
+      keyby = cf
+    ][, `:=`(
       consolidation_achieved = original_segments - consolidated_periods,
       total_employment_periods = consolidated_periods
     )][, avg_contracts_per_period := round(avg_contracts_per_period, 2)]
-
   } else {
     # Standard vectorized approach
-    impact_summary <- over_id_analysis[, {
-      total_contracts <- sum(contracts_in_period)
-      period_count <- .N
-      .(
-        original_segments = total_contracts,
-        consolidated_periods = period_count,
-        consolidation_achieved = total_contracts - period_count,
-        avg_contracts_per_period = round(mean(contracts_in_period), 2),
-        total_employment_periods = period_count
-      )
-    }, keyby = cf]
+    impact_summary <- over_id_analysis[,
+      {
+        total_contracts <- sum(contracts_in_period)
+        period_count <- .N
+        .(
+          original_segments = total_contracts,
+          consolidated_periods = period_count,
+          consolidation_achieved = total_contracts - period_count,
+          avg_contracts_per_period = round(mean(contracts_in_period), 2),
+          total_employment_periods = period_count
+        )
+      },
+      keyby = cf
+    ]
   }
 
   # PHASE 3: Ultra-fast summary statistics with pre-computed vectors
@@ -923,20 +1150,34 @@ extract_consolidation_metrics <- function(original_data,
     # Maximum performance using collapse functions
     temporal_summary <- list(
       total_over_id_groups = analysis_nrows,
-      employment_over_id_groups = analysis_nrows,  # All employment since pre-filtered
-      avg_contracts_per_over_id = if (analysis_nrows > 0)
-        round(collapse::fmean(contracts_per_period), 2) else 0,
-      max_contracts_per_over_id = if (analysis_nrows > 0)
-        collapse::fmax(contracts_per_period) else 0L,
+      employment_over_id_groups = analysis_nrows, # All employment since pre-filtered
+      avg_contracts_per_over_id = if (analysis_nrows > 0) {
+        round(collapse::fmean(contracts_per_period), 2)
+      } else {
+        0
+      },
+      max_contracts_per_over_id = if (analysis_nrows > 0) {
+        collapse::fmax(contracts_per_period)
+      } else {
+        0L
+      },
       overlapping_employment_groups = collapse::fsum(contracts_per_period > 1L)
     )
   } else {
     # Standard vectorized summary calculation
     temporal_summary <- list(
       total_over_id_groups = analysis_nrows,
-      employment_over_id_groups = analysis_nrows,  # All employment since pre-filtered
-      avg_contracts_per_over_id = if (analysis_nrows > 0) round(mean(contracts_per_period), 2) else 0,
-      max_contracts_per_over_id = if (analysis_nrows > 0) max(contracts_per_period) else 0L,
+      employment_over_id_groups = analysis_nrows, # All employment since pre-filtered
+      avg_contracts_per_over_id = if (analysis_nrows > 0) {
+        round(mean(contracts_per_period), 2)
+      } else {
+        0
+      },
+      max_contracts_per_over_id = if (analysis_nrows > 0) {
+        max(contracts_per_period)
+      } else {
+        0L
+      },
       overlapping_employment_groups = sum(contracts_per_period > 1L)
     )
   }
@@ -1021,19 +1262,20 @@ extract_consolidation_metrics <- function(original_data,
 #' }
 #'
 #' @export
-analyze_employment_transitions_with_metrics <- function(pipeline_result,
-                                                       transition_variable = NULL,
-                                                       statistics_variables = NULL,
-                                                       min_unemployment_duration = 1,
-                                                       max_unemployment_duration = NULL,
-                                                       consolidation_type = "both",
-                                                       consolidation_mode = "none",
-                                                       employer_var = NULL,
-                                                       min_lag = 8,
-                                                       output_transition_matrix = FALSE,
-                                                       eval_chain = "last",
-                                                       show_progress = TRUE) {
-
+analyze_employment_transitions_with_metrics <- function(
+  pipeline_result,
+  transition_variable = NULL,
+  statistics_variables = NULL,
+  min_unemployment_duration = 1,
+  max_unemployment_duration = NULL,
+  consolidation_type = "both",
+  consolidation_mode = "none",
+  employer_var = NULL,
+  min_lag = 8,
+  output_transition_matrix = FALSE,
+  eval_chain = "last",
+  show_progress = TRUE
+) {
   # Input validation
   if (!inherits(pipeline_result, "data.table")) {
     stop("pipeline_result must be a data.table object")
@@ -1045,16 +1287,26 @@ analyze_employment_transitions_with_metrics <- function(pipeline_result,
 
   # We'll extract consolidated data from the actual analysis results
   # This avoids duplicating consolidation logic
-  consolidated_data <- NULL  # Will be populated later
+  consolidated_data <- NULL # Will be populated later
 
   # Simplified validation - let main function handle consolidation details
   # This eliminates redundant consolidation logic
-  if (consolidation_mode %in% c("temporal", "both") && !"over_id" %in% names(pipeline_result)) {
+  if (
+    consolidation_mode %in%
+      c("temporal", "both") &&
+      !"over_id" %in% names(pipeline_result)
+  ) {
     if (show_progress) {
-      message("Note: 'over_id' column not found in data. Temporal consolidation disabled.")
+      message(
+        "Note: 'over_id' column not found in data. Temporal consolidation disabled."
+      )
     }
     # Adjust consolidation_mode if over_id is missing
-    consolidation_mode <- if (consolidation_mode == "temporal") "none" else "employer"
+    consolidation_mode <- if (consolidation_mode == "temporal") {
+      "none"
+    } else {
+      "employer"
+    }
   }
 
   # Run the main transition analysis
@@ -1086,12 +1338,15 @@ analyze_employment_transitions_with_metrics <- function(pipeline_result,
 
   # EMERGENCY PHASE 4: Check dataset size and adjust processing
   dataset_size <- nrow(original_data)
-  is_massive_dataset <- dataset_size > 10000000  # 10M+ records
+  is_massive_dataset <- dataset_size > 10000000 # 10M+ records
 
   # Extract consolidation metrics
   if (show_progress) {
     if (is_massive_dataset) {
-      message(sprintf("Extracting consolidation metrics for massive dataset (%d records)...", dataset_size))
+      message(sprintf(
+        "Extracting consolidation metrics for massive dataset (%d records)...",
+        dataset_size
+      ))
       message("Using emergency optimizations to prevent excessive runtime.")
     } else {
       message("Extracting consolidation metrics...")
@@ -1101,7 +1356,7 @@ analyze_employment_transitions_with_metrics <- function(pipeline_result,
   # PHASE 2 OPTIMIZATION: Use intelligent consolidated data generation
   consolidation_metrics <- extract_consolidation_metrics(
     original_data = original_data,
-    consolidated_data = NULL,  # Let function generate consolidated data intelligently
+    consolidated_data = NULL, # Let function generate consolidated data intelligently
     consolidation_mode = consolidation_mode,
     employer_var = employer_var,
     min_lag = min_lag,
@@ -1201,8 +1456,12 @@ analyze_employment_transitions_with_metrics <- function(pipeline_result,
 #' }
 #'
 #' @export
-mark_employer_consolidation <- function(data, employer_var, min_lag = 30, consolidation_col = "consolidation_group") {
-
+mark_employer_consolidation <- function(
+  data,
+  employer_var,
+  min_lag = 30,
+  consolidation_col = "consolidation_group"
+) {
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table object")
@@ -1224,7 +1483,10 @@ mark_employer_consolidation <- function(data, employer_var, min_lag = 30, consol
   required_cols <- c("cf", "inizio", "fine")
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0) {
-    stop(paste("Missing required columns:", paste(missing_cols, collapse = ", ")))
+    stop(paste(
+      "Missing required columns:",
+      paste(missing_cols, collapse = ", ")
+    ))
   }
 
   # Ensure date columns are Date objects (modify by reference if needed)
@@ -1239,20 +1501,25 @@ mark_employer_consolidation <- function(data, employer_var, min_lag = 30, consol
   data.table::setorderv(data, cols = c("cf", employer_var, "inizio"))
 
   # Create temporary columns for gap analysis (by reference)
-  data[, `:=`(
-    temp_prev_employer = data.table::shift(.SD[[employer_var]], 1L),
-    temp_prev_fine = data.table::shift(fine, 1L)
-  ), by = "cf"]
+  data[,
+    `:=`(
+      temp_prev_employer = data.table::shift(.SD[[employer_var]], 1L),
+      temp_prev_fine = data.table::shift(fine, 1L)
+    ),
+    by = "cf"
+  ]
 
   # Calculate gap between current start and previous end
   data[, temp_gap_days := as.numeric(inizio - temp_prev_fine)]
 
   # Mark records that should NOT start a new consolidation group
   # (same employer and gap <= threshold)
-  data[, temp_new_group := is.na(temp_prev_employer) |
-                           .SD[[employer_var]] != temp_prev_employer |
-                           is.na(temp_gap_days) |
-                           temp_gap_days > min_lag]
+  data[,
+    temp_new_group := is.na(temp_prev_employer) |
+      .SD[[employer_var]] != temp_prev_employer |
+      is.na(temp_gap_days) |
+      temp_gap_days > min_lag
+  ]
 
   # Create consolidation group IDs within each person
   data[, temp_person_group := cumsum(temp_new_group), by = "cf"]
@@ -1262,7 +1529,13 @@ mark_employer_consolidation <- function(data, employer_var, min_lag = 30, consol
   data[, (consolidation_col) := paste(cf, temp_person_group, sep = "_")]
 
   # Clean up temporary columns (by reference)
-  temp_cols <- c("temp_prev_employer", "temp_prev_fine", "temp_gap_days", "temp_new_group", "temp_person_group")
+  temp_cols <- c(
+    "temp_prev_employer",
+    "temp_prev_fine",
+    "temp_gap_days",
+    "temp_new_group",
+    "temp_person_group"
+  )
   data[, (temp_cols) := NULL]
 
   # Return invisibly (since data is modified by reference)
@@ -1276,23 +1549,22 @@ mark_employer_consolidation <- function(data, employer_var, min_lag = 30, consol
 #' @param min_lag Minimum lag threshold
 #' @return Consolidated data.table
 #' @keywords internal
-.apply_employer_consolidation_simple <- function(data, employer_var, min_lag = 30) {
+.apply_employer_consolidation_simple <- function(
+  data,
+  employer_var,
+  min_lag = 30
+) {
   if (!employer_var %in% names(data)) {
     warning("Employer variable not found, returning original data")
     return(data)
   }
 
-  # Use the new consolidate_employment function if available
-  if (exists("consolidate_employment", mode = "function")) {
-    return(consolidate_employment(data, mode = "employer",
-                                 employer_var = employer_var,
-                                 min_lag = min_lag,
-                                 show_progress = FALSE))
-  } else {
-    # Fallback: return original data with warning
-    warning("consolidate_employment function not available, returning original data")
-    return(data)
-  }
+  consolidate_by_employer(
+    data,
+    employer_var = employer_var,
+    max_gap_days = min_lag,
+    variable_handling = "first"
+  )
 }
 
 
@@ -1307,19 +1579,13 @@ mark_employer_consolidation <- function(data, employer_var, min_lag = 30, consol
     return(data)
   }
 
-  # Use the new consolidate_employment function if available
-  if (exists("consolidate_employment", mode = "function")) {
-    return(consolidate_employment(
-      data,
-      mode = "temporal",
-      consolidation_type = cons_type,
-      show_progress = FALSE
-    ))
-  } else {
-    # Fallback with warning
-    warning("consolidate_employment function not available, returning original data")
-    return(data)
+  if (cons_type %in% c("overlapping", "both")) {
+    data <- consolidate_overlapping(data, variable_handling = "first")
   }
+  if (cons_type %in% c("adjacent", "both")) {
+    data <- consolidate_adjacent(data, variable_handling = "first")
+  }
+  return(data)
 }
 
 
@@ -1407,13 +1673,19 @@ mark_employer_consolidation <- function(data, employer_var, min_lag = 30, consol
 #' }
 #'
 #' @export
-summarize_consolidation <- function(consolidation_metrics,
-                                  include_distribution = TRUE,
-                                  include_employer_details = TRUE) {
-
+summarize_consolidation <- function(
+  consolidation_metrics,
+  include_distribution = TRUE,
+  include_employer_details = TRUE
+) {
   # Input validation
-  if (!is.list(consolidation_metrics) || is.null(consolidation_metrics$consolidation_summary)) {
-    stop("consolidation_metrics must be a list from extract_consolidation_metrics()")
+  if (
+    !is.list(consolidation_metrics) ||
+      is.null(consolidation_metrics$consolidation_summary)
+  ) {
+    stop(
+      "consolidation_metrics must be a list from extract_consolidation_metrics()"
+    )
   }
 
   cs <- consolidation_metrics$consolidation_summary
@@ -1427,8 +1699,14 @@ summarize_consolidation <- function(consolidation_metrics,
     consolidation_percentage = cs$consolidation_percentage,
     contracts_eliminated = cs$contracts_eliminated,
     total_persons = cs$total_persons,
-    avg_contracts_per_person_original = round(cs$original_contracts / cs$total_persons, 2),
-    avg_periods_per_person_consolidated = round(cs$consolidated_periods / cs$total_persons, 2)
+    avg_contracts_per_person_original = round(
+      cs$original_contracts / cs$total_persons,
+      2
+    ),
+    avg_periods_per_person_consolidated = round(
+      cs$consolidated_periods / cs$total_persons,
+      2
+    )
   )
 
   # Effectiveness assessment
@@ -1444,7 +1722,8 @@ summarize_consolidation <- function(consolidation_metrics,
     "High consolidation"
   }
 
-  effectiveness_interpretation <- switch(effectiveness_level,
+  effectiveness_interpretation <- switch(
+    effectiveness_level,
     "No consolidation" = "Data structure unchanged. Consider using different consolidation parameters if periods should be merged.",
     "Low consolidation" = "Minor data simplification achieved. Review consolidation parameters or consider alternative approaches.",
     "Moderate consolidation" = "Meaningful reduction in data complexity with preserved information granularity.",
@@ -1456,7 +1735,10 @@ summarize_consolidation <- function(consolidation_metrics,
     effectiveness_level = effectiveness_level,
     effectiveness_percentage = cs$consolidation_percentage,
     interpretation = effectiveness_interpretation,
-    data_reduction_factor = round(cs$original_contracts / pmax(cs$consolidated_periods, 1), 2)
+    data_reduction_factor = round(
+      cs$original_contracts / pmax(cs$consolidated_periods, 1),
+      2
+    )
   )
 
   # Person-level summary - optimized for single data scan
@@ -1470,13 +1752,28 @@ summarize_consolidation <- function(consolidation_metrics,
 
     person_summary <- list(
       persons_analyzed = nrow(person_data),
-      avg_consolidation_ratio = round(mean(consolidation_ratios, na.rm = TRUE), 4),
-      median_consolidation_ratio = round(median(consolidation_ratios, na.rm = TRUE), 4),
+      avg_consolidation_ratio = round(
+        mean(consolidation_ratios, na.rm = TRUE),
+        4
+      ),
+      median_consolidation_ratio = round(
+        median(consolidation_ratios, na.rm = TRUE),
+        4
+      ),
       persons_with_consolidation = sum(contracts_eliminated > 0, na.rm = TRUE),
-      persons_without_consolidation = sum(contracts_eliminated == 0, na.rm = TRUE),
+      persons_without_consolidation = sum(
+        contracts_eliminated == 0,
+        na.rm = TRUE
+      ),
       max_contracts_eliminated = max(contracts_eliminated, na.rm = TRUE),
-      avg_contracts_eliminated = round(mean(contracts_eliminated, na.rm = TRUE), 2),
-      consolidation_variability = round(sd(consolidation_ratios, na.rm = TRUE), 4)
+      avg_contracts_eliminated = round(
+        mean(contracts_eliminated, na.rm = TRUE),
+        2
+      ),
+      consolidation_variability = round(
+        sd(consolidation_ratios, na.rm = TRUE),
+        4
+      )
     )
   }
 
@@ -1485,14 +1782,22 @@ summarize_consolidation <- function(consolidation_metrics,
   if (include_distribution && !is.null(consolidation_metrics$distribution)) {
     dist_data <- consolidation_metrics$distribution$distribution_summary
     distribution_summary <- list(
-      consolidation_patterns = length(consolidation_metrics$distribution$consolidation_distribution$contracts_eliminated),
+      consolidation_patterns = length(
+        consolidation_metrics$distribution$consolidation_distribution$contracts_eliminated
+      ),
       most_common_consolidation = {
         dist_df <- consolidation_metrics$distribution$consolidation_distribution
         if (!is.null(dist_df) && nrow(dist_df) > 0) {
           max_idx <- which.max(dist_df$persons_count)
-          paste0(dist_df$contracts_eliminated[max_idx], " contracts eliminated (",
-                dist_df$persons_count[max_idx], " persons)")
-        } else "No consolidation patterns found"
+          paste0(
+            dist_df$contracts_eliminated[max_idx],
+            " contracts eliminated (",
+            dist_df$persons_count[max_idx],
+            " persons)"
+          )
+        } else {
+          "No consolidation patterns found"
+        }
       },
       consolidation_distribution = dist_data
     )
@@ -1500,10 +1805,11 @@ summarize_consolidation <- function(consolidation_metrics,
 
   # Employer summary (when applicable and requested)
   employer_summary <- NULL
-  if (include_employer_details &&
+  if (
+    include_employer_details &&
       !is.null(consolidation_metrics$employer_specific) &&
-      cs$consolidation_mode %in% c("employer", "both")) {
-
+      cs$consolidation_mode %in% c("employer", "both")
+  ) {
     emp_specific <- consolidation_metrics$employer_specific
     emp_data <- emp_specific$employer_summary
 
@@ -1534,9 +1840,10 @@ summarize_consolidation <- function(consolidation_metrics,
 
   # Temporal-specific summary (when applicable)
   temporal_summary <- NULL
-  if (!is.null(consolidation_metrics$temporal_specific) &&
-      cs$consolidation_mode %in% c("temporal", "both")) {
-
+  if (
+    !is.null(consolidation_metrics$temporal_specific) &&
+      cs$consolidation_mode %in% c("temporal", "both")
+  ) {
     temp_data <- consolidation_metrics$temporal_specific$temporal_summary
     temporal_summary <- list(
       consolidation_method = "temporal (over_id based)",
@@ -1581,28 +1888,52 @@ summarize_consolidation <- function(consolidation_metrics,
 #' @param consolidation_mode Mode used
 #' @return List of recommendations
 #' @keywords internal
-.generate_consolidation_recommendations <- function(metrics, effectiveness_level, consolidation_mode) {
-
+.generate_consolidation_recommendations <- function(
+  metrics,
+  effectiveness_level,
+  consolidation_mode
+) {
   recommendations <- character(0)
 
   # Simplified, focused recommendations
   if (effectiveness_level == "No consolidation") {
     recommendations <- c("No consolidation applied - data structure unchanged")
-  } else if (effectiveness_level %in% c("Low consolidation", "Moderate consolidation")) {
-    recommendations <- c(paste0("Achieved ", effectiveness_level, " with ",
-                                 metrics$consolidation_summary$contracts_eliminated,
-                                 " contracts consolidated"))
-  } else if (effectiveness_level %in% c("Substantial consolidation", "High consolidation")) {
-    recommendations <- c(paste0(effectiveness_level, ": ",
-                                 metrics$consolidation_summary$consolidation_percentage,
-                                 "% reduction in contract records"))
+  } else if (
+    effectiveness_level %in% c("Low consolidation", "Moderate consolidation")
+  ) {
+    recommendations <- c(paste0(
+      "Achieved ",
+      effectiveness_level,
+      " with ",
+      metrics$consolidation_summary$contracts_eliminated,
+      " contracts consolidated"
+    ))
+  } else if (
+    effectiveness_level %in%
+      c("Substantial consolidation", "High consolidation")
+  ) {
+    recommendations <- c(paste0(
+      effectiveness_level,
+      ": ",
+      metrics$consolidation_summary$consolidation_percentage,
+      "% reduction in contract records"
+    ))
   }
 
   # Add employment percentage if available
-  if (!is.null(metrics$distribution$distribution_summary$avg_employment_percentage)) {
-    recommendations <- c(recommendations,
-                          paste0("Average employment coverage: ",
-                                 metrics$distribution$distribution_summary$avg_employment_percentage, "%"))
+  if (
+    !is.null(
+      metrics$distribution$distribution_summary$avg_employment_percentage
+    )
+  ) {
+    recommendations <- c(
+      recommendations,
+      paste0(
+        "Average employment coverage: ",
+        metrics$distribution$distribution_summary$avg_employment_percentage,
+        "%"
+      )
+    )
   }
 
   return(recommendations)
@@ -1621,8 +1952,11 @@ print.longworkR_consolidation_summary <- function(x, ...) {
   cat(sprintf("  Consolidation Mode: %s\n", x$overview$consolidation_mode))
   cat(sprintf("  Original Contracts: %d\n", x$overview$original_contracts))
   cat(sprintf("  Consolidated Periods: %d\n", x$overview$consolidated_periods))
-  cat(sprintf("  Consolidation Ratio: %.1f%% (%.4f)\n",
-              x$overview$consolidation_percentage, x$overview$consolidation_ratio))
+  cat(sprintf(
+    "  Consolidation Ratio: %.1f%% (%.4f)\n",
+    x$overview$consolidation_percentage,
+    x$overview$consolidation_ratio
+  ))
   cat(sprintf("  Contracts Eliminated: %d\n", x$overview$contracts_eliminated))
   cat(sprintf("  Total Persons: %d\n", x$overview$total_persons))
   cat("\n")
@@ -1630,23 +1964,44 @@ print.longworkR_consolidation_summary <- function(x, ...) {
   # Effectiveness
   cat("EFFECTIVENESS:\n")
   cat(sprintf("  Level: %s\n", x$effectiveness$effectiveness_level))
-  cat(sprintf("  Data Reduction Factor: %.2fx\n", x$effectiveness$data_reduction_factor))
+  cat(sprintf(
+    "  Data Reduction Factor: %.2fx\n",
+    x$effectiveness$data_reduction_factor
+  ))
   cat(sprintf("  Interpretation: %s\n", x$effectiveness$interpretation))
   cat("\n")
 
   # Person summary if available
   if (!is.null(x$person_summary)) {
     cat("PERSON-LEVEL ANALYSIS:\n")
-    cat(sprintf("  Persons with consolidation: %d/%d (%.1f%%)\n",
-                x$person_summary$persons_with_consolidation,
-                x$person_summary$persons_analyzed,
-                x$person_summary$persons_with_consolidation / x$person_summary$persons_analyzed * 100))
-    cat(sprintf("  Average consolidation ratio: %.4f\n", x$person_summary$avg_consolidation_ratio))
-    cat(sprintf("  Maximum contracts eliminated: %d\n", x$person_summary$max_contracts_eliminated))
+    cat(sprintf(
+      "  Persons with consolidation: %d/%d (%.1f%%)\n",
+      x$person_summary$persons_with_consolidation,
+      x$person_summary$persons_analyzed,
+      x$person_summary$persons_with_consolidation /
+        x$person_summary$persons_analyzed *
+        100
+    ))
+    cat(sprintf(
+      "  Average consolidation ratio: %.4f\n",
+      x$person_summary$avg_consolidation_ratio
+    ))
+    cat(sprintf(
+      "  Maximum contracts eliminated: %d\n",
+      x$person_summary$max_contracts_eliminated
+    ))
 
     # Add employment percentage if available
-    if (!is.null(x$distribution_summary) && !is.null(x$distribution_summary$consolidation_distribution$avg_employment_percentage)) {
-      cat(sprintf("  Average employment coverage: %.1f%%\n", x$distribution_summary$consolidation_distribution$avg_employment_percentage))
+    if (
+      !is.null(x$distribution_summary) &&
+        !is.null(
+          x$distribution_summary$consolidation_distribution$avg_employment_percentage
+        )
+    ) {
+      cat(sprintf(
+        "  Average employment coverage: %.1f%%\n",
+        x$distribution_summary$consolidation_distribution$avg_employment_percentage
+      ))
     }
     cat("\n")
   }
@@ -1654,23 +2009,48 @@ print.longworkR_consolidation_summary <- function(x, ...) {
   # Employer summary if available
   if (!is.null(x$employer_summary)) {
     cat("EMPLOYER-SPECIFIC ANALYSIS:\n")
-    cat(sprintf("  Employer variable: %s\n", x$employer_summary$employer_variable))
-    cat(sprintf("  Lag threshold: %d days\n", x$employer_summary$lag_threshold_days))
-    cat(sprintf("  Total unique employers: %d\n", x$employer_summary$total_unique_employers))
-    cat(sprintf("  Person-employer pairs: %d\n", x$employer_summary$person_employer_combinations))
-    cat(sprintf("  Pairs with consolidation potential: %d\n", x$employer_summary$person_employer_pairs_with_consolidation))
-    cat(sprintf("  Persons with same employer multiple times: %d\n", x$employer_summary$persons_with_same_employer_multiple_times))
+    cat(sprintf(
+      "  Employer variable: %s\n",
+      x$employer_summary$employer_variable
+    ))
+    cat(sprintf(
+      "  Lag threshold: %d days\n",
+      x$employer_summary$lag_threshold_days
+    ))
+    cat(sprintf(
+      "  Total unique employers: %d\n",
+      x$employer_summary$total_unique_employers
+    ))
+    cat(sprintf(
+      "  Person-employer pairs: %d\n",
+      x$employer_summary$person_employer_combinations
+    ))
+    cat(sprintf(
+      "  Pairs with consolidation potential: %d\n",
+      x$employer_summary$person_employer_pairs_with_consolidation
+    ))
+    cat(sprintf(
+      "  Persons with same employer multiple times: %d\n",
+      x$employer_summary$persons_with_same_employer_multiple_times
+    ))
 
     # Top employers if available
-    if (!is.null(x$employer_summary$top_employers_by_contracts) &&
-        nrow(x$employer_summary$top_employers_by_contracts) > 0) {
+    if (
+      !is.null(x$employer_summary$top_employers_by_contracts) &&
+        nrow(x$employer_summary$top_employers_by_contracts) > 0
+    ) {
       cat("  Top employers by contract volume:\n")
       top_emp <- head(x$employer_summary$top_employers_by_contracts, 3)
       for (i in 1:nrow(top_emp)) {
         emp_id <- top_emp[[x$employer_summary$employer_variable]][i]
         contracts <- top_emp$total_contracts[i]
         persons <- top_emp$total_persons[i]
-        cat(sprintf("    %s: %d contracts, %d persons\n", emp_id, contracts, persons))
+        cat(sprintf(
+          "    %s: %d contracts, %d persons\n",
+          emp_id,
+          contracts,
+          persons
+        ))
       }
     }
     cat("\n")
@@ -1679,11 +2059,26 @@ print.longworkR_consolidation_summary <- function(x, ...) {
   # Temporal summary if available
   if (!is.null(x$temporal_summary)) {
     cat("TEMPORAL-SPECIFIC ANALYSIS:\n")
-    cat(sprintf("  Consolidation type: %s\n", x$temporal_summary$consolidation_type))
-    cat(sprintf("  Employment groups: %d\n", x$temporal_summary$employment_groups))
-    cat(sprintf("  Overlapping periods: %d\n", x$temporal_summary$overlapping_periods))
-    cat(sprintf("  Average contracts per period: %.2f\n", x$temporal_summary$avg_contracts_per_period))
-    cat(sprintf("  Maximum contracts per period: %d\n", x$temporal_summary$max_contracts_per_period))
+    cat(sprintf(
+      "  Consolidation type: %s\n",
+      x$temporal_summary$consolidation_type
+    ))
+    cat(sprintf(
+      "  Employment groups: %d\n",
+      x$temporal_summary$employment_groups
+    ))
+    cat(sprintf(
+      "  Overlapping periods: %d\n",
+      x$temporal_summary$overlapping_periods
+    ))
+    cat(sprintf(
+      "  Average contracts per period: %.2f\n",
+      x$temporal_summary$avg_contracts_per_period
+    ))
+    cat(sprintf(
+      "  Maximum contracts per period: %d\n",
+      x$temporal_summary$max_contracts_per_period
+    ))
     cat("\n")
   }
 
@@ -1710,12 +2105,22 @@ print.longworkR_transitions_with_metrics <- function(x, ...) {
   # Transition results summary
   if (is.matrix(x$transition_results)) {
     cat("TRANSITION MATRIX:\n")
-    cat(sprintf("  Dimensions: %d x %d\n", nrow(x$transition_results), ncol(x$transition_results)))
-    cat(sprintf("  Total transitions: %d\n", sum(x$transition_results, na.rm = TRUE)))
+    cat(sprintf(
+      "  Dimensions: %d x %d\n",
+      nrow(x$transition_results),
+      ncol(x$transition_results)
+    ))
+    cat(sprintf(
+      "  Total transitions: %d\n",
+      sum(x$transition_results, na.rm = TRUE)
+    ))
   } else {
     cat("TRANSITION ANALYSIS:\n")
     cat(sprintf("  Unique transitions: %d\n", nrow(x$transition_results)))
-    cat(sprintf("  Total transition events: %d\n", sum(x$transition_results$weight, na.rm = TRUE)))
+    cat(sprintf(
+      "  Total transition events: %d\n",
+      sum(x$transition_results$weight, na.rm = TRUE)
+    ))
   }
   cat("\n")
 

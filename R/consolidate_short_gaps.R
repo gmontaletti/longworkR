@@ -179,10 +179,16 @@
 #'
 #' \code{\link{consolidate_adjacent}} for contiguous period consolidation
 #'
+#' \code{\link{consolidate_by_employer}} for same-employer consolidation
+#'
 #' \code{\link{consolidation_helpers}} for internal aggregation functions
 #'
 #' @export
-consolidate_short_gaps <- function(data, max_gap_days = 8, variable_handling = "first") {
+consolidate_short_gaps <- function(
+  data,
+  max_gap_days = 8,
+  variable_handling = "first"
+) {
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
@@ -240,8 +246,16 @@ consolidate_short_gaps <- function(data, max_gap_days = 8, variable_handling = "
 
   # Skip: single-period workers (no gaps to bridge)
   skip_mask <- dt$.n_periods_temp == 1L
-  skip_records <- if (any(skip_mask)) dt[skip_mask] else data.table::data.table()
-  process_records <- if (any(!skip_mask)) dt[!skip_mask] else data.table::data.table()
+  skip_records <- if (any(skip_mask)) {
+    dt[skip_mask]
+  } else {
+    data.table::data.table()
+  }
+  process_records <- if (any(!skip_mask)) {
+    dt[!skip_mask]
+  } else {
+    data.table::data.table()
+  }
 
   # Clean up temporary column from both splits
   if (nrow(skip_records) > 0) {
@@ -254,16 +268,27 @@ consolidate_short_gaps <- function(data, max_gap_days = 8, variable_handling = "
   # Process multi-period workers only
   if (nrow(process_records) > 0) {
     # Create shift columns to calculate gaps and detect unemployment barriers
-    process_records[, prev_fine := data.table::shift(fine, 1L, type = "lag"), by = cf]
-    process_records[, prev_arco := data.table::shift(arco, 1L, type = "lag"), by = cf]
-    process_records[, prev_durata := data.table::shift(durata, 1L, type = "lag"), by = cf]
+    process_records[,
+      prev_fine := data.table::shift(fine, 1L, type = "lag"),
+      by = cf
+    ]
+    process_records[,
+      prev_arco := data.table::shift(arco, 1L, type = "lag"),
+      by = cf
+    ]
+    process_records[,
+      prev_durata := data.table::shift(durata, 1L, type = "lag"),
+      by = cf
+    ]
 
     # Calculate gap in days
-    process_records[, gap_days := data.table::fifelse(
-      is.na(prev_fine),
-      NA_integer_,
-      as.integer(inizio - prev_fine - 1L)
-    )]
+    process_records[,
+      gap_days := data.table::fifelse(
+        is.na(prev_fine),
+        NA_integer_,
+        as.integer(inizio - prev_fine - 1L)
+      )
+    ]
 
     # Detect new group starts based on threshold
     # New group when:
@@ -271,34 +296,60 @@ consolidate_short_gaps <- function(data, max_gap_days = 8, variable_handling = "
     # - Gap exceeds max_gap_days
     # - Previous period was unemployment with duration > max_gap_days (acts as barrier)
     # - Current period is unemployment with duration > max_gap_days (acts as barrier)
-    process_records[, new_group := is.na(prev_fine) |
-                      is.na(gap_days) |
-                      gap_days > max_gap_days |
-                      (!is.na(prev_arco) & prev_arco == 0L & prev_durata > max_gap_days) |
-                      (arco == 0L & durata > max_gap_days)]
+    process_records[,
+      new_group := is.na(prev_fine) |
+        is.na(gap_days) |
+        gap_days > max_gap_days |
+        (!is.na(prev_arco) & prev_arco == 0L & prev_durata > max_gap_days) |
+        (arco == 0L & durata > max_gap_days)
+    ]
 
     # Create consolidation group IDs
-    process_records[, consolidation_group := paste(cf, cumsum(new_group), sep = "_"), by = cf]
+    process_records[,
+      consolidation_group := paste(cf, cumsum(new_group), sep = "_"),
+      by = cf
+    ]
 
     # Calculate non_working_days per group BEFORE consolidation
     # Mark unemployment days
-    process_records[, non_working_days_temp := data.table::fifelse(arco == 0L, durata, 0L)]
+    process_records[,
+      non_working_days_temp := data.table::fifelse(arco == 0L, durata, 0L)
+    ]
 
     # Aggregate by group
-    non_working_summary <- process_records[, .(
-      non_working_days = sum(non_working_days_temp, na.rm = TRUE)
-    ), by = .(cf, consolidation_group)]
+    non_working_summary <- process_records[,
+      .(
+        non_working_days = sum(non_working_days_temp, na.rm = TRUE)
+      ),
+      by = .(cf, consolidation_group)
+    ]
 
     # Clean temporary columns before consolidation
-    process_records[, c("prev_fine", "prev_arco", "prev_durata", "gap_days", "new_group", "non_working_days_temp") := NULL]
+    process_records[,
+      c(
+        "prev_fine",
+        "prev_arco",
+        "prev_durata",
+        "gap_days",
+        "new_group",
+        "non_working_days_temp"
+      ) := NULL
+    ]
 
     # Call optimized consolidation helper (Phase 5: 10-15x faster for "first" mode)
-    consolidated <- .consolidate_groups_optimized(process_records, remove_group_col = FALSE, variable_handling = variable_handling)
+    consolidated <- .consolidate_groups_optimized(
+      process_records,
+      remove_group_col = FALSE,
+      variable_handling = variable_handling
+    )
 
     # Merge non_working_days back to result
-    consolidated <- merge(consolidated, non_working_summary,
-                          by = c("cf", "consolidation_group"),
-                          all.x = TRUE)
+    consolidated <- merge(
+      consolidated,
+      non_working_summary,
+      by = c("cf", "consolidation_group"),
+      all.x = TRUE
+    )
 
     # Remove consolidation_group from consolidated output
     consolidated[, consolidation_group := NULL]
@@ -310,7 +361,7 @@ consolidate_short_gaps <- function(data, max_gap_days = 8, variable_handling = "
   # Prepare skip records (add required columns)
   if (nrow(skip_records) > 0) {
     skip_records[, n_periods_consolidated := 1L]
-    skip_records[, non_working_days := 0L]  # Single period = no gaps bridged
+    skip_records[, non_working_days := 0L] # Single period = no gaps bridged
   }
 
   # Combine results

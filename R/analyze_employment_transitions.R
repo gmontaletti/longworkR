@@ -318,191 +318,6 @@
 }
 
 
-#' @title Consolidate Employment Contracts by Employer
-#' @description
-#' Helper function that consolidates consecutive contracts with the same employer
-#' within a specified time gap, while never consolidating contracts from different employers.
-#'
-#' @param pipeline_result data.table object from process_employment_pipeline()
-#' @param employer_var Character string specifying column name containing employer identifiers
-#' @param min_lag Numeric value specifying maximum gap (in days) between contracts
-#'   from the same employer to be consolidated (default: 8)
-#'
-#' @return data.table with consolidated employment periods
-#'
-#' @details
-#' This function:
-#' \itemize{
-#'   \item Groups contracts by person (cf) and employer
-#'   \item Identifies consecutive contracts within min_lag days
-#'   \item Consolidates them preserving appropriate column values
-#'   \item Never consolidates across different employers
-#' }
-#'
-#' Column consolidation strategy:
-#' \itemize{
-#'   \item Dates: Use first 'inizio', last 'fine'
-#'   \item Duration: Recalculate as fine - inizio + 1
-#'   \item Numeric columns: Use sum for additive values, mean for rates
-#'   \item Character columns: Use first value (mode if available)
-#' }
-#'
-#' @keywords internal
-consolidate_by_employer <- function(
-  pipeline_result,
-  employer_var,
-  min_lag = 8
-) {
-  # Input validation
-  if (!inherits(pipeline_result, "data.table")) {
-    stop("pipeline_result must be a data.table object")
-  }
-
-  if (is.null(employer_var) || !employer_var %in% names(pipeline_result)) {
-    stop("employer_var must specify a valid column name in pipeline_result")
-  }
-
-  if (!is.numeric(min_lag) || min_lag < 0) {
-    stop("min_lag must be a non-negative numeric value")
-  }
-
-  # Create working copy
-  dt <- copy(pipeline_result)
-
-  # Ensure required columns exist
-  required_cols <- c("cf", "inizio", "fine", "durata")
-  missing_cols <- setdiff(required_cols, names(dt))
-  if (length(missing_cols) > 0) {
-    stop(paste(
-      "Missing required columns:",
-      paste(missing_cols, collapse = ", ")
-    ))
-  }
-
-  # Ensure date columns are Date objects
-  if (!inherits(dt$inizio, "Date")) {
-    dt[, inizio := as.Date(inizio)]
-  }
-  if (!inherits(dt$fine, "Date")) {
-    dt[, fine := as.Date(fine)]
-  }
-
-  # Sort by person, employer, and start date
-  setorderv(dt, cols = c("cf", employer_var, "inizio"))
-
-  # Create grouping for consolidation
-  # Contracts are consolidated if:
-  # 1. Same person (cf)
-  # 2. Same employer
-  # 3. Gap between contracts <= min_lag days
-
-  dt[,
-    `:=`(
-      prev_employer = shift(.SD[[employer_var]], 1L),
-      prev_fine = shift(fine, 1L)
-    ),
-    by = "cf"
-  ]
-
-  # Calculate gap between current start and previous end
-  dt[, gap_days := as.numeric(inizio - prev_fine)]
-
-  # Mark records that should NOT start a new consolidation group
-  # (same employer and gap <= threshold)
-  dt[,
-    new_group := is.na(prev_employer) |
-      .SD[[employer_var]] != prev_employer |
-      is.na(gap_days) |
-      gap_days > min_lag
-  ]
-
-  # Create consolidation group IDs
-  dt[, consolidation_group := cumsum(new_group), by = "cf"]
-
-  # Get column names for aggregation (exclude helper columns)
-  exclude_cols <- c(
-    "prev_employer",
-    "prev_fine",
-    "gap_days",
-    "new_group",
-    "consolidation_group"
-  )
-  agg_cols <- setdiff(names(dt), exclude_cols)
-
-  # Store original column classes for type restoration
-  original_classes <- sapply(dt, class, simplify = FALSE)
-
-  # Perform consolidation using simple aggregation approach to avoid type conflicts
-  consolidated <- dt[,
-    {
-      # Calculate aggregated values using consistent types
-      min_inizio <- min(inizio, na.rm = TRUE)
-      max_fine <- max(fine, na.rm = TRUE)
-      new_durata <- as.numeric(max_fine - min_inizio + 1)
-
-      # Start with core columns (cf is automatically included by the grouping)
-      result <- list(
-        inizio = min_inizio,
-        fine = max_fine,
-        durata = new_durata
-      )
-
-      # Add employer variable if different from cf
-      if (employer_var != "cf" && employer_var %in% agg_cols) {
-        result[[employer_var]] <- .SD[[employer_var]][1L] # Should be same within group
-      }
-
-      # Add all other columns with simple aggregation
-      # Note: cf is excluded because it's already in the grouping variables
-      other_cols <- setdiff(
-        agg_cols,
-        c("inizio", "fine", "durata", "cf", employer_var)
-      )
-      for (col in other_cols) {
-        col_vals <- .SD[[col]]
-        if (is.numeric(col_vals)) {
-          # For numeric: use mean to ensure consistent double type
-          result[[col]] <- mean(col_vals, na.rm = TRUE)
-        } else {
-          # For non-numeric: use first value to ensure consistent type
-          result[[col]] <- col_vals[1L]
-        }
-      }
-
-      result
-    },
-    by = .(cf, consolidation_group)
-  ]
-
-  # Restore original column types after aggregation
-  for (col in names(consolidated)) {
-    if (
-      col %in%
-        names(original_classes) &&
-        !col %in% c("cf", "consolidation_group")
-    ) {
-      orig_class <- original_classes[[col]]
-
-      if (inherits(orig_class, "integer") && is.numeric(consolidated[[col]])) {
-        # Convert back to integer if original was integer and result is numeric
-        consolidated[, (col) := as.integer(round(get(col)))]
-      } else if (any(c("Date", "IDate") %in% orig_class)) {
-        # Restore date classes
-        consolidated[, (col) := structure(get(col), class = orig_class)]
-      }
-    }
-  }
-
-  # Remove helper column
-  consolidated[, consolidation_group := NULL]
-
-  # Restore original column order (approximately)
-  original_cols <- intersect(names(pipeline_result), names(consolidated))
-  data.table::setcolorder(consolidated, original_cols)
-
-  return(consolidated)
-}
-
 #' @title Analyze Employment Transitions from Pipeline Output
 #' @description
 #' Analyzes employment transitions from the output of process_employment_pipeline().
@@ -1098,7 +913,8 @@ analyze_employment_transitions <- function(
       dt <- consolidate_by_employer(
         dt,
         employer_var = employer_var,
-        min_lag = min_lag
+        max_gap_days = min_lag,
+        variable_handling = "first"
       )
     } else if (consolidation_mode == "temporal") {
       dt <- .apply_temporal_consolidation(
@@ -1110,7 +926,8 @@ analyze_employment_transitions <- function(
       dt <- consolidate_by_employer(
         dt,
         employer_var = employer_var,
-        min_lag = min_lag
+        max_gap_days = min_lag,
+        variable_handling = "first"
       )
       dt <- .apply_temporal_consolidation(
         dt,

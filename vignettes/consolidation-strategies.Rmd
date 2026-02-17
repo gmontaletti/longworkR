@@ -46,11 +46,12 @@ Without consolidation, these patterns create noise in longitudinal employment an
 
 ### The longworkR Consolidation Solution
 
-The longworkR package provides **three focused functions** for employment consolidation, each with a single, clear purpose:
+The longworkR package provides **four focused functions** for employment consolidation, each with a single, clear purpose:
 
 1. **`consolidate_overlapping()`** - Merges concurrent employment periods
-2. **`consolidate_adjacent()`** - Merges touching employment periods (no gap)
-3. **`consolidate_short_gaps()`** - Bridges short unemployment gaps
+2. **`consolidate_by_employer()`** - Merges same-employer periods within a gap threshold
+3. **`consolidate_adjacent()`** - Merges touching employment periods (no gap)
+4. **`consolidate_short_gaps()`** - Bridges short unemployment gaps
 
 These functions are **composable** (chainable with pipes) and **performant** (9x faster than previous implementations).
 
@@ -80,14 +81,15 @@ Problems with the old API:
 - Performance issues with large datasets
 - Hard to compose different consolidation strategies
 
-**New approach (longworkR 0.6.0+):** Three focused functions
+**New approach (longworkR 0.6.0+):** Four focused functions
 
 ```r
 # NEW API (v0.6.0+)
 consolidated <- data |>
-  consolidate_overlapping() |>  # Clear: merge concurrent jobs
-  consolidate_adjacent() |>     # Clear: merge touching periods
-  consolidate_short_gaps(30)    # Clear: bridge 30-day gaps
+  consolidate_overlapping() |>           # Clear: merge concurrent jobs
+  consolidate_by_employer("datore") |>   # Clear: merge same-employer periods
+  consolidate_adjacent() |>              # Clear: merge touching periods
+  consolidate_short_gaps(30)             # Clear: bridge 30-day gaps
 ```
 
 Benefits of the new API:
@@ -168,6 +170,75 @@ When consolidating overlapping periods, columns are aggregated as:
 | Logical | Majority rule | mean(values) >= 0.5 |
 | `arco` | Maximum | Indicates if any period was employment |
 | `stato` | Employment state | Preferentially selects employment states |
+
+---
+
+## Function Guide: consolidate_by_employer()
+
+### Purpose
+
+Merges consecutive employment periods with the same employer, consolidating contracts separated by short gaps into single employment spells. This is useful when contract renewals or rollovers with the same employer should be treated as continuous employment.
+
+### When to Use
+
+Use this function when:
+- You have an employer identifier column in your data
+- Contract renewals with the same employer should be treated as continuous employment
+- You want to distinguish same-employer continuity from cross-employer transitions
+- Short gaps between same-employer contracts are administrative artifacts
+
+### How It Works
+
+The function:
+1. Sorts records by `cf`, employer, and start date
+2. Detects **new group starts** when:
+   - First record for person
+   - Employer changes
+   - Gap > `max_gap_days` days between periods
+   - Previous or current period is unemployment (`arco == 0`)
+3. Consolidates periods within each group using the shared aggregation engine
+
+**Important**: Unemployment periods (`arco == 0`) act as **barriers** that prevent consolidation, even between same-employer records.
+
+### Example: Basic Usage
+
+```{r employer-basic, eval=FALSE}
+# Data with same-employer renewals
+employer_data <- data.table(
+  cf = rep(1, 4),
+  inizio = as.Date(c("2023-01-01", "2023-04-05", "2023-07-01", "2023-04-01")),
+  fine = as.Date(c("2023-03-31", "2023-06-30", "2023-09-30", "2023-06-30")),
+  durata = c(90, 87, 92, 91),
+  arco = c(1, 1, 1, 1),
+  datore = c("Employer_A", "Employer_A", "Employer_A", "Employer_B")
+)
+
+# Consolidate same-employer periods (gap between first two = 5 days <= 8 default)
+result <- consolidate_by_employer(employer_data, employer_var = "datore")
+nrow(result)  # 2 (Employer_A merged, Employer_B separate)
+```
+
+### Example: Adjusting Gap Threshold
+
+```{r employer-threshold, eval=FALSE}
+# Strict: only merge if gap <= 3 days
+strict <- consolidate_by_employer(employer_data, "datore", max_gap_days = 3)
+nrow(strict)  # 3 (5-day gap too large for strict threshold)
+
+# Lenient: merge if gap <= 30 days
+lenient <- consolidate_by_employer(employer_data, "datore", max_gap_days = 30)
+nrow(lenient)  # 2 (all Employer_A periods merged)
+```
+
+### Difference from Other Functions
+
+| Aspect | `consolidate_overlapping()` | `consolidate_by_employer()` | `consolidate_adjacent()` | `consolidate_short_gaps()` |
+|--------|---------------------------|----------------------------|------------------------|--------------------------|
+| **What it merges** | Concurrent employment | Same-employer sequential | All sequential (no gap) | Sequential across gaps |
+| **Uses `over_id`** | Yes | No | No | No |
+| **Employer-aware** | No | Yes (required) | No | No |
+| **Gap tolerance** | N/A | Configurable (`max_gap_days`) | Exactly 0 days | Configurable |
+| **Typical use case** | Multiple simultaneous jobs | Contract renewals | Administrative boundaries | Short unemployment |
 
 ---
 
@@ -350,14 +421,15 @@ This column is **critical** for understanding consolidation quality:
 
 ### The Recommended Workflow
 
-The three consolidation functions are designed to be used **in sequence**, creating a progressive consolidation chain:
+The four consolidation functions are designed to be used **in sequence**, creating a progressive consolidation chain:
 
 ```r
 # RECOMMENDED: Full consolidation chain
 consolidated_data <- raw_data |>
-  consolidate_overlapping() |>  # Step 1: Merge concurrent employment
-  consolidate_adjacent() |>     # Step 2: Merge touching periods
-  consolidate_short_gaps(30)    # Step 3: Bridge short gaps
+  consolidate_overlapping() |>           # Step 1: Merge concurrent employment
+  consolidate_by_employer("datore") |>   # Step 2: Merge same-employer renewals
+  consolidate_adjacent() |>              # Step 3: Merge touching periods
+  consolidate_short_gaps(30)             # Step 4: Bridge short gaps
 ```
 
 ### Why Order Matters
@@ -365,8 +437,9 @@ consolidated_data <- raw_data |>
 **Always consolidate in this order:**
 
 1. **Overlapping first**: Simplifies concurrent employment before analyzing sequences
-2. **Adjacent second**: Removes administrative contract boundaries
-3. **Short gaps last**: Most aggressive, should work on already-simplified data
+2. **Employer second**: Consolidates same-employer renewals while employer identity is still available
+3. **Adjacent third**: Removes administrative contract boundaries
+4. **Short gaps last**: Most aggressive, should work on already-simplified data
 
 **Wrong order can produce suboptimal results:**
 
@@ -735,14 +808,14 @@ consolidated <- consolidate_adjacent(data)
 | `type = "overlapping"` | Use `consolidate_overlapping()` only |
 | `type = "adjacent"` | Use `consolidate_adjacent()` only |
 | `min_lag = N` | Use `consolidate_short_gaps(max_gap_days = N)` |
-| `employer_var = "..."` | Not supported in new API (see note below) |
+| `employer_var = "..."` | Use `consolidate_by_employer(employer_var = "...")` |
 
 ### Employer-Based Consolidation
 
-The old `employer_var` parameter for employer-based consolidation is **not directly supported** in the new API. This functionality may be restored in a future release or requires custom implementation:
+The old `mode = "employer"` parameter maps directly to the new `consolidate_by_employer()` function:
 
 ```r
-# OLD CODE (< 0.6.0) - NOT DIRECTLY SUPPORTED
+# OLD CODE (< 0.6.0) - NO LONGER WORKS
 consolidated <- consolidate_employment(
   data,
   mode = "employer",
@@ -750,11 +823,18 @@ consolidated <- consolidate_employment(
   min_lag = 30
 )
 
-# NEW CODE (0.6.0+) - WORKAROUND
-# For employer-based consolidation, you'll need to:
-# 1. Pre-process to mark same-employer adjacent periods
-# 2. Use consolidate_adjacent() or write custom logic
-# 3. Or wait for future longworkR release with employer support
+# NEW CODE (0.6.0+)
+consolidated <- consolidate_by_employer(
+  data,
+  employer_var = "employer_id",
+  max_gap_days = 30  # min_lag → max_gap_days
+)
+
+# Or as part of a pipeline
+consolidated <- data |>
+  consolidate_overlapping() |>
+  consolidate_by_employer("employer_id", max_gap_days = 30) |>
+  consolidate_adjacent()
 ```
 
 ### Updated Workflow Pattern
@@ -800,7 +880,7 @@ Migrating to the new API provides:
 - [ ] Remove `consolidation_mode` and `consolidation_type` from `analyze_employment_transitions()` calls
 - [ ] Test that results match expected behavior
 - [ ] Update any documentation or README files
-- [ ] Consider if employer-based consolidation was needed (requires workaround)
+- [ ] Replace employer-based consolidation with `consolidate_by_employer()`
 
 ---
 
@@ -808,8 +888,9 @@ Migrating to the new API provides:
 
 ### Key Takeaways
 
-1. **Three focused functions** replace complex old API:
+1. **Four focused functions** replace complex old API:
    - `consolidate_overlapping()` - Concurrent employment
+   - `consolidate_by_employer()` - Same-employer renewals
    - `consolidate_adjacent()` - Touching periods
    - `consolidate_short_gaps()` - Bridge unemployment gaps
 
@@ -829,9 +910,10 @@ data <- readRDS("data/sample.rds")
 
 # 2. Progressive consolidation
 consolidated <- data |>
-  consolidate_overlapping() |>  # Merge concurrent jobs
-  consolidate_adjacent() |>     # Merge touching periods
-  consolidate_short_gaps(30)    # Bridge 30-day gaps
+  consolidate_overlapping() |>           # Merge concurrent jobs
+  consolidate_by_employer("datore") |>   # Merge same-employer renewals
+  consolidate_adjacent() |>              # Merge touching periods
+  consolidate_short_gaps(30)             # Bridge 30-day gaps
 
 # 3. Analyze
 transitions <- analyze_employment_transitions(consolidated)
@@ -842,7 +924,7 @@ plot_transitions_network(transitions)
 
 ### Further Reading
 
-- Function documentation: `?consolidate_overlapping`, `?consolidate_adjacent`, `?consolidate_short_gaps`
+- Function documentation: `?consolidate_overlapping`, `?consolidate_by_employer`, `?consolidate_adjacent`, `?consolidate_short_gaps`
 - Performance vignette: `vignette("performance-optimizations", package = "longworkR")`
 - Transition analysis: `?analyze_employment_transitions`
 - vecshift package: Understanding the `over_id` column

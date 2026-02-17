@@ -127,5 +127,6 @@ system.time({
 }
 \seealso{
 \code{\link{consolidate_adjacent}} to merge touching employment periods
+\code{\link{consolidate_by_employer}} to merge same-employer periods
 \code{\link{consolidate_short_gaps}} to bridge short unemployment gaps
 }

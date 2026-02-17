@@ -149,6 +149,8 @@
 #' @seealso
 #' \code{\link{consolidate_overlapping}} for concurrent employment consolidation
 #'
+#' \code{\link{consolidate_by_employer}} for same-employer consolidation
+#'
 #' \code{\link{consolidate_short_gaps}} for gap-bridging consolidation
 #'
 #' \code{\link{consolidation_helpers}} for internal aggregation functions
@@ -206,8 +208,16 @@ consolidate_adjacent <- function(data, variable_handling = "weight") {
 
   # Skip: single-period workers (nothing to consolidate)
   skip_mask <- dt$.n_periods_temp == 1L
-  skip_records <- if (any(skip_mask)) dt[skip_mask] else data.table::data.table()
-  process_records <- if (any(!skip_mask)) dt[!skip_mask] else data.table::data.table()
+  skip_records <- if (any(skip_mask)) {
+    dt[skip_mask]
+  } else {
+    data.table::data.table()
+  }
+  process_records <- if (any(!skip_mask)) {
+    dt[!skip_mask]
+  } else {
+    data.table::data.table()
+  }
 
   # Clean up temporary column from both splits
   if (nrow(skip_records) > 0) {
@@ -220,17 +230,22 @@ consolidate_adjacent <- function(data, variable_handling = "weight") {
   # Process multi-period workers only
   if (nrow(process_records) > 0) {
     # Create shift columns by cf to detect adjacency
-    process_records[, `:=`(
-      prev_fine = data.table::shift(fine, 1L, type = "lag"),
-      prev_arco = data.table::shift(arco, 1L, type = "lag")
-    ), by = cf]
+    process_records[,
+      `:=`(
+        prev_fine = data.table::shift(fine, 1L, type = "lag"),
+        prev_arco = data.table::shift(arco, 1L, type = "lag")
+      ),
+      by = cf
+    ]
 
     # Calculate gap in days
-    process_records[, gap_days := data.table::fifelse(
-      is.na(prev_fine),
-      NA_integer_,
-      as.integer(inizio - prev_fine - 1L)
-    )]
+    process_records[,
+      gap_days := data.table::fifelse(
+        is.na(prev_fine),
+        NA_integer_,
+        as.integer(inizio - prev_fine - 1L)
+      )
+    ]
 
     # Detect new group starts (vectorized)
     # Start new group when:
@@ -238,19 +253,30 @@ consolidate_adjacent <- function(data, variable_handling = "weight") {
     # - Gap > 0 days
     # - Previous was unemployment
     # - Current is unemployment
-    process_records[, new_group := is.na(prev_fine) |
-                      gap_days > 0L |
-                      prev_arco == 0L |
-                      arco == 0L]
+    process_records[,
+      new_group := is.na(prev_fine) |
+        gap_days > 0L |
+        prev_arco == 0L |
+        arco == 0L
+    ]
 
     # Create consolidation group IDs
-    process_records[, consolidation_group := paste(cf, cumsum(new_group), sep = "_"), by = cf]
+    process_records[,
+      consolidation_group := paste(cf, cumsum(new_group), sep = "_"),
+      by = cf
+    ]
 
     # Clean up temporary columns
-    process_records[, c("prev_fine", "prev_arco", "gap_days", "new_group") := NULL]
+    process_records[,
+      c("prev_fine", "prev_arco", "gap_days", "new_group") := NULL
+    ]
 
     # Call shared consolidation helper
-    consolidated <- .consolidate_groups(process_records, remove_group_col = TRUE, variable_handling = variable_handling)
+    consolidated <- .consolidate_groups(
+      process_records,
+      remove_group_col = TRUE,
+      variable_handling = variable_handling
+    )
   } else {
     # No multi-period workers to process
     consolidated <- data.table::data.table()

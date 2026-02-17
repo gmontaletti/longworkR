@@ -168,6 +168,8 @@ result_single <- consolidate_adjacent(single_record)  # Returns as-is
 \seealso{
 \code{\link{consolidate_overlapping}} for concurrent employment consolidation
 
+\code{\link{consolidate_by_employer}} for same-employer consolidation
+
 \code{\link{consolidate_short_gaps}} for gap-bridging consolidation
 
 \code{\link{consolidation_helpers}} for internal aggregation functions

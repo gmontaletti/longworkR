@@ -201,5 +201,7 @@ cat("Lenient (90d):", nrow(result_lenient), "periods\n")
 
 \code{\link{consolidate_adjacent}} for contiguous period consolidation
 
+\code{\link{consolidate_by_employer}} for same-employer consolidation
+
 \code{\link{consolidation_helpers}} for internal aggregation functions
 }

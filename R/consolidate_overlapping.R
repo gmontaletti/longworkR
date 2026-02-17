@@ -107,14 +107,16 @@
 #'
 #' @seealso
 #' \code{\link{consolidate_adjacent}} to merge touching employment periods
+#' \code{\link{consolidate_by_employer}} to merge same-employer periods
 #' \code{\link{consolidate_short_gaps}} to bridge short unemployment gaps
 #'
 #' @export
 consolidate_overlapping <- function(data, variable_handling = "weight") {
-
   # 1. Input validation
   if (!data.table::is.data.table(data)) {
-    stop("Input must be a data.table. Use data.table::as.data.table() to convert.")
+    stop(
+      "Input must be a data.table. Use data.table::as.data.table() to convert."
+    )
   }
 
   # Validate variable_handling
@@ -164,8 +166,16 @@ consolidate_overlapping <- function(data, variable_handling = "weight") {
   # Skip: single-period workers with over_id == 0 (no overlapping possible)
   # Process: multi-period workers OR single-period with over_id > 0
   skip_mask <- dt$.n_periods_temp == 1L & dt$over_id == 0L
-  skip_records <- if (any(skip_mask)) dt[skip_mask] else data.table::data.table()
-  process_records <- if (any(!skip_mask)) dt[!skip_mask] else data.table::data.table()
+  skip_records <- if (any(skip_mask)) {
+    dt[skip_mask]
+  } else {
+    data.table::data.table()
+  }
+  process_records <- if (any(!skip_mask)) {
+    dt[!skip_mask]
+  } else {
+    data.table::data.table()
+  }
 
   # Clean up temporary column from both splits
   if (nrow(skip_records) > 0) {
@@ -180,18 +190,25 @@ consolidate_overlapping <- function(data, variable_handling = "weight") {
     # 6. Create consolidation_group
     # Employment with over_id > 0: group by cf and over_id
     # Others: unique group per record (no consolidation)
-    process_records[, consolidation_group := {
-      if (over_id[1] > 0) {
-        # All records in this group get the same consolidation_group
-        paste(cf[1], over_id[1], sep = "_")
-      } else {
-        # Each record gets unique group (no consolidation)
-        paste(cf, "single", seq_len(.N), sep = "_")
-      }
-    }, by = .(cf, over_id)]
+    process_records[,
+      consolidation_group := {
+        if (over_id[1] > 0) {
+          # All records in this group get the same consolidation_group
+          paste(cf[1], over_id[1], sep = "_")
+        } else {
+          # Each record gets unique group (no consolidation)
+          paste(cf, "single", seq_len(.N), sep = "_")
+        }
+      },
+      by = .(cf, over_id)
+    ]
 
     # 7. Call shared consolidation helper
-    consolidated <- .consolidate_groups(process_records, remove_group_col = TRUE, variable_handling = variable_handling)
+    consolidated <- .consolidate_groups(
+      process_records,
+      remove_group_col = TRUE,
+      variable_handling = variable_handling
+    )
   } else {
     # No records to process
     consolidated <- data.table::data.table()
