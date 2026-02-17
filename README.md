@@ -1,5 +1,7 @@
 # longworkR
 
+[![pkgdown](https://github.com/gmontaletti/longworkR/actions/workflows/pkgdown.yml/badge.svg)](https://gmontaletti.github.io/longworkR/)
+
 Longitudinal Employment Analytics for vecshift Data
 
 ## Overview

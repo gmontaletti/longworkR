@@ -1,0 +1,240 @@
+url: https://gmontaletti.github.io/longworkR/
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get Started
+      href: articles/consolidation-strategies.html
+    github:
+      icon: fa-github
+      href: https://github.com/gmontaletti/longworkR
+      aria-label: GitHub
+
+articles:
+  - title: Getting Started
+    navbar: ~
+    contents:
+      - consolidation-strategies
+  - title: Advanced Topics
+    navbar: ~
+    contents:
+      - impact-metrics-integration
+      - multiple-treatment-groups-evaluation
+      - performance-optimizations
+
+reference:
+  - title: Employment Consolidation
+    desc: Functions for consolidating overlapping, adjacent, and gapped employment periods.
+    contents:
+      - consolidate_overlapping
+      - consolidate_adjacent
+      - consolidate_short_gaps
+      - consolidate_by_employer
+      - mark_employer_consolidation
+      - summarize_consolidation
+      - extract_consolidation_metrics
+      - analyze_consolidated_periods
+
+  - title: Transition Analysis
+    desc: Analyze employment transitions, overlaps, and network structures.
+    contents:
+      - analyze_employment_transitions
+      - analyze_employment_transitions_with_metrics
+      - analyze_employment_overlaps
+      - analyze_transitions_network
+      - create_consolidated_transition_matrix
+      - create_monthly_transition_matrices
+      - create_monthly_transition_matrices_optimized
+
+  - title: Career Metrics
+    desc: Calculate career complexity, stability, success, and transition metrics.
+    contents:
+      - calculate_career_complexity_metrics
+      - calculate_career_stability_metrics
+      - calculate_career_success_metrics
+      - calculate_career_transition_metrics
+      - calculate_comprehensive_career_metrics
+      - calculate_contract_quality_metrics
+      - calculate_employment_stability_metrics
+      - calculate_transition_pattern_metrics
+      - calculate_comprehensive_impact_metrics
+      - calculate_impact_career_complexity_metrics
+
+  - title: Career Clustering
+    desc: Cluster career trajectories and visualize cluster profiles.
+    contents:
+      - cluster_career_trajectories
+      - plot_cluster_profiles
+      - plot_employment_complexity
+
+  - title: Trajectory Tracking
+    desc: Track employment trajectories across contracts, employers, professions, and sectors.
+    contents:
+      - track_contract_trajectories
+      - track_employer_trajectories
+      - track_professional_trajectories
+      - track_professional_group_trajectories
+      - track_sector_trajectories
+
+  - title: Survival Analysis
+    desc: Contract survival estimation, comparison, and metrics.
+    contents:
+      - estimate_contract_survival
+      - estimate_contract_survival_optimized
+      - compare_contract_survival
+      - add_contract_survival_metrics
+      - add_all_survival_metrics_optimized
+      - add_survival_probabilities
+      - calculate_median_survival_probability
+      - export_survival_results
+      - visualize_contract_survival
+
+  - title: Impact Evaluation Methods
+    desc: Core causal inference methods for employment policy evaluation.
+    contents:
+      - difference_in_differences
+      - propensity_score_matching
+      - regression_discontinuity
+      - synthetic_control_method
+      - event_study_design
+      - coarsened_exact_matching
+
+  - title: Impact Matching & Assessment
+    desc: Treatment identification, matching diagnostics, and robustness checks.
+    contents:
+      - create_treatment_control_groups
+      - identify_treatment_events
+      - aggregate_treatment_effects
+      - assess_balance
+      - assess_match_quality
+      - assess_treatment_event_quality
+      - diagnose_matching_data
+      - prepare_metrics_for_impact_analysis
+      - rdd_robustness_checks
+      - rdd_placebo_tests
+
+  - title: Impact Reporting
+    desc: Export and format impact evaluation results.
+    contents:
+      - export_impact_results
+      - generate_impact_report
+      - create_impact_summary_table
+
+  - title: "Visualization: Networks"
+    desc: Static and interactive network visualizations for employment transitions.
+    contents:
+      - plot_transitions_network
+      - plot_transitions_hierarchical
+      - plot_transitions_heatmap
+      - plot_transitions_circular
+      - plot_transitions_over_time
+      - plot_transition_flows
+      - plot_overlap_patterns
+      - plot_interactive_transitions
+      - convert_transitions_to_g6r
+      - generate_g6r_demo_data
+      - interactive_transitions_module
+      - create_enhanced_transitions_dashboard
+
+  - title: "Visualization: Survival"
+    desc: Survival curve plots, heatmaps, and animations.
+    contents:
+      - plot_survival_comparison
+      - plot_survival_heatmap
+      - plot_median_survival_forest
+      - animate_survival_curves
+      - create_risk_table
+
+  - title: "Visualization: Impact"
+    desc: Plots for impact evaluation results.
+    contents:
+      - plot_did_results
+      - plot_event_study
+      - plot_impact_summary
+      - plot_balance_assessment
+      - plot_synthetic_control
+      - plot_treatment_control_comparison
+      - rdd_plot
+
+  - title: "Visualization: Employment"
+    desc: Employment timeline, distribution, and summary visualizations.
+    contents:
+      - plot_employment_gantt
+      - plot_employment_gantt_advanced
+      - plot_employment_timeline
+      - plot_employment_heatmap
+      - plot_employment_distribution
+      - plot_employment_summary
+      - plot_integrated_employment_metrics
+      - plot_duration_analysis
+      - plot_over_id_distribution
+      - plot_consolidation_comparison
+      - quick_employment_viz
+      - compare_transitions_between_groups
+
+  - title: Theme & Colors
+    desc: Consistent theming, color scales, and accessibility tools.
+    contents:
+      - theme_vecshift
+      - set_vecshift_theme
+      - reset_default_theme
+      - scale_color_vecshift
+      - scale_colour_vecshift
+      - scale_fill_vecshift
+      - scale_fill_vecshift_bw
+      - scale_linetype_vecshift
+      - vecshift_colors
+      - vecshift_patterns
+      - vecshift_linetypes
+      - get_employment_colors
+      - preview_vecshift_colors
+      - preview_bw_patterns
+
+  - title: Temporal Indicators
+    desc: Compute temporal employment indicators, CPI mapping, and summaries.
+    contents:
+      - compute_temporal_employment_indicators
+      - create_temporal_indicators_summary
+      - add_cpi_to_data
+      - add_cpi_via_belfiore
+      - load_belfiore_mapping
+      - create_comune_cpi_lookup
+      - generate_comune_cpi_lookup
+
+  - title: Data & Utilities
+    desc: Sample data generation, synthetic data, and accessibility reports.
+    contents:
+      - sample
+      - create_sample_employment_data
+      - generate_synthetic_employment_data
+      - validate_synthetic_data
+      - synthetic_sample
+      - .check_g6r
+      - test_g6r_accessibility
+      - test_vecshift_accessibility
+      - create_accessibility_report
+
+  - title: Internal
+    desc: Internal helper functions and documentation pages.
+    contents:
+      - starts_with("dot-")
+      - has_keyword("internal")
+      - matches("^(consolidation_helpers|consolidation_metrics|career_clustering|career_metrics)$")
+      - matches("^(impact_estimation|impact_evaluation|impact_matching|impact_metrics|impact_rdd|impact_reporting|impact_visualization)$")
+      - matches("^(survival_analysis|survival_visualization|temporal_indicators)$")
+      - matches("^(ggraph-transitions|theme-vecshift|vecshift-plots|vecshift-plots-extensions|trajectory-analysis|g6r_examples)$")
+      - matches("^(grapes-or-or-grapes)$")
+      - matches("^print\\.")
+      - matches("^(aggregate_to_person_level|calculate_career_success_index_for_impact|calculate_employer_trajectories_vectorized)$")
+      - matches("^(calculate_l1_imbalance|calculate_professional_group_trajectories_vectorized|calculate_professional_trajectories_vectorized)$")
+      - matches("^(calculate_sector_trajectories_vectorized|calculate_trajectories_vectorized|calculate_unified_career_metrics_optimized)$")
+      - matches("^(cem_fallback_implementation|cem_native_implementation)$")
+      - matches("^(get_standardized_employment_colors|get_survival_at_time|get_survival_at_time_optimized)$")
+      - matches("^(load_spatial_maps|translate_trajectory_status|validate_animation_setup|validate_integration_setup)$")

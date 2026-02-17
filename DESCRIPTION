@@ -12,6 +12,9 @@ Description: Analytics and visualization tools for longitudinal employment data
     protection with synthetic data generation for public distribution while maintaining
     privacy of real employment records.
 License: MIT + file LICENSE
+URL: https://github.com/gmontaletti/longworkR,
+    https://gmontaletti.github.io/longworkR/
+BugReports: https://github.com/gmontaletti/longworkR/issues
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
