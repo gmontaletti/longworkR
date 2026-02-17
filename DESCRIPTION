@@ -56,5 +56,9 @@ Suggests:
     rdrobust,
     lfe,
     fixest
+Remotes:
+    gmontaletti/vecshift,
+    cynkra/g6R,
+    ebenmichael/augsynth
 VignetteBuilder: knitr
 Config/testthat/edition: 3
