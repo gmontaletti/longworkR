@@ -173,6 +173,9 @@ for concurrent employment consolidation
 [`consolidate_adjacent`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md)
 for contiguous period consolidation
 
+[`consolidate_by_employer`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md)
+for same-employer consolidation
+
 [`consolidation_helpers`](https://gmontaletti.github.io/longworkR/reference/consolidation_helpers.md)
 for internal aggregation functions
 

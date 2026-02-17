@@ -107,13 +107,16 @@ employment analysis, making it difficult to:</p>
 <div class="section level3">
 <h3 id="the-longworkr-consolidation-solution">The longworkR Consolidation Solution<a class="anchor" aria-label="anchor" href="#the-longworkr-consolidation-solution"></a>
 </h3>
-<p>The longworkR package provides <strong>three focused
+<p>The longworkR package provides <strong>four focused
 functions</strong> for employment consolidation, each with a single,
 clear purpose:</p>
 <ol style="list-style-type: decimal">
 <li>
 <strong><code><a href="../reference/consolidate_overlapping.html">consolidate_overlapping()</a></code></strong> - Merges
 concurrent employment periods</li>
+<li>
+<strong><code><a href="../reference/consolidate_by_employer.html">consolidate_by_employer()</a></code></strong> - Merges
+same-employer periods within a gap threshold</li>
 <li>
 <strong><code><a href="../reference/consolidate_adjacent.html">consolidate_adjacent()</a></code></strong> - Merges
 touching employment periods (no gap)</li>
@@ -148,14 +151,15 @@ function with complex parameters</p>
 variations - Complex parameter interactions - Difficult to understand
 what consolidation was performed - Performance issues with large
 datasets - Hard to compose different consolidation strategies</p>
-<p><strong>New approach (longworkR 0.6.0+):</strong> Three focused
+<p><strong>New approach (longworkR 0.6.0+):</strong> Four focused
 functions</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># NEW API (v0.6.0+)</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>  <span class="co"># Clear: merge concurrent jobs</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>     <span class="co"># Clear: merge touching periods</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>    <span class="co"># Clear: bridge 30-day gaps</span></span></code></pre></div>
+<span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>           <span class="co"># Clear: merge concurrent jobs</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span><span class="st">"datore"</span><span class="op">)</span> <span class="op">|&gt;</span>   <span class="co"># Clear: merge same-employer periods</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>              <span class="co"># Clear: merge touching periods</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>             <span class="co"># Clear: bridge 30-day gaps</span></span></code></pre></div>
 <p>Benefits of the new API: - ✅ <strong>Composable</strong>: Chain
 functions as needed - ✅ <strong>Focused</strong>: Each function does
 one thing well - ✅ <strong>Fast</strong>: 9x performance improvement -
@@ -289,17 +293,139 @@ as:</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="function-guide-consolidate_adjacent">Function Guide: consolidate_adjacent()<a class="anchor" aria-label="anchor" href="#function-guide-consolidate_adjacent"></a>
+<h2 id="function-guide-consolidate_by_employer">Function Guide: consolidate_by_employer()<a class="anchor" aria-label="anchor" href="#function-guide-consolidate_by_employer"></a>
 </h2>
 <div class="section level3">
 <h3 id="purpose-1">Purpose<a class="anchor" aria-label="anchor" href="#purpose-1"></a>
+</h3>
+<p>Merges consecutive employment periods with the same employer,
+consolidating contracts separated by short gaps into single employment
+spells. This is useful when contract renewals or rollovers with the same
+employer should be treated as continuous employment.</p>
+</div>
+<div class="section level3">
+<h3 id="when-to-use-1">When to Use<a class="anchor" aria-label="anchor" href="#when-to-use-1"></a>
+</h3>
+<p>Use this function when: - You have an employer identifier column in
+your data - Contract renewals with the same employer should be treated
+as continuous employment - You want to distinguish same-employer
+continuity from cross-employer transitions - Short gaps between
+same-employer contracts are administrative artifacts</p>
+</div>
+<div class="section level3">
+<h3 id="how-it-works-1">How It Works<a class="anchor" aria-label="anchor" href="#how-it-works-1"></a>
+</h3>
+<p>The function: 1. Sorts records by <code>cf</code>, employer, and
+start date 2. Detects <strong>new group starts</strong> when: - First
+record for person - Employer changes - Gap &gt;
+<code>max_gap_days</code> days between periods - Previous or current
+period is unemployment (<code>arco == 0</code>) 3. Consolidates periods
+within each group using the shared aggregation engine</p>
+<p><strong>Important</strong>: Unemployment periods
+(<code>arco == 0</code>) act as <strong>barriers</strong> that prevent
+consolidation, even between same-employer records.</p>
+</div>
+<div class="section level3">
+<h3 id="example-basic-usage-1">Example: Basic Usage<a class="anchor" aria-label="anchor" href="#example-basic-usage-1"></a>
+</h3>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Data with same-employer renewals</span></span>
+<span><span class="va">employer_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span></span>
+<span>  cf <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>  inizio <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2023-01-01"</span>, <span class="st">"2023-04-05"</span>, <span class="st">"2023-07-01"</span>, <span class="st">"2023-04-01"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  fine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2023-03-31"</span>, <span class="st">"2023-06-30"</span>, <span class="st">"2023-09-30"</span>, <span class="st">"2023-06-30"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  durata <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">90</span>, <span class="fl">87</span>, <span class="fl">92</span>, <span class="fl">91</span><span class="op">)</span>,</span>
+<span>  arco <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  datore <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Employer_A"</span>, <span class="st">"Employer_A"</span>, <span class="st">"Employer_A"</span>, <span class="st">"Employer_B"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Consolidate same-employer periods (gap between first two = 5 days &lt;= 8 default)</span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span><span class="va">employer_data</span>, employer_var <span class="op">=</span> <span class="st">"datore"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span>  <span class="co"># 2 (Employer_A merged, Employer_B separate)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="example-adjusting-gap-threshold">Example: Adjusting Gap Threshold<a class="anchor" aria-label="anchor" href="#example-adjusting-gap-threshold"></a>
+</h3>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Strict: only merge if gap &lt;= 3 days</span></span>
+<span><span class="va">strict</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span><span class="va">employer_data</span>, <span class="st">"datore"</span>, max_gap_days <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">strict</span><span class="op">)</span>  <span class="co"># 3 (5-day gap too large for strict threshold)</span></span>
+<span></span>
+<span><span class="co"># Lenient: merge if gap &lt;= 30 days</span></span>
+<span><span class="va">lenient</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span><span class="va">employer_data</span>, <span class="st">"datore"</span>, max_gap_days <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">lenient</span><span class="op">)</span>  <span class="co"># 2 (all Employer_A periods merged)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="difference-from-other-functions">Difference from Other Functions<a class="anchor" aria-label="anchor" href="#difference-from-other-functions"></a>
+</h3>
+<table class="table">
+<colgroup>
+<col width="7%">
+<col width="23%">
+<col width="24%">
+<col width="21%">
+<col width="23%">
+</colgroup>
+<thead><tr class="header">
+<th>Aspect</th>
+<th><code><a href="../reference/consolidate_overlapping.html">consolidate_overlapping()</a></code></th>
+<th><code><a href="../reference/consolidate_by_employer.html">consolidate_by_employer()</a></code></th>
+<th><code><a href="../reference/consolidate_adjacent.html">consolidate_adjacent()</a></code></th>
+<th><code><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps()</a></code></th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><strong>What it merges</strong></td>
+<td>Concurrent employment</td>
+<td>Same-employer sequential</td>
+<td>All sequential (no gap)</td>
+<td>Sequential across gaps</td>
+</tr>
+<tr class="even">
+<td><strong>Uses <code>over_id</code></strong></td>
+<td>Yes</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr class="odd">
+<td><strong>Employer-aware</strong></td>
+<td>No</td>
+<td>Yes (required)</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr class="even">
+<td><strong>Gap tolerance</strong></td>
+<td>N/A</td>
+<td>Configurable (<code>max_gap_days</code>)</td>
+<td>Exactly 0 days</td>
+<td>Configurable</td>
+</tr>
+<tr class="odd">
+<td><strong>Typical use case</strong></td>
+<td>Multiple simultaneous jobs</td>
+<td>Contract renewals</td>
+<td>Administrative boundaries</td>
+<td>Short unemployment</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</div>
+</div>
+<div class="section level2">
+<h2 id="function-guide-consolidate_adjacent">Function Guide: consolidate_adjacent()<a class="anchor" aria-label="anchor" href="#function-guide-consolidate_adjacent"></a>
+</h2>
+<div class="section level3">
+<h3 id="purpose-2">Purpose<a class="anchor" aria-label="anchor" href="#purpose-2"></a>
 </h3>
 <p>Merges employment periods that are contiguous in time (touching, with
 no gap between them). This consolidates contract renewals and
 consecutive employment spells with the same or different employers.</p>
 </div>
 <div class="section level3">
-<h3 id="when-to-use-1">When to Use<a class="anchor" aria-label="anchor" href="#when-to-use-1"></a>
+<h3 id="when-to-use-2">When to Use<a class="anchor" aria-label="anchor" href="#when-to-use-2"></a>
 </h3>
 <p>Use this function when: - You want to treat consecutive employment as
 continuous - Contract renewals should be viewed as single employment
@@ -308,7 +434,7 @@ administrative contract boundaries to fragment true employment
 periods</p>
 </div>
 <div class="section level3">
-<h3 id="how-it-works-1">How It Works<a class="anchor" aria-label="anchor" href="#how-it-works-1"></a>
+<h3 id="how-it-works-2">How It Works<a class="anchor" aria-label="anchor" href="#how-it-works-2"></a>
 </h3>
 <p>The function: 1. Sorts records by <code>cf</code> and date 2.
 Calculates gap in days between consecutive periods 3. Detects
@@ -321,9 +447,9 @@ Consolidates periods within each group</p>
 consolidation.</p>
 </div>
 <div class="section level3">
-<h3 id="example-basic-usage-1">Example: Basic Usage<a class="anchor" aria-label="anchor" href="#example-basic-usage-1"></a>
+<h3 id="example-basic-usage-2">Example: Basic Usage<a class="anchor" aria-label="anchor" href="#example-basic-usage-2"></a>
 </h3>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Create test data with adjacent periods</span></span>
 <span><span class="va">test_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span></span>
 <span>  cf <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">3</span><span class="op">)</span>,</span>
@@ -345,7 +471,7 @@ consolidation.</p>
 <div class="section level3">
 <h3 id="example-unemployment-as-barrier">Example: Unemployment as Barrier<a class="anchor" aria-label="anchor" href="#example-unemployment-as-barrier"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Data with unemployment between employment</span></span>
 <span><span class="va">barrier_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span></span>
 <span>  cf <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">3</span><span class="op">)</span>,</span>
@@ -411,7 +537,7 @@ consolidation.</p>
 <h2 id="function-guide-consolidate_short_gaps">Function Guide: consolidate_short_gaps()<a class="anchor" aria-label="anchor" href="#function-guide-consolidate_short_gaps"></a>
 </h2>
 <div class="section level3">
-<h3 id="purpose-2">Purpose<a class="anchor" aria-label="anchor" href="#purpose-2"></a>
+<h3 id="purpose-3">Purpose<a class="anchor" aria-label="anchor" href="#purpose-3"></a>
 </h3>
 <p>Bridges short unemployment gaps between employment periods,
 consolidating employment spells separated by brief periods of
@@ -419,7 +545,7 @@ inactivity. This is useful for analyzing labor market attachment when
 short gaps don’t represent true labor market exit.</p>
 </div>
 <div class="section level3">
-<h3 id="when-to-use-2">When to Use<a class="anchor" aria-label="anchor" href="#when-to-use-2"></a>
+<h3 id="when-to-use-3">When to Use<a class="anchor" aria-label="anchor" href="#when-to-use-3"></a>
 </h3>
 <p>Use this function when: - You want to treat brief unemployment (1-30
 days) as part of continuous employment - You’re analyzing labor market
@@ -427,7 +553,7 @@ attachment over time - Administrative gaps between contracts shouldn’t
 fragment employment trajectories</p>
 </div>
 <div class="section level3">
-<h3 id="how-it-works-2">How It Works<a class="anchor" aria-label="anchor" href="#how-it-works-2"></a>
+<h3 id="how-it-works-3">How It Works<a class="anchor" aria-label="anchor" href="#how-it-works-3"></a>
 </h3>
 <p>The function: 1. Calculates gap in days between consecutive periods
 2. Creates consolidation groups where gap ≤ <code>max_gap_days</code> 3.
@@ -482,7 +608,7 @@ analyses:</p>
 <div class="section level3">
 <h3 id="example-basic-gap-bridging">Example: Basic Gap Bridging<a class="anchor" aria-label="anchor" href="#example-basic-gap-bridging"></a>
 </h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Employment with 15-day gap</span></span>
 <span><span class="va">gap_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span></span>
 <span>  cf <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">5</span><span class="op">)</span>,</span>
@@ -506,7 +632,7 @@ analyses:</p>
 <div class="section level3">
 <h3 id="example-analyzing-employment-quality">Example: Analyzing Employment Quality<a class="anchor" aria-label="anchor" href="#example-analyzing-employment-quality"></a>
 </h3>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># After full consolidation chain</span></span>
 <span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"data/sample.rds"</span><span class="op">)</span></span>
 <span><span class="va">final</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span></span>
@@ -556,14 +682,15 @@ caution)</li>
 <div class="section level3">
 <h3 id="the-recommended-workflow">The Recommended Workflow<a class="anchor" aria-label="anchor" href="#the-recommended-workflow"></a>
 </h3>
-<p>The three consolidation functions are designed to be used <strong>in
+<p>The four consolidation functions are designed to be used <strong>in
 sequence</strong>, creating a progressive consolidation chain:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># RECOMMENDED: Full consolidation chain</span></span>
 <span><span class="va">consolidated_data</span> <span class="op">&lt;-</span> <span class="va">raw_data</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>  <span class="co"># Step 1: Merge concurrent employment</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>     <span class="co"># Step 2: Merge touching periods</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>    <span class="co"># Step 3: Bridge short gaps</span></span></code></pre></div>
+<span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>           <span class="co"># Step 1: Merge concurrent employment</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span><span class="st">"datore"</span><span class="op">)</span> <span class="op">|&gt;</span>   <span class="co"># Step 2: Merge same-employer renewals</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>              <span class="co"># Step 3: Merge touching periods</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>             <span class="co"># Step 4: Bridge short gaps</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="why-order-matters">Why Order Matters<a class="anchor" aria-label="anchor" href="#why-order-matters"></a>
@@ -574,14 +701,17 @@ sequence</strong>, creating a progressive consolidation chain:</p>
 <strong>Overlapping first</strong>: Simplifies concurrent employment
 before analyzing sequences</li>
 <li>
-<strong>Adjacent second</strong>: Removes administrative contract
+<strong>Employer second</strong>: Consolidates same-employer
+renewals while employer identity is still available</li>
+<li>
+<strong>Adjacent third</strong>: Removes administrative contract
 boundaries</li>
 <li>
 <strong>Short gaps last</strong>: Most aggressive, should work on
 already-simplified data</li>
 </ol>
 <p><strong>Wrong order can produce suboptimal results:</strong></p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># WRONG: Bridging gaps before merging adjacent periods</span></span>
 <span><span class="va">wrong_order</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span> <span class="op">|&gt;</span>  <span class="co"># Gap calculation includes noise</span></span>
@@ -597,7 +727,7 @@ already-simplified data</li>
 </h3>
 <p>You don’t have to use all three functions. Choose based on your
 analysis needs:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Minimal: Only merge concurrent employment</span></span>
 <span><span class="va">minimal</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
@@ -615,7 +745,7 @@ analysis needs:</p>
 <div class="section level3">
 <h3 id="example-progressive-analysis">Example: Progressive Analysis<a class="anchor" aria-label="anchor" href="#example-progressive-analysis"></a>
 </h3>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load data</span></span>
 <span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"data/sample.rds"</span><span class="op">)</span></span>
 <span></span>
@@ -648,7 +778,7 @@ analysis needs:</p>
 <p><strong>In longworkR 0.6.0+</strong>, consolidation is
 <strong>decoupled</strong> from transition analysis. You consolidate
 data first, then analyze transitions:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># NEW WORKFLOW (v0.6.0+)</span></span>
 <span></span>
 <span><span class="co"># Step 1: Consolidate employment data</span></span>
@@ -685,7 +815,7 @@ from transition analysis</li>
 <div class="section level3">
 <h3 id="example-multiple-analyses-on-same-consolidation">Example: Multiple Analyses on Same Consolidation<a class="anchor" aria-label="anchor" href="#example-multiple-analyses-on-same-consolidation"></a>
 </h3>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Consolidate once</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -704,7 +834,7 @@ from transition analysis</li>
 <div class="section level3">
 <h3 id="comparing-consolidation-strategies">Comparing Consolidation Strategies<a class="anchor" aria-label="anchor" href="#comparing-consolidation-strategies"></a>
 </h3>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Compare impact of different consolidation strategies</span></span>
 <span></span>
 <span><span class="co"># No consolidation</span></span>
@@ -768,7 +898,7 @@ from transition analysis</li>
 <div class="section level3">
 <h3 id="benchmark-real-world-dataset">Benchmark: Real-World Dataset<a class="anchor" aria-label="anchor" href="#benchmark-real-world-dataset"></a>
 </h3>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load large dataset (434,103 employment records)</span></span>
 <span><span class="va">large_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"data/large_sample.rds"</span><span class="op">)</span></span>
 <span></span>
@@ -804,7 +934,7 @@ from transition analysis</li>
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Use data.table format</strong>:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Good: data.table (fast)</span></span>
 <span><span class="va">dt</span> <span class="op">&lt;-</span> <span class="fu">data.table</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/data.table/man/as.data.table.html" class="external-link">as.data.table</a></span><span class="op">(</span><span class="va">data</span><span class="op">)</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="va">dt</span><span class="op">)</span></span>
@@ -816,13 +946,13 @@ from transition analysis</li>
 <li>
 <p><strong>Set key for better performance</strong> (optional, done
 automatically):</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">data.table</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/data.table/man/setkey.html" class="external-link">setkey</a></span><span class="op">(</span><span class="va">data</span>, <span class="va">cf</span>, <span class="va">inizio</span>, <span class="va">fine</span><span class="op">)</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="va">data</span><span class="op">)</span>  <span class="co"># Slightly faster</span></span></code></pre></div>
 </li>
 <li>
 <p><strong>Use pipe chains for clarity</strong>:</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Good: Clear pipeline</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -833,7 +963,7 @@ automatically):</p>
 </li>
 <li>
 <p><strong>Consolidate before analysis, not during</strong>:</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Good: Consolidate once, use many times</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">trans1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/analyze_employment_transitions.html">analyze_employment_transitions</a></span><span class="op">(</span><span class="va">consolidated</span>, eval_chain <span class="op">=</span> <span class="st">"first"</span><span class="op">)</span></span>
@@ -866,7 +996,7 @@ buildup</li>
 </ul>
 <p>For extremely large datasets (100M+ records), consider processing in
 chunks:</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Process by person ID ranges</span></span>
 <span><span class="va">chunk_size</span> <span class="op">&lt;-</span> <span class="fl">1000000</span>  <span class="co"># 1M records per chunk</span></span>
 <span><span class="va">person_ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">data</span><span class="op">$</span><span class="va">cf</span><span class="op">)</span></span>
@@ -913,7 +1043,7 @@ update your code.</p>
 <div class="section level4">
 <h4 id="example-1-basic-temporal-consolidation">Example 1: Basic Temporal Consolidation<a class="anchor" aria-label="anchor" href="#example-1-basic-temporal-consolidation"></a>
 </h4>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># OLD CODE (&lt; 0.6.0) - NO LONGER WORKS</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="fu">consolidate_employment</span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
@@ -929,7 +1059,7 @@ update your code.</p>
 <div class="section level4">
 <h4 id="example-2-with-gap-bridging">Example 2: With Gap Bridging<a class="anchor" aria-label="anchor" href="#example-2-with-gap-bridging"></a>
 </h4>
-<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># OLD CODE (&lt; 0.6.0) - NO LONGER WORKS</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="fu">consolidate_employment</span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
@@ -947,7 +1077,7 @@ update your code.</p>
 <div class="section level4">
 <h4 id="example-3-within-analyze_employment_transitions">Example 3: Within analyze_employment_transitions()<a class="anchor" aria-label="anchor" href="#example-3-within-analyze_employment_transitions"></a>
 </h4>
-<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># OLD CODE (&lt; 0.6.0) - NO LONGER WORKS</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/analyze_employment_transitions.html">analyze_employment_transitions</a></span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
@@ -966,7 +1096,7 @@ update your code.</p>
 <div class="section level4">
 <h4 id="example-4-only-overlapping-consolidation">Example 4: Only Overlapping Consolidation<a class="anchor" aria-label="anchor" href="#example-4-only-overlapping-consolidation"></a>
 </h4>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># OLD CODE (&lt; 0.6.0)</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="fu">consolidate_employment</span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
@@ -980,7 +1110,7 @@ update your code.</p>
 <div class="section level4">
 <h4 id="example-5-only-adjacent-consolidation">Example 5: Only Adjacent Consolidation<a class="anchor" aria-label="anchor" href="#example-5-only-adjacent-consolidation"></a>
 </h4>
-<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># OLD CODE (&lt; 0.6.0)</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="fu">consolidate_employment</span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
@@ -1032,7 +1162,8 @@ update your code.</p>
 </tr>
 <tr class="even">
 <td><code>employer_var = "..."</code></td>
-<td>Not supported in new API (see note below)</td>
+<td>Use <code>consolidate_by_employer(employer_var = "...")</code>
+</td>
 </tr>
 </tbody>
 </table>
@@ -1040,12 +1171,10 @@ update your code.</p>
 <div class="section level3">
 <h3 id="employer-based-consolidation">Employer-Based Consolidation<a class="anchor" aria-label="anchor" href="#employer-based-consolidation"></a>
 </h3>
-<p>The old <code>employer_var</code> parameter for employer-based
-consolidation is <strong>not directly supported</strong> in the new API.
-This functionality may be restored in a future release or requires
-custom implementation:</p>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># OLD CODE (&lt; 0.6.0) - NOT DIRECTLY SUPPORTED</span></span>
+<p>The old <code>mode = "employer"</code> parameter maps directly to the
+new <code><a href="../reference/consolidate_by_employer.html">consolidate_by_employer()</a></code> function:</p>
+<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># OLD CODE (&lt; 0.6.0) - NO LONGER WORKS</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="fu">consolidate_employment</span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
 <span>  mode <span class="op">=</span> <span class="st">"employer"</span>,</span>
@@ -1053,17 +1182,24 @@ custom implementation:</p>
 <span>  min_lag <span class="op">=</span> <span class="fl">30</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># NEW CODE (0.6.0+) - WORKAROUND</span></span>
-<span><span class="co"># For employer-based consolidation, you'll need to:</span></span>
-<span><span class="co"># 1. Pre-process to mark same-employer adjacent periods</span></span>
-<span><span class="co"># 2. Use consolidate_adjacent() or write custom logic</span></span>
-<span><span class="co"># 3. Or wait for future longworkR release with employer support</span></span></code></pre></div>
+<span><span class="co"># NEW CODE (0.6.0+)</span></span>
+<span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span></span>
+<span>  <span class="va">data</span>,</span>
+<span>  employer_var <span class="op">=</span> <span class="st">"employer_id"</span>,</span>
+<span>  max_gap_days <span class="op">=</span> <span class="fl">30</span>  <span class="co"># min_lag → max_gap_days</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Or as part of a pipeline</span></span>
+<span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span><span class="st">"employer_id"</span>, max_gap_days <span class="op">=</span> <span class="fl">30</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="updated-workflow-pattern">Updated Workflow Pattern<a class="anchor" aria-label="anchor" href="#updated-workflow-pattern"></a>
 </h3>
 <p>The new API separates consolidation from analysis:</p>
-<div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># OLD PATTERN (&lt; 0.6.0)</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/analyze_employment_transitions.html">analyze_employment_transitions</a></span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
@@ -1120,8 +1256,8 @@ function(s)</label></li>
 behavior</label></li>
 <li><label><input type="checkbox">Update any documentation or README
 files</label></li>
-<li><label><input type="checkbox">Consider if employer-based
-consolidation was needed (requires workaround)</label></li>
+<li><label><input type="checkbox">Replace employer-based consolidation
+with <code><a href="../reference/consolidate_by_employer.html">consolidate_by_employer()</a></code></label></li>
 </ul>
 <hr>
 </div>
@@ -1134,11 +1270,13 @@ consolidation was needed (requires workaround)</label></li>
 </h3>
 <ol style="list-style-type: decimal">
 <li>
-<p><strong>Three focused functions</strong> replace complex old
+<p><strong>Four focused functions</strong> replace complex old
 API:</p>
 <ul>
 <li>
 <code><a href="../reference/consolidate_overlapping.html">consolidate_overlapping()</a></code> - Concurrent employment</li>
+<li>
+<code><a href="../reference/consolidate_by_employer.html">consolidate_by_employer()</a></code> - Same-employer renewals</li>
 <li>
 <code><a href="../reference/consolidate_adjacent.html">consolidate_adjacent()</a></code> - Touching periods</li>
 <li>
@@ -1159,15 +1297,16 @@ analyze</p></li>
 <div class="section level3">
 <h3 id="recommended-workflow">Recommended Workflow<a class="anchor" aria-label="anchor" href="#recommended-workflow"></a>
 </h3>
-<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># 1. Load data</span></span>
 <span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="st">"data/sample.rds"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. Progressive consolidation</span></span>
 <span><span class="va">consolidated</span> <span class="op">&lt;-</span> <span class="va">data</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>  <span class="co"># Merge concurrent jobs</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>     <span class="co"># Merge touching periods</span></span>
-<span>  <span class="fu"><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>    <span class="co"># Bridge 30-day gaps</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_overlapping.html">consolidate_overlapping</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>           <span class="co"># Merge concurrent jobs</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_by_employer.html">consolidate_by_employer</a></span><span class="op">(</span><span class="st">"datore"</span><span class="op">)</span> <span class="op">|&gt;</span>   <span class="co"># Merge same-employer renewals</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_adjacent.html">consolidate_adjacent</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span>              <span class="co"># Merge touching periods</span></span>
+<span>  <span class="fu"><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>             <span class="co"># Bridge 30-day gaps</span></span>
 <span></span>
 <span><span class="co"># 3. Analyze</span></span>
 <span><span class="va">transitions</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/analyze_employment_transitions.html">analyze_employment_transitions</a></span><span class="op">(</span><span class="va">consolidated</span><span class="op">)</span></span>
@@ -1180,6 +1319,7 @@ analyze</p></li>
 </h3>
 <ul>
 <li>Function documentation: <code><a href="../reference/consolidate_overlapping.html">?consolidate_overlapping</a></code>,
+<code><a href="../reference/consolidate_by_employer.html">?consolidate_by_employer</a></code>,
 <code><a href="../reference/consolidate_adjacent.html">?consolidate_adjacent</a></code>,
 <code><a href="../reference/consolidate_short_gaps.html">?consolidate_short_gaps</a></code>
 </li>
@@ -1197,7 +1337,7 @@ analyze</p></li>
 <div class="section level2">
 <h2 id="session-info">Session Info<a class="anchor" aria-label="anchor" href="#session-info"></a>
 </h2>
-<div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.2 (2025-10-31)</span></span>
 <span><span class="co">#&gt; Platform: x86_64-pc-linux-gnu</span></span>

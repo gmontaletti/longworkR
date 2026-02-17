@@ -122,6 +122,9 @@ adjacent periods, and finally bridge gaps if needed.
 [`consolidate_overlapping`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md)
 for concurrent employment consolidation
 
+[`consolidate_by_employer`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md)
+for same-employer consolidation
+
 [`consolidate_short_gaps`](https://gmontaletti.github.io/longworkR/reference/consolidate_short_gaps.md)
 for gap-bridging consolidation
 

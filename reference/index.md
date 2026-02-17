@@ -12,7 +12,7 @@ periods.
 - [`consolidate_short_gaps()`](https://gmontaletti.github.io/longworkR/reference/consolidate_short_gaps.md)
   : Consolidate Employment Periods with Short Gaps
 - [`consolidate_by_employer()`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md)
-  : Consolidate Employment Contracts by Employer
+  : Consolidate Employment Periods by Employer
 - [`mark_employer_consolidation()`](https://gmontaletti.github.io/longworkR/reference/mark_employer_consolidation.md)
   : Mark Records for Employer Consolidation (Lightweight)
 - [`summarize_consolidation()`](https://gmontaletti.github.io/longworkR/reference/summarize_consolidation.md)
@@ -366,8 +366,6 @@ Internal helper functions and documentation pages.
 - [`cem_native_implementation()`](https://gmontaletti.github.io/longworkR/reference/cem_native_implementation.md)
   : Native CEM Implementation (using CEM package) with Person-Level
   Matching
-- [`consolidate_by_employer()`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md)
-  : Consolidate Employment Contracts by Employer
 - [`consolidation_helpers`](https://gmontaletti.github.io/longworkR/reference/consolidation_helpers.md)
   : Consolidation Helper Functions
 - [`consolidation_metrics`](https://gmontaletti.github.io/longworkR/reference/consolidation_metrics.md)

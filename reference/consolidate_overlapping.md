@@ -119,6 +119,8 @@ optionally bridge short gaps:
 
 [`consolidate_adjacent`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md)
 to merge touching employment periods
+[`consolidate_by_employer`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md)
+to merge same-employer periods
 [`consolidate_short_gaps`](https://gmontaletti.github.io/longworkR/reference/consolidate_short_gaps.md)
 to bridge short unemployment gaps
 

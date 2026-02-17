@@ -63,7 +63,7 @@ print(dt)
 #>         .Call(C_dt, x, df, log)
 #>     else .Call(C_dnt, x, df, ncp, log)
 #> }
-#> <bytecode: 0x5649fa74a590>
+#> <bytecode: 0x564928725820>
 #> <environment: namespace:stats>
 
 # Add only CPI code without name
