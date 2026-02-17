@@ -33,7 +33,10 @@ test_that("cluster_career_trajectories validates input correctly", {
 
   # Test with invalid features
   expect_error(
-    cluster_career_trajectories(sample_metrics, features = c("invalid_feature")),
+    cluster_career_trajectories(
+      sample_metrics,
+      features = c("invalid_feature")
+    ),
     "Invalid features"
   )
 
@@ -77,8 +80,16 @@ test_that("cluster_career_trajectories produces valid clusters with automatic k 
 
   # Check result structure
   expect_type(result, "list")
-  expect_true(all(c("cluster_assignments", "cluster_profiles", "cluster_quality",
-                    "feature_importance", "cluster_labels") %in% names(result)))
+  expect_true(all(
+    c(
+      "cluster_assignments",
+      "cluster_profiles",
+      "cluster_quality",
+      "feature_importance",
+      "cluster_labels"
+    ) %in%
+      names(result)
+  ))
 
   # Check cluster_assignments
   expect_s3_class(result$cluster_assignments, "data.table")
@@ -110,8 +121,10 @@ test_that("cluster_career_trajectories produces valid clusters with automatic k 
   expect_true("calinski_harabasz" %in% names(result$cluster_quality))
 
   # Silhouette should be between -1 and 1
-  expect_true(result$cluster_quality$overall_silhouette >= -1 &&
-              result$cluster_quality$overall_silhouette <= 1)
+  expect_true(
+    result$cluster_quality$overall_silhouette >= -1 &&
+      result$cluster_quality$overall_silhouette <= 1
+  )
 
   # Check feature importance
   expect_s3_class(result$feature_importance, "data.table")
@@ -121,7 +134,11 @@ test_that("cluster_career_trajectories produces valid clusters with automatic k 
   expect_true("importance_score" %in% names(result$feature_importance))
 
   # Importance scores should sum to 1
-  expect_equal(sum(result$feature_importance$importance_score), 1, tolerance = 0.01)
+  expect_equal(
+    sum(result$feature_importance$importance_score),
+    1,
+    tolerance = 0.01
+  )
 })
 
 
@@ -202,10 +219,26 @@ test_that("cluster labels are bilingual and meaningful", {
   # Create data with distinct patterns for label testing
   sample_metrics <- data.table(
     cf = 1:n_workers,
-    employment_rate = c(runif(50, 0.8, 1.0), runif(50, 0.2, 0.4), runif(50, 0.5, 0.7)),
-    employment_stability_index = c(runif(50, 0.7, 1.0), runif(50, 0.1, 0.3), runif(50, 0.4, 0.6)),
-    career_advancement_index = c(runif(50, 0.6, 0.9), runif(50, 0.1, 0.3), runif(50, 0.3, 0.5)),
-    contract_quality_score = c(runif(50, 0.7, 1.0), runif(50, 0.2, 0.4), runif(50, 0.4, 0.6))
+    employment_rate = c(
+      runif(50, 0.8, 1.0),
+      runif(50, 0.2, 0.4),
+      runif(50, 0.5, 0.7)
+    ),
+    employment_stability_index = c(
+      runif(50, 0.7, 1.0),
+      runif(50, 0.1, 0.3),
+      runif(50, 0.4, 0.6)
+    ),
+    career_advancement_index = c(
+      runif(50, 0.6, 0.9),
+      runif(50, 0.1, 0.3),
+      runif(50, 0.3, 0.5)
+    ),
+    contract_quality_score = c(
+      runif(50, 0.7, 1.0),
+      runif(50, 0.2, 0.4),
+      runif(50, 0.4, 0.6)
+    )
   )
 
   result <- cluster_career_trajectories(
@@ -227,8 +260,18 @@ test_that("cluster labels are bilingual and meaningful", {
 
   # Known label archetypes should be present in some form
   all_labels_en <- paste(result$cluster_labels$cluster_label_en, collapse = " ")
-  possible_keywords <- c("Stable", "Precarious", "Upward", "Entry", "Multi", "Declining", "Moderate")
-  expect_true(any(sapply(possible_keywords, function(kw) grepl(kw, all_labels_en))))
+  possible_keywords <- c(
+    "Stable",
+    "Precarious",
+    "Upward",
+    "Entry",
+    "Multi",
+    "Declining",
+    "Moderate"
+  )
+  expect_true(any(sapply(possible_keywords, function(kw) {
+    grepl(kw, all_labels_en)
+  })))
 })
 
 
@@ -264,7 +307,11 @@ test_that("feature selection works correctly", {
   )
 
   # Check that stability features were used
-  stability_features <- c("employment_stability_index", "avg_employment_spell", "job_turnover_rate")
+  stability_features <- c(
+    "employment_stability_index",
+    "avg_employment_spell",
+    "job_turnover_rate"
+  )
   expect_true(any(stability_features %in% result_stability$clustering_features))
 
   result_multi <- cluster_career_trajectories(
@@ -288,7 +335,7 @@ test_that("handling of missing values works correctly", {
     cf = 1:n_workers,
     employment_rate = runif(n_workers, 0.3, 1.0),
     employment_stability_index = runif(n_workers, 0.2, 1.0),
-    career_advancement_index = c(runif(80, 0, 0.8), rep(NA, 20))  # 20% missing
+    career_advancement_index = c(runif(80, 0, 0.8), rep(NA, 20)) # 20% missing
   )
 
   result <- cluster_career_trajectories(
@@ -300,7 +347,7 @@ test_that("handling of missing values works correctly", {
 
   # Should have fewer rows after removing missing values
   expect_true(nrow(result$cluster_assignments) < n_workers)
-  expect_equal(nrow(result$cluster_assignments), 80)  # 20 rows with NA removed
+  expect_equal(nrow(result$cluster_assignments), 80) # 20 rows with NA removed
 
   # All cluster assignments should be valid
   expect_true(all(!is.na(result$cluster_assignments$cluster_id)))
@@ -380,7 +427,11 @@ test_that("plot_cluster_profiles validates input correctly", {
     career_advancement_index = runif(50)
   )
 
-  result <- cluster_career_trajectories(sample_metrics, n_clusters = 3, seed = 555)
+  result <- cluster_career_trajectories(
+    sample_metrics,
+    n_clusters = 3,
+    seed = 555
+  )
 
   expect_error(
     plot_cluster_profiles(result, plot_type = "invalid"),
@@ -409,7 +460,7 @@ test_that("cluster quality metrics are reasonable", {
 
   result <- cluster_career_trajectories(
     sample_metrics,
-    n_clusters = 3,  # Should find clear clusters
+    n_clusters = 3, # Should find clear clusters
     method = "kmeans",
     seed = 666
   )
@@ -432,9 +483,9 @@ test_that("standardization option works correctly", {
   # Create data with very different scales
   sample_metrics <- data.table(
     cf = 1:n_workers,
-    employment_rate = runif(n_workers, 0, 1),  # 0-1 scale
-    days_employed = runif(n_workers, 100, 1000),  # 100-1000 scale
-    job_turnover_rate = runif(n_workers, 0, 5)  # 0-5 scale
+    employment_rate = runif(n_workers, 0, 1), # 0-1 scale
+    days_employed = runif(n_workers, 100, 1000), # 100-1000 scale
+    job_turnover_rate = runif(n_workers, 0, 5) # 0-5 scale
   )
 
   # With standardization
@@ -477,7 +528,7 @@ test_that("min_cluster_size parameter works correctly", {
   result <- cluster_career_trajectories(
     sample_metrics,
     n_clusters = 3,
-    min_cluster_size = 20,  # Each cluster must have at least 20 members
+    min_cluster_size = 20, # Each cluster must have at least 20 members
     seed = 888
   )
 

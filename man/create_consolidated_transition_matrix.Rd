@@ -132,8 +132,8 @@ library(data.table)
 employment_data <- data.table(
   id = 1:10,
   cf = c(rep("PERSON001", 6), rep("PERSON002", 4)),
-  INIZIO = as.Date(c("2023-01-01", "2023-02-15", "2023-03-01", "2023-05-01", 
-                     "2023-08-01", "2023-10-01", "2023-01-15", "2023-04-01", 
+  INIZIO = as.Date(c("2023-01-01", "2023-02-15", "2023-03-01", "2023-05-01",
+                     "2023-08-01", "2023-10-01", "2023-01-15", "2023-04-01",
                      "2023-07-01", "2023-09-15")),
   FINE = as.Date(c("2023-02-28", "2023-04-30", "2023-04-15", "2023-06-30",
                    "2023-09-30", "2023-12-31", "2023-03-31", "2023-06-15",
@@ -160,7 +160,7 @@ consolidated_result <- create_consolidated_transition_matrix(
 # View consolidated frequency matrix
 print(consolidated_result$consolidated_frequency_matrix)
 
-# View consolidated probability matrix  
+# View consolidated probability matrix
 print(consolidated_result$consolidated_probability_matrix)
 
 # Compare improvement over raw matrix
@@ -172,7 +172,7 @@ print(consolidated_result$consolidation_impact)
 # Create employment type transitions with overlapping consolidation only
 employment_transitions <- create_consolidated_transition_matrix(
   pipeline_result = result,
-  transition_variable = "employment_type", 
+  transition_variable = "employment_type",
   consolidation_type = "overlapping",
   matrix_type = "probability",
   normalize_by = "row",
@@ -186,7 +186,7 @@ no_consolidation <- create_consolidated_transition_matrix(
   result, "company", "none", "frequency", FALSE
 )
 overlapping_only <- create_consolidated_transition_matrix(
-  result, "company", "overlapping", "frequency", FALSE  
+  result, "company", "overlapping", "frequency", FALSE
 )
 full_consolidation <- create_consolidated_transition_matrix(
   result, "company", "both", "frequency", FALSE

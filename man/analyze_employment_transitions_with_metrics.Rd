@@ -41,6 +41,27 @@ to consider a transition. If NULL (default), no upper limit is applied. When not
 NULL, only transitions with unemployment duration between min_unemployment_duration
 and max_unemployment_duration (inclusive) are included.}
 
+\item{consolidation_type}{Character string specifying the temporal consolidation
+approach (default: "both"). Only used when \code{consolidation_mode} includes
+temporal consolidation. Options: "both", "overlapping", "employment_only".}
+
+\item{consolidation_mode}{Character string specifying the consolidation strategy
+to apply before transition analysis (default: "none"). Options:
+\itemize{
+\item{\code{"none"}}: No consolidation (default, backward-compatible)
+\item{\code{"temporal"}}: Consolidate overlapping periods using over_id
+\item{\code{"employer"}}: Consolidate consecutive contracts from the same employer
+\item{\code{"both"}}: Apply employer consolidation first, then temporal
+}}
+
+\item{employer_var}{Character string specifying the column name containing
+employer identifiers. Required when \code{consolidation_mode} is "employer"
+or "both". Ignored for other modes (with a warning if provided).}
+
+\item{min_lag}{Numeric value specifying the maximum gap in days between
+consecutive contracts from the same employer to be consolidated (default: 8).
+Only used with employer-based consolidation modes.}
+
 \item{output_transition_matrix}{Logical. If TRUE, returns a square transition matrix
 instead of the normal aggregated data.table. Rows represent "from" states, columns
 represent "to" states, and values are transition weights (counts). Non-populated

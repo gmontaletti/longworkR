@@ -53,7 +53,9 @@
       "Bash(xargs kill -9)",
       "Bash(python3:*)",
       "Bash(quarto render:*)",
-      "Skill(slidecraft)"
+      "Skill(slidecraft)",
+      "Bash(grep:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

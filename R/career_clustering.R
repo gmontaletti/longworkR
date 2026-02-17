@@ -434,28 +434,31 @@ NULL
 #' \code{\link{plot_cluster_profiles}} for visualizing cluster characteristics
 #'
 #' @export
-cluster_career_trajectories <- function(career_metrics,
-                                       n_clusters = NULL,
-                                       method = "kmeans",
-                                       features = c("stability", "employment", "progression"),
-                                       k_selection_method = c("hybrid", "elbow", "silhouette"),
-                                       id_column = "cf",
-                                       min_cluster_size = 10,
-                                       standardize = TRUE,
-                                       nstart = 25,
-                                       seed = 123,
-                                       verbose = FALSE,
-                                       use_sampling = NULL,
-                                       sample_size_k = 50000,
-                                       sample_size_quality = 50000,
-                                       batch_size = 100000,
-                                       memory_fraction = 0.33) {
-
+cluster_career_trajectories <- function(
+  career_metrics,
+  n_clusters = NULL,
+  method = "kmeans",
+  features = c("stability", "employment", "progression"),
+  k_selection_method = c("hybrid", "elbow", "silhouette"),
+  id_column = "cf",
+  min_cluster_size = 10,
+  standardize = TRUE,
+  nstart = 25,
+  seed = 123,
+  verbose = FALSE,
+  use_sampling = NULL,
+  sample_size_k = 50000,
+  sample_size_quality = 50000,
+  batch_size = 100000,
+  memory_fraction = 0.33
+) {
   k_selection_method <- match.arg(k_selection_method)
 
   # Input validation
   if (!inherits(career_metrics, "data.table")) {
-    stop("career_metrics must be a data.table (output from calculate_comprehensive_career_metrics)")
+    stop(
+      "career_metrics must be a data.table (output from calculate_comprehensive_career_metrics)"
+    )
   }
 
   if (!method %in% c("kmeans", "pam", "hierarchical")) {
@@ -466,7 +469,13 @@ cluster_career_trajectories <- function(career_metrics,
     stop("n_clusters must be between 3 and 6 (or NULL for automatic selection)")
   }
 
-  valid_features <- c("stability", "employment", "progression", "quality", "complexity")
+  valid_features <- c(
+    "stability",
+    "employment",
+    "progression",
+    "quality",
+    "complexity"
+  )
   invalid_features <- setdiff(features, valid_features)
   if (length(invalid_features) > 0) {
     stop(paste("Invalid features:", paste(invalid_features, collapse = ", ")))
@@ -485,14 +494,20 @@ cluster_career_trajectories <- function(career_metrics,
 
   # Warn about unsuitable methods for large datasets
   if (n_workers >= 50000 && method == "hierarchical") {
-    warning("Hierarchical clustering not recommended for n >= 50K workers. Consider using 'kmeans'.")
+    warning(
+      "Hierarchical clustering not recommended for n >= 50K workers. Consider using 'kmeans'."
+    )
     if (n_workers >= 100000) {
-      stop("Hierarchical clustering requires O(n²) memory and will fail with n >= 100K. Use 'kmeans' instead.")
+      stop(
+        "Hierarchical clustering requires O(n²) memory and will fail with n >= 100K. Use 'kmeans' instead."
+      )
     }
   }
 
   if (n_workers >= 500000 && method == "pam") {
-    warning("PAM clustering not recommended for n >= 500K workers. Using CLARA approximation.")
+    warning(
+      "PAM clustering not recommended for n >= 500K workers. Using CLARA approximation."
+    )
   }
 
   if (verbose) {
@@ -500,15 +515,25 @@ cluster_career_trajectories <- function(career_metrics,
     cat("Input data:", format(n_workers, big.mark = ","), "workers\n")
     if (use_sampling) {
       cat("Scalability mode: ENABLED (n >= 100K)\n")
-      cat(sprintf("  Sample size for k: %s\n", format(sample_size_k, big.mark = ",")))
-      cat(sprintf("  Sample size for quality: %s\n", format(sample_size_quality, big.mark = ",")))
+      cat(sprintf(
+        "  Sample size for k: %s\n",
+        format(sample_size_k, big.mark = ",")
+      ))
+      cat(sprintf(
+        "  Sample size for quality: %s\n",
+        format(sample_size_quality, big.mark = ",")
+      ))
     }
     cat("Features selected:", paste(features, collapse = ", "), "\n")
     cat("Method:", method, "\n\n")
   }
 
   # Select clustering features based on user specification
-  clustering_features <- .select_clustering_features(career_metrics, features, verbose)
+  clustering_features <- .select_clustering_features(
+    career_metrics,
+    features,
+    verbose
+  )
 
   # Prepare clustering data
   clustering_data <- .prepare_clustering_data(
@@ -524,8 +549,13 @@ cluster_career_trajectories <- function(career_metrics,
   if (is.null(n_clusters)) {
     if (verbose) {
       if (use_sampling) {
-        cat(sprintf("Determining optimal number of clusters on stratified sample (%s workers)...\n",
-                    format(min(sample_size_k, nrow(clustering_data$features_matrix)), big.mark = ",")))
+        cat(sprintf(
+          "Determining optimal number of clusters on stratified sample (%s workers)...\n",
+          format(
+            min(sample_size_k, nrow(clustering_data$features_matrix)),
+            big.mark = ","
+          )
+        ))
       } else {
         cat("Determining optimal number of clusters...\n")
       }
@@ -549,15 +579,21 @@ cluster_career_trajectories <- function(career_metrics,
     n_clusters <- optimal_result$optimal_k
 
     if (verbose) {
-      cat(sprintf("Selected %d clusters (method: %s, decision: %s)\n\n",
-                  n_clusters, optimal_result$method_used, optimal_result$decision_rule))
+      cat(sprintf(
+        "Selected %d clusters (method: %s, decision: %s)\n\n",
+        n_clusters,
+        optimal_result$method_used,
+        optimal_result$decision_rule
+      ))
     }
   }
 
   # Perform clustering
   set.seed(seed)
 
-  if (verbose) cat(sprintf("Performing %s clustering with k=%d...\n", method, n_clusters))
+  if (verbose) {
+    cat(sprintf("Performing %s clustering with k=%d...\n", method, n_clusters))
+  }
 
   cluster_result <- .perform_clustering(
     clustering_data$features_matrix,
@@ -580,8 +616,11 @@ cluster_career_trajectories <- function(career_metrics,
 
   if (length(small_clusters) > 0) {
     if (verbose) {
-      cat(sprintf("Warning: %d clusters have fewer than %d members\n",
-                  length(small_clusters), min_cluster_size))
+      cat(sprintf(
+        "Warning: %d clusters have fewer than %d members\n",
+        length(small_clusters),
+        min_cluster_size
+      ))
       cat("Small clusters:", paste(small_clusters, collapse = ", "), "\n")
     }
     # Reassign small clusters to nearest larger cluster
@@ -595,7 +634,9 @@ cluster_career_trajectories <- function(career_metrics,
   }
 
   # Characterize clusters and generate labels
-  if (verbose) cat("Characterizing clusters and generating labels...\n")
+  if (verbose) {
+    cat("Characterizing clusters and generating labels...\n")
+  }
 
   cluster_characterization <- .characterize_clusters(
     career_metrics,
@@ -608,8 +649,13 @@ cluster_career_trajectories <- function(career_metrics,
   # Compute validation metrics
   if (verbose) {
     if (use_sampling) {
-      cat(sprintf("Computing cluster quality metrics on stratified sample (%s workers)...\n",
-                  format(min(sample_size_quality, nrow(clustering_data$features_matrix)), big.mark = ",")))
+      cat(sprintf(
+        "Computing cluster quality metrics on stratified sample (%s workers)...\n",
+        format(
+          min(sample_size_quality, nrow(clustering_data$features_matrix)),
+          big.mark = ","
+        )
+      ))
     } else {
       cat("Computing cluster quality metrics...\n")
     }
@@ -642,23 +688,36 @@ cluster_career_trajectories <- function(career_metrics,
   # Add distance to centroid
   if (method %in% c("kmeans", "pam")) {
     if (verbose && use_sampling && n_workers > batch_size) {
-      cat(sprintf("Computing distances to centroids in batches (%s per batch)...\n",
-                  format(batch_size, big.mark = ",")))
+      cat(sprintf(
+        "Computing distances to centroids in batches (%s per batch)...\n",
+        format(batch_size, big.mark = ",")
+      ))
     }
-    cluster_assignments[, cluster_distance := .compute_distance_to_centroid(
-      clustering_data$features_matrix,
-      cluster_id,
-      cluster_result,
-      batch_size = batch_size
-    )]
+    cluster_assignments[,
+      cluster_distance := .compute_distance_to_centroid(
+        clustering_data$features_matrix,
+        cluster_id,
+        cluster_result,
+        batch_size = batch_size
+      )
+    ]
   }
 
   if (verbose) {
     cat("\n===== Clustering Complete =====\n")
     cat("Number of clusters:", n_clusters, "\n")
-    cat("Overall silhouette score:", round(cluster_quality$overall_silhouette, 3), "\n")
+    cat(
+      "Overall silhouette score:",
+      round(cluster_quality$overall_silhouette, 3),
+      "\n"
+    )
     cat("\nCluster distribution:\n")
-    print(cluster_characterization$profiles[, .(cluster_id, cluster_label_en, n_workers, pct_workers)])
+    print(cluster_characterization$profiles[, .(
+      cluster_id,
+      cluster_label_en,
+      n_workers,
+      pct_workers
+    )])
   }
 
   # Return comprehensive results
@@ -692,19 +751,38 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param verbose Logical
 #' @return Character vector of selected feature names
 #' @keywords internal
-.select_clustering_features <- function(career_metrics, features, verbose = FALSE) {
-
+.select_clustering_features <- function(
+  career_metrics,
+  features,
+  verbose = FALSE
+) {
   # Define feature mappings
   feature_map <- list(
-    stability = c("employment_stability_index", "career_stability_score",
-                  "avg_employment_spell", "job_turnover_rate"),
-    employment = c("employment_rate", "days_employed", "employment_spells",
-                   "unemployment_spells", "total_employment_days"),
+    stability = c(
+      "employment_stability_index",
+      "career_stability_score",
+      "avg_employment_spell",
+      "job_turnover_rate"
+    ),
+    employment = c(
+      "employment_rate",
+      "days_employed",
+      "employment_spells",
+      "unemployment_spells",
+      "total_employment_days"
+    ),
     progression = c("career_advancement_index", "career_success_index"),
-    quality = c("contract_quality_score", "employment_intensity_score",
-                "growth_opportunity_score"),
-    complexity = c("career_complexity_index", "career_fragmentation_index",
-                   "concurrent_employment_rate", "max_concurrent_jobs")
+    quality = c(
+      "contract_quality_score",
+      "employment_intensity_score",
+      "growth_opportunity_score"
+    ),
+    complexity = c(
+      "career_complexity_index",
+      "career_fragmentation_index",
+      "concurrent_employment_rate",
+      "max_concurrent_jobs"
+    )
   )
 
   # Collect selected features
@@ -715,7 +793,9 @@ cluster_career_trajectories <- function(career_metrics,
   missing_features <- setdiff(selected_features, available_features)
 
   if (length(missing_features) > 0 && verbose) {
-    cat("Note: The following features are not available and will be excluded:\n")
+    cat(
+      "Note: The following features are not available and will be excluded:\n"
+    )
     cat(paste("-", missing_features, collapse = "\n"), "\n\n")
   }
 
@@ -741,9 +821,13 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param verbose Logical
 #' @return List with features_matrix, features_scaled, ids
 #' @keywords internal
-.prepare_clustering_data <- function(career_metrics, clustering_features,
-                                     id_column, standardize, verbose) {
-
+.prepare_clustering_data <- function(
+  career_metrics,
+  clustering_features,
+  id_column,
+  standardize,
+  verbose
+) {
   # Extract clustering features
   clustering_cols <- c(id_column, clustering_features)
   clustering_dt <- career_metrics[, ..clustering_cols]
@@ -754,14 +838,21 @@ cluster_career_trajectories <- function(career_metrics,
 
   if (n_missing > 0) {
     if (verbose) {
-      cat(sprintf("Removing %d rows with missing values (%.1f%%)\n",
-                  n_missing, 100 * n_missing / nrow(clustering_dt)))
+      cat(sprintf(
+        "Removing %d rows with missing values (%.1f%%)\n",
+        n_missing,
+        100 * n_missing / nrow(clustering_dt)
+      ))
     }
     clustering_dt <- clustering_dt[complete_cases]
   }
 
   if (nrow(clustering_dt) < 100) {
-    warning("Very small sample size after removing missing values: ", nrow(clustering_dt), " rows")
+    warning(
+      "Very small sample size after removing missing values: ",
+      nrow(clustering_dt),
+      " rows"
+    )
   }
 
   # Extract IDs and feature matrix
@@ -773,11 +864,16 @@ cluster_career_trajectories <- function(career_metrics,
     features_scaled <- scale(features_matrix)
 
     # Handle constant columns (zero variance)
-    zero_var_cols <- which(apply(features_scaled, 2, function(x) all(is.nan(x))))
+    zero_var_cols <- which(apply(features_scaled, 2, function(x) {
+      all(is.nan(x))
+    }))
     if (length(zero_var_cols) > 0) {
       if (verbose) {
-        cat("Removing zero-variance features:",
-            paste(colnames(features_scaled)[zero_var_cols], collapse = ", "), "\n")
+        cat(
+          "Removing zero-variance features:",
+          paste(colnames(features_scaled)[zero_var_cols], collapse = ", "),
+          "\n"
+        )
       }
       features_scaled <- features_scaled[, -zero_var_cols, drop = FALSE]
       features_matrix <- features_matrix[, -zero_var_cols, drop = FALSE]
@@ -787,8 +883,11 @@ cluster_career_trajectories <- function(career_metrics,
   }
 
   if (verbose) {
-    cat(sprintf("Clustering dataset prepared: %d workers × %d features\n\n",
-                nrow(features_scaled), ncol(features_scaled)))
+    cat(sprintf(
+      "Clustering dataset prepared: %d workers × %d features\n\n",
+      nrow(features_scaled),
+      ncol(features_scaled)
+    ))
   }
 
   return(list(
@@ -807,54 +906,66 @@ cluster_career_trajectories <- function(career_metrics,
 #' @return Numeric. Available RAM in GB, or NULL if detection fails
 #' @keywords internal
 .get_available_memory_gb <- function() {
+  available_gb <- tryCatch(
+    {
+      os_type <- Sys.info()["sysname"]
 
-  available_gb <- tryCatch({
-    os_type <- Sys.info()["sysname"]
+      if (os_type == "Darwin") {
+        # Mac: use vm_stat to get free + inactive pages
+        vm_output <- system("vm_stat", intern = TRUE)
 
-    if (os_type == "Darwin") {
-      # Mac: use vm_stat to get free + inactive pages
-      vm_output <- system("vm_stat", intern = TRUE)
+        # Extract free and inactive pages
+        free_line <- grep("Pages free", vm_output, value = TRUE)
+        inactive_line <- grep("Pages inactive", vm_output, value = TRUE)
 
-      # Extract free and inactive pages
-      free_line <- grep("Pages free", vm_output, value = TRUE)
-      inactive_line <- grep("Pages inactive", vm_output, value = TRUE)
+        free_pages <- as.numeric(gsub(".*:\\s*(\\d+).*", "\\1", free_line))
+        inactive_pages <- as.numeric(gsub(
+          ".*:\\s*(\\d+).*",
+          "\\1",
+          inactive_line
+        ))
 
-      free_pages <- as.numeric(gsub(".*:\\s*(\\d+).*", "\\1", free_line))
-      inactive_pages <- as.numeric(gsub(".*:\\s*(\\d+).*", "\\1", inactive_line))
+        # Page size is typically 4096 bytes on Mac
+        page_size <- 4096
+        available_bytes <- (free_pages + inactive_pages) * page_size
+        available_bytes / (1024^3)
+      } else if (os_type == "Linux") {
+        # Linux: read MemAvailable from /proc/meminfo
+        mem_info <- readLines("/proc/meminfo")
+        avail_line <- grep("MemAvailable", mem_info, value = TRUE)
 
-      # Page size is typically 4096 bytes on Mac
-      page_size <- 4096
-      available_bytes <- (free_pages + inactive_pages) * page_size
-      available_bytes / (1024^3)
+        if (length(avail_line) > 0) {
+          # Extract value in KB
+          avail_kb <- as.numeric(sub(
+            "MemAvailable:\\s+(\\d+).*",
+            "\\1",
+            avail_line
+          ))
+          avail_kb / (1024^2)
+        } else {
+          # Fallback: free + cached
+          free_line <- grep("MemFree", mem_info, value = TRUE)
+          cached_line <- grep("^Cached", mem_info, value = TRUE)
 
-    } else if (os_type == "Linux") {
-      # Linux: read MemAvailable from /proc/meminfo
-      mem_info <- readLines("/proc/meminfo")
-      avail_line <- grep("MemAvailable", mem_info, value = TRUE)
+          free_kb <- as.numeric(sub("MemFree:\\s+(\\d+).*", "\\1", free_line))
+          cached_kb <- as.numeric(sub(
+            "Cached:\\s+(\\d+).*",
+            "\\1",
+            cached_line
+          ))
 
-      if (length(avail_line) > 0) {
-        # Extract value in KB
-        avail_kb <- as.numeric(sub("MemAvailable:\\s+(\\d+).*", "\\1", avail_line))
-        avail_kb / (1024^2)
+          (free_kb + cached_kb) / (1024^2)
+        }
+      } else if (.Platform$OS.type == "windows") {
+        # Windows: Try to use system command
+        # Note: This is a basic implementation
+        NULL # Fall back to total memory approach
       } else {
-        # Fallback: free + cached
-        free_line <- grep("MemFree", mem_info, value = TRUE)
-        cached_line <- grep("^Cached", mem_info, value = TRUE)
-
-        free_kb <- as.numeric(sub("MemFree:\\s+(\\d+).*", "\\1", free_line))
-        cached_kb <- as.numeric(sub("Cached:\\s+(\\d+).*", "\\1", cached_line))
-
-        (free_kb + cached_kb) / (1024^2)
+        NULL
       }
-
-    } else if (.Platform$OS.type == "windows") {
-      # Windows: Try to use system command
-      # Note: This is a basic implementation
-      NULL  # Fall back to total memory approach
-    } else {
-      NULL
-    }
-  }, error = function(e) NULL)
+    },
+    error = function(e) NULL
+  )
 
   return(available_gb)
 }
@@ -872,10 +983,12 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param verbose Logical. Print memory info?
 #' @return Integer. Maximum safe sample size for distance matrix calculations
 #' @keywords internal
-.calculate_memory_aware_limit <- function(memory_fraction = 0.33, p = 10,
-                                          method = c("clustering", "silhouette"),
-                                          verbose = FALSE) {
-
+.calculate_memory_aware_limit <- function(
+  memory_fraction = 0.33,
+  p = 10,
+  method = c("clustering", "silhouette"),
+  verbose = FALSE
+) {
   method <- match.arg(method)
 
   # Try to determine available RAM first (more accurate)
@@ -883,41 +996,57 @@ cluster_career_trajectories <- function(career_metrics,
   using_total <- FALSE
 
   # If available RAM detection failed, fall back to total RAM
-  if (is.null(available_ram_gb) || is.na(available_ram_gb) || available_ram_gb <= 0) {
+  if (
+    is.null(available_ram_gb) ||
+      is.na(available_ram_gb) ||
+      available_ram_gb <= 0
+  ) {
     # Fall back to total RAM
-    total_ram_gb <- tryCatch({
-      if (.Platform$OS.type == "windows") {
-        memory.limit() / 1024
-      } else {
-        # Try memuse package or system commands (existing code)
-        if (requireNamespace("memuse", quietly = TRUE)) {
-          as.numeric(memuse::Sys.meminfo()$totalram) / (1024^3)
+    total_ram_gb <- tryCatch(
+      {
+        if (.Platform$OS.type == "windows") {
+          memory.limit() / 1024
         } else {
-          os_type <- Sys.info()["sysname"]
-
-          if (os_type == "Darwin") {
-            mem_bytes <- as.numeric(system("sysctl -n hw.memsize", intern = TRUE))
-            mem_bytes / (1024^3)
-          } else if (os_type == "Linux") {
-            mem_info <- readLines("/proc/meminfo", n = 1)
-            mem_kb <- as.numeric(sub("MemTotal:\\s+(\\d+).*", "\\1", mem_info))
-            mem_kb / (1024^2)
+          # Try memuse package or system commands (existing code)
+          if (requireNamespace("memuse", quietly = TRUE)) {
+            as.numeric(memuse::Sys.meminfo()$totalram) / (1024^3)
           } else {
-            NULL
+            os_type <- Sys.info()["sysname"]
+
+            if (os_type == "Darwin") {
+              mem_bytes <- as.numeric(system(
+                "sysctl -n hw.memsize",
+                intern = TRUE
+              ))
+              mem_bytes / (1024^3)
+            } else if (os_type == "Linux") {
+              mem_info <- readLines("/proc/meminfo", n = 1)
+              mem_kb <- as.numeric(sub(
+                "MemTotal:\\s+(\\d+).*",
+                "\\1",
+                mem_info
+              ))
+              mem_kb / (1024^2)
+            } else {
+              NULL
+            }
           }
         }
-      }
-    }, error = function(e) NULL)
+      },
+      error = function(e) NULL
+    )
 
     if (is.null(total_ram_gb) || is.na(total_ram_gb) || total_ram_gb <= 0) {
       if (verbose) {
-        cat("Unable to determine system RAM, using conservative default (5K sample limit)\n")
+        cat(
+          "Unable to determine system RAM, using conservative default (5K sample limit)\n"
+        )
       }
-      return(5000L)  # More conservative default
+      return(5000L) # More conservative default
     }
 
     # Use total RAM with conservative fraction
-    available_ram_gb <- total_ram_gb * 0.5  # Assume 50% is available
+    available_ram_gb <- total_ram_gb * 0.5 # Assume 50% is available
     using_total <- TRUE
   }
 
@@ -939,7 +1068,7 @@ cluster_career_trajectories <- function(career_metrics,
   max_n <- (-b + sqrt(discriminant)) / (2 * a)
 
   # Apply safety bounds
-  max_n <- max(1000, min(max_n, 100000))  # Between 1K and 100K
+  max_n <- max(1000, min(max_n, 100000)) # Between 1K and 100K
   max_n <- floor(max_n)
 
   # Apply stricter limits for silhouette (requires O(n²) distance matrix)
@@ -949,20 +1078,31 @@ cluster_career_trajectories <- function(career_metrics,
     max_n <- min(max_n * 0.5, 10000)
 
     if (verbose) {
-      cat(sprintf("    Silhouette micro-sample limit: %d observations\n", floor(max_n)))
+      cat(sprintf(
+        "    Silhouette micro-sample limit: %d observations\n",
+        floor(max_n)
+      ))
     }
   }
 
   if (verbose && method == "clustering") {
     if (using_total) {
-      cat(sprintf("System RAM (total): %.1f GB (estimated %.1f GB available)\n",
-                  total_ram_gb, available_ram_gb))
+      cat(sprintf(
+        "System RAM (total): %.1f GB (estimated %.1f GB available)\n",
+        total_ram_gb,
+        available_ram_gb
+      ))
     } else {
       cat(sprintf("System RAM (available): %.1f GB\n", available_ram_gb))
     }
-    cat(sprintf("Using %.0f%% of available RAM for distance calculations\n", memory_fraction * 100))
-    cat(sprintf("Memory-aware sample limit: %s observations\n",
-                format(max_n, big.mark = ",")))
+    cat(sprintf(
+      "Using %.0f%% of available RAM for distance calculations\n",
+      memory_fraction * 100
+    ))
+    cat(sprintf(
+      "Memory-aware sample limit: %s observations\n",
+      format(max_n, big.mark = ",")
+    ))
   }
 
   return(as.integer(max_n))
@@ -1001,20 +1141,32 @@ cluster_career_trajectories <- function(career_metrics,
 #' Memory complexity: O(n*p) - linear in dataset size, suitable for large data.
 #'
 #' @keywords internal
-.elbow_method <- function(features_matrix, k_range = 3:6, seed = NULL, verbose = TRUE) {
+.elbow_method <- function(
+  features_matrix,
+  k_range = 3:6,
+  seed = NULL,
+  verbose = TRUE
+) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
 
-  if (!is.null(seed)) set.seed(seed)
-
-  if (verbose) cat("  Running Elbow method (WSS analysis)...\n")
+  if (verbose) {
+    cat("  Running Elbow method (WSS analysis)...\n")
+  }
 
   # Calculate WSS for each k
   wss_values <- sapply(k_range, function(k) {
-    if (verbose) cat(sprintf("    Testing k=%d... ", k))
+    if (verbose) {
+      cat(sprintf("    Testing k=%d... ", k))
+    }
 
     km <- kmeans(features_matrix, centers = k, nstart = 10, iter.max = 100)
     wss <- km$tot.withinss
 
-    if (verbose) cat(sprintf("WSS=%.2f\n", wss))
+    if (verbose) {
+      cat(sprintf("WSS=%.2f\n", wss))
+    }
 
     return(wss)
   })
@@ -1029,7 +1181,7 @@ cluster_career_trajectories <- function(career_metrics,
     second_deriv <- diff(gradients)
 
     # Elbow is where second derivative is maximum (sharpest bend)
-    elbow_idx <- which.max(abs(second_deriv)) + 1  # +1 because diff() reduces length
+    elbow_idx <- which.max(abs(second_deriv)) + 1 # +1 because diff() reduces length
     optimal_k <- k_range[elbow_idx]
   } else {
     # Fallback: choose k with steepest gradient
@@ -1038,8 +1190,11 @@ cluster_career_trajectories <- function(career_metrics,
   }
 
   if (verbose) {
-    cat(sprintf("  Elbow method suggests k=%d (WSS=%.2f)\n",
-                optimal_k, wss_values[paste0("k", optimal_k)]))
+    cat(sprintf(
+      "  Elbow method suggests k=%d (WSS=%.2f)\n",
+      optimal_k,
+      wss_values[paste0("k", optimal_k)]
+    ))
   }
 
   return(list(
@@ -1072,19 +1227,20 @@ cluster_career_trajectories <- function(career_metrics,
 #' @return List with optimal_k, wss_values, silhouette_values, method_used
 #'
 #' @keywords internal
-.determine_optimal_clusters <- function(features_matrix,
-                                        method = "kmeans",
-                                        min_k = 3,
-                                        max_k = 6,
-                                        min_cluster_size = 10,
-                                        nstart = 25,
-                                        seed = 123,
-                                        verbose = FALSE,
-                                        use_sampling = FALSE,
-                                        sample_size = 50000,
-                                        memory_fraction = 0.33,
-                                        k_selection_method = c("hybrid", "elbow", "silhouette")) {
-
+.determine_optimal_clusters <- function(
+  features_matrix,
+  method = "kmeans",
+  min_k = 3,
+  max_k = 6,
+  min_cluster_size = 10,
+  nstart = 25,
+  seed = 123,
+  verbose = FALSE,
+  use_sampling = FALSE,
+  sample_size = 50000,
+  memory_fraction = 0.33,
+  k_selection_method = c("hybrid", "elbow", "silhouette")
+) {
   k_selection_method <- match.arg(k_selection_method)
   k_range <- min_k:max_k
 
@@ -1109,7 +1265,6 @@ cluster_career_trajectories <- function(career_metrics,
   # === PHASE 2: SILHOUETTE VALIDATION (if method != "elbow") ===
   silhouette_result <- NULL
   if (k_selection_method %in% c("hybrid", "silhouette")) {
-
     # Calculate conservative limit for silhouette micro-sample
     # ALWAYS check memory regardless of use_sampling flag
     max_silhouette_sample <- .calculate_memory_aware_limit(
@@ -1121,20 +1276,23 @@ cluster_career_trajectories <- function(career_metrics,
 
     # NEW: Pre-flight safety check
     effective_sample_size <- min(sample_size, max_silhouette_sample, n)
-    required_gb <- (effective_sample_size^2 * 8) / (1024^3)  # Estimate distance matrix size
+    required_gb <- (effective_sample_size^2 * 8) / (1024^3) # Estimate distance matrix size
 
     # Get available memory for comparison
     available_mem <- .get_available_memory_gb()
     if (is.null(available_mem) || is.na(available_mem)) {
       # Fall back to conservative estimate
-      available_mem <- 8.0  # Assume 8GB available
+      available_mem <- 8.0 # Assume 8GB available
     }
 
     # Check if we have enough memory (with 20% safety margin)
     if (required_gb > available_mem * 0.8) {
       if (verbose) {
-        cat(sprintf("\nWARNING: Silhouette computation would require %.1f GB but only %.1f GB available.\n",
-                    required_gb, available_mem))
+        cat(sprintf(
+          "\nWARNING: Silhouette computation would require %.1f GB but only %.1f GB available.\n",
+          required_gb,
+          available_mem
+        ))
         cat("Automatically switching to elbow-only method for safety.\n\n")
       }
 
@@ -1152,16 +1310,26 @@ cluster_career_trajectories <- function(career_metrics,
       # This is independent of use_sampling flag (which is for clustering, not silhouette)
       if (n > max_silhouette_sample) {
         if (verbose) {
-          cat(sprintf("  Silhouette validation on micro-sample (n=%d, memory-limited)...\n",
-                      effective_sample_size))
+          cat(sprintf(
+            "  Silhouette validation on micro-sample (n=%d, memory-limited)...\n",
+            effective_sample_size
+          ))
         }
 
         # Stratified sampling to preserve feature distribution
-        sample_indices <- .stratified_sample(features_matrix, effective_sample_size, seed)
+        sample_indices <- .stratified_sample(
+          features_matrix,
+          effective_sample_size,
+          seed
+        )
         features_sample <- features_matrix[sample_indices, , drop = FALSE]
       } else {
         features_sample <- features_matrix
-        if (verbose) cat("  Silhouette validation on full dataset (n within memory limits)...\n")
+        if (verbose) {
+          cat(
+            "  Silhouette validation on full dataset (n within memory limits)...\n"
+          )
+        }
       }
 
       # Compute silhouette for each k with error handling
@@ -1170,37 +1338,56 @@ cluster_career_trajectories <- function(career_metrics,
 
       for (i in seq_along(k_range)) {
         k <- k_range[i]
-        if (verbose) cat(sprintf("    Testing k=%d... ", k))
+        if (verbose) {
+          cat(sprintf("    Testing k=%d... ", k))
+        }
 
         # Cluster the sample
-        km_sample <- kmeans(features_sample, centers = k, nstart = 10, iter.max = 100)
+        km_sample <- kmeans(
+          features_sample,
+          centers = k,
+          nstart = 10,
+          iter.max = 100
+        )
         clusters <- km_sample$cluster
 
         # Calculate silhouette with error handling
-        avg_sil <- tryCatch({
-          sil <- silhouette(clusters, dist(features_sample))
-          mean(sil[, "sil_width"])
-        }, error = function(e) {
-          if (verbose) {
-            cat(sprintf("\nERROR during silhouette computation for k=%d:\n", k))
-            cat(sprintf("  %s\n\n", e$message))
-          }
+        avg_sil <- tryCatch(
+          {
+            sil <- silhouette(clusters, dist(features_sample))
+            mean(sil[, "sil_width"])
+          },
+          error = function(e) {
+            if (verbose) {
+              cat(sprintf(
+                "\nERROR during silhouette computation for k=%d:\n",
+                k
+              ))
+              cat(sprintf("  %s\n\n", e$message))
+            }
 
-          # Check if it's a memory error
-          if (grepl("memory|vector|allocation|limit", e$message, ignore.case = TRUE)) {
-            stop(sprintf(
-              "Memory overflow during silhouette computation:\n  %s\n\nThis typically happens when the sample size is too large for available RAM.\n\nSolutions (try in order):\n  1. Reduce memory_fraction parameter (try 0.15 or 0.1)\n  2. Use k_selection_method='elbow' (faster, no silhouette)\n  3. Manually specify n_clusters to skip automatic optimization\n  4. Close other applications to free system RAM\n  5. Use a machine with more RAM for large datasets\n\nCurrent settings:\n  - Dataset size: %s observations\n  - Sample size for silhouette: %s observations\n  - Estimated memory needed: %.1f GB\n  - Memory fraction: %.0f%%",
-              e$message,
-              format(n, big.mark = ","),
-              format(nrow(features_sample), big.mark = ","),
-              required_gb,
-              memory_fraction * 100
-            ))
-          } else {
-            # Re-throw non-memory errors
-            stop(e)
+            # Check if it's a memory error
+            if (
+              grepl(
+                "memory|vector|allocation|limit",
+                e$message,
+                ignore.case = TRUE
+              )
+            ) {
+              stop(sprintf(
+                "Memory overflow during silhouette computation:\n  %s\n\nThis typically happens when the sample size is too large for available RAM.\n\nSolutions (try in order):\n  1. Reduce memory_fraction parameter (try 0.15 or 0.1)\n  2. Use k_selection_method='elbow' (faster, no silhouette)\n  3. Manually specify n_clusters to skip automatic optimization\n  4. Close other applications to free system RAM\n  5. Use a machine with more RAM for large datasets\n\nCurrent settings:\n  - Dataset size: %s observations\n  - Sample size for silhouette: %s observations\n  - Estimated memory needed: %.1f GB\n  - Memory fraction: %.0f%%",
+                e$message,
+                format(n, big.mark = ","),
+                format(nrow(features_sample), big.mark = ","),
+                required_gb,
+                memory_fraction * 100
+              ))
+            } else {
+              # Re-throw non-memory errors
+              stop(e)
+            }
           }
-        })
+        )
 
         sil_values[i] <- avg_sil
 
@@ -1211,8 +1398,11 @@ cluster_career_trajectories <- function(career_metrics,
       optimal_k_sil <- k_range[which.max(sil_values)]
 
       if (verbose) {
-        cat(sprintf("  Silhouette suggests k=%d (avg_sil=%.3f)\n",
-                    optimal_k_sil, max(sil_values)))
+        cat(sprintf(
+          "  Silhouette suggests k=%d (avg_sil=%.3f)\n",
+          optimal_k_sil,
+          max(sil_values)
+        ))
       }
 
       silhouette_result <- list(
@@ -1243,16 +1433,24 @@ cluster_career_trajectories <- function(career_metrics,
       final_k <- k_sil
       decision_rule <- "adjacent_prefer_silhouette"
       if (verbose) {
-        cat(sprintf("\nMethods differ by 1 (elbow=%d, sil=%d), using silhouette: k=%d\n",
-                    k_elbow, k_sil, final_k))
+        cat(sprintf(
+          "\nMethods differ by 1 (elbow=%d, sil=%d), using silhouette: k=%d\n",
+          k_elbow,
+          k_sil,
+          final_k
+        ))
       }
     } else {
       # Substantial difference: prefer elbow (computed on larger sample)
       final_k <- k_elbow
       decision_rule <- "disagreement_prefer_elbow"
       if (verbose) {
-        cat(sprintf("\nMethods disagree (elbow=%d, sil=%d), using elbow: k=%d\n",
-                    k_elbow, k_sil, final_k))
+        cat(sprintf(
+          "\nMethods disagree (elbow=%d, sil=%d), using elbow: k=%d\n",
+          k_elbow,
+          k_sil,
+          final_k
+        ))
       }
     }
   }
@@ -1261,7 +1459,11 @@ cluster_career_trajectories <- function(career_metrics,
   return(list(
     optimal_k = final_k,
     wss_values = if (!is.null(elbow_result)) elbow_result$wss_values else NULL,
-    silhouette_values = if (!is.null(silhouette_result)) silhouette_result$silhouette_values else NULL,
+    silhouette_values = if (!is.null(silhouette_result)) {
+      silhouette_result$silhouette_values
+    } else {
+      NULL
+    },
     method_used = k_selection_method,
     decision_rule = decision_rule
   ))
@@ -1277,18 +1479,29 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param seed Random seed
 #' @return Clustering result object
 #' @keywords internal
-.perform_clustering <- function(features_matrix, n_clusters, method, nstart, seed) {
-
+.perform_clustering <- function(
+  features_matrix,
+  n_clusters,
+  method,
+  nstart,
+  seed
+) {
   set.seed(seed)
 
   if (method == "kmeans") {
-    result <- kmeans(features_matrix, centers = n_clusters, nstart = nstart, iter.max = 100)
+    result <- kmeans(
+      features_matrix,
+      centers = n_clusters,
+      nstart = nstart,
+      iter.max = 100
+    )
   } else if (method == "pam") {
     result <- pam(features_matrix, k = n_clusters)
     # Standardize output format
     result$cluster <- result$clustering
     result$centers <- result$medoids
-  } else { # hierarchical
+  } else {
+    # hierarchical
     hc <- hclust(dist(features_matrix), method = "ward.D2")
     clusters <- cutree(hc, k = n_clusters)
     # Compute centroids
@@ -1296,7 +1509,11 @@ cluster_career_trajectories <- function(career_metrics,
     for (k in 1:n_clusters) {
       centers[k, ] <- colMeans(features_matrix[clusters == k, , drop = FALSE])
     }
-    result <- list(cluster = clusters, centers = centers, method = "hierarchical")
+    result <- list(
+      cluster = clusters,
+      centers = centers,
+      method = "hierarchical"
+    )
   }
 
   return(result)
@@ -1312,9 +1529,13 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param min_cluster_size Minimum size threshold
 #' @return Updated cluster_assignments data.table
 #' @keywords internal
-.reassign_small_clusters <- function(cluster_assignments, features_matrix,
-                                     cluster_result, small_clusters, min_cluster_size) {
-
+.reassign_small_clusters <- function(
+  cluster_assignments,
+  features_matrix,
+  cluster_result,
+  small_clusters,
+  min_cluster_size
+) {
   # For each small cluster, find nearest larger cluster
   for (small_id in small_clusters) {
     small_members <- which(cluster_assignments$cluster_id == small_id)
@@ -1348,30 +1569,52 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param verbose Logical
 #' @return List with profiles and labels data.tables
 #' @keywords internal
-.characterize_clusters <- function(career_metrics, cluster_assignments,
-                                   clustering_features, id_column, verbose) {
-
+.characterize_clusters <- function(
+  career_metrics,
+  cluster_assignments,
+  clustering_features,
+  id_column,
+  verbose
+) {
   # Merge cluster assignments with metrics
-  metrics_with_clusters <- merge(career_metrics, cluster_assignments, by = id_column)
+  metrics_with_clusters <- merge(
+    career_metrics,
+    cluster_assignments,
+    by = id_column
+  )
 
   # Compute cluster profiles
   profile_features <- c(
-    "employment_rate", "employment_stability_index", "career_advancement_index",
-    "career_success_index", "contract_quality_score", "employment_intensity_score",
-    "avg_employment_spell", "job_turnover_rate", "career_complexity_index",
-    "days_employed", "employment_spells"
+    "employment_rate",
+    "employment_stability_index",
+    "career_advancement_index",
+    "career_success_index",
+    "contract_quality_score",
+    "employment_intensity_score",
+    "avg_employment_spell",
+    "job_turnover_rate",
+    "career_complexity_index",
+    "days_employed",
+    "employment_spells"
   )
 
-  available_profile_features <- intersect(profile_features, names(metrics_with_clusters))
+  available_profile_features <- intersect(
+    profile_features,
+    names(metrics_with_clusters)
+  )
 
   # Aggregate by cluster
-  cluster_profiles <- metrics_with_clusters[, c(
-    list(
-      n_workers = .N,
-      pct_workers = .N / nrow(metrics_with_clusters) * 100
+  cluster_profiles <- metrics_with_clusters[,
+    c(
+      list(
+        n_workers = .N,
+        pct_workers = .N / nrow(metrics_with_clusters) * 100
+      ),
+      lapply(.SD, function(x) mean(x, na.rm = TRUE))
     ),
-    lapply(.SD, function(x) mean(x, na.rm = TRUE))
-  ), by = cluster_id, .SDcols = available_profile_features]
+    by = cluster_id,
+    .SDcols = available_profile_features
+  ]
 
   # Generate labels based on cluster characteristics
   cluster_labels <- .generate_cluster_labels(cluster_profiles, verbose)
@@ -1380,8 +1623,23 @@ cluster_career_trajectories <- function(career_metrics,
   cluster_profiles <- merge(cluster_profiles, cluster_labels, by = "cluster_id")
 
   # Reorder columns
-  col_order <- c("cluster_id", "cluster_label_en", "cluster_label_it", "n_workers", "pct_workers",
-                 setdiff(names(cluster_profiles), c("cluster_id", "cluster_label_en", "cluster_label_it", "n_workers", "pct_workers")))
+  col_order <- c(
+    "cluster_id",
+    "cluster_label_en",
+    "cluster_label_it",
+    "n_workers",
+    "pct_workers",
+    setdiff(
+      names(cluster_profiles),
+      c(
+        "cluster_id",
+        "cluster_label_en",
+        "cluster_label_it",
+        "n_workers",
+        "pct_workers"
+      )
+    )
+  )
   setcolorder(cluster_profiles, col_order)
 
   return(list(
@@ -1398,7 +1656,6 @@ cluster_career_trajectories <- function(career_metrics,
 #' @return data.table with cluster_id, cluster_label_en, cluster_label_it
 #' @keywords internal
 .generate_cluster_labels <- function(cluster_profiles, verbose = FALSE) {
-
   n_clusters <- nrow(cluster_profiles)
   labels <- data.table(
     cluster_id = cluster_profiles$cluster_id,
@@ -1409,9 +1666,21 @@ cluster_career_trajectories <- function(career_metrics,
   # Get raw (un-normalized) metrics for differentiation
   raw_metrics <- data.table(
     cluster_id = cluster_profiles$cluster_id,
-    stability = cluster_profiles$employment_stability_index,
-    employment_rate = cluster_profiles$employment_rate,
-    advancement = cluster_profiles$career_advancement_index,
+    stability = if ("employment_stability_index" %in% names(cluster_profiles)) {
+      cluster_profiles$employment_stability_index
+    } else {
+      rep(0.5, n_clusters)
+    },
+    employment_rate = if ("employment_rate" %in% names(cluster_profiles)) {
+      cluster_profiles$employment_rate
+    } else {
+      rep(0.5, n_clusters)
+    },
+    advancement = if ("career_advancement_index" %in% names(cluster_profiles)) {
+      cluster_profiles$career_advancement_index
+    } else {
+      rep(0.5, n_clusters)
+    },
     quality = if ("contract_quality_score" %in% names(cluster_profiles)) {
       cluster_profiles$contract_quality_score
     } else if ("career_success_index" %in% names(cluster_profiles)) {
@@ -1428,13 +1697,16 @@ cluster_career_trajectories <- function(career_metrics,
 
   # Rank clusters on each dimension (for tie-breaking)
   raw_metrics[, stability_rank := frank(-stability, ties.method = "dense")]
-  raw_metrics[, employment_rank := frank(-employment_rate, ties.method = "dense")]
+  raw_metrics[,
+    employment_rank := frank(-employment_rate, ties.method = "dense")
+  ]
   raw_metrics[, advancement_rank := frank(-advancement, ties.method = "dense")]
   raw_metrics[, quality_rank := frank(-quality, ties.method = "dense")]
 
   # Normalize metrics to 0-1 scale for thresholding
   normalize <- function(x) {
-    (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE) + 1e-10)
+    (x - min(x, na.rm = TRUE)) /
+      (max(x, na.rm = TRUE) - min(x, na.rm = TRUE) + 1e-10)
   }
 
   stability_norm <- normalize(raw_metrics$stability)
@@ -1450,22 +1722,22 @@ cluster_career_trajectories <- function(career_metrics,
     # Stable Full Employment: High stability + High employment
     if (stability_norm[i] > 0.6 && employment_norm[i] > 0.7) {
       primary_labels[i] <- "Stable"
-    # Precarious Workers: Low stability + Low employment
+      # Precarious Workers: Low stability + Low employment
     } else if (stability_norm[i] < 0.4 && employment_norm[i] < 0.5) {
       primary_labels[i] <- "Precarious"
-    # Career Progressors: High advancement
+      # Career Progressors: High advancement
     } else if (advancement_norm[i] > 0.6 && quality_norm[i] > 0.5) {
       primary_labels[i] <- "Upward"
-    # Entry-level: Low advancement
+      # Entry-level: Low advancement
     } else if (advancement_norm[i] < 0.4) {
       primary_labels[i] <- "Entry"
-    # Complex Multi-job: High complexity
+      # Complex Multi-job: High complexity
     } else if (complexity_norm[i] > 0.6) {
       primary_labels[i] <- "Complex"
-    # Declining: Low quality
+      # Declining: Low quality
     } else if (quality_norm[i] < 0.4) {
       primary_labels[i] <- "Declining"
-    # Moderate/Mixed: Default
+      # Moderate/Mixed: Default
     } else {
       primary_labels[i] <- "Moderate"
     }
@@ -1485,86 +1757,191 @@ cluster_career_trajectories <- function(career_metrics,
         ranks <- raw_metrics[dup_indices, ]$stability_rank
 
         # Define qualifiers for up to 6 clusters
-        qualifiers_en_all <- c("Very High Stability", "High Stability", "Moderate Stability",
-                              "Basic Stability", "Low Stability", "Minimal Stability")
-        qualifiers_it_all <- c("Stabilità Molto Alta", "Alta Stabilità", "Stabilità Moderata",
-                              "Stabilità Base", "Bassa Stabilità", "Stabilità Minima")
+        qualifiers_en_all <- c(
+          "Very High Stability",
+          "High Stability",
+          "Moderate Stability",
+          "Basic Stability",
+          "Low Stability",
+          "Minimal Stability"
+        )
+        qualifiers_it_all <- c(
+          "Stabilità Molto Alta",
+          "Alta Stabilità",
+          "Stabilità Moderata",
+          "Stabilità Base",
+          "Bassa Stabilità",
+          "Stabilità Minima"
+        )
 
         # Check if we have enough qualifiers
         if (max(ranks) <= length(qualifiers_en_all)) {
           for (j in seq_along(dup_indices)) {
             idx <- dup_indices[j]
-            labels[idx, cluster_label_en := paste0(qualifiers_en_all[ranks[j]], " Employment")]
-            labels[idx, cluster_label_it := paste0("Occupazione con ", qualifiers_it_all[ranks[j]])]
+            labels[
+              idx,
+              cluster_label_en := paste0(
+                qualifiers_en_all[ranks[j]],
+                " Employment"
+              )
+            ]
+            labels[
+              idx,
+              cluster_label_it := paste0(
+                "Occupazione con ",
+                qualifiers_it_all[ranks[j]]
+              )
+            ]
           }
         } else {
           # Fallback to numeric differentiation
           for (j in seq_along(dup_indices)) {
             idx <- dup_indices[j]
-            labels[idx, cluster_label_en := sprintf("Stable Employment - Level %d", ranks[j])]
-            labels[idx, cluster_label_it := sprintf("Occupazione Stabile - Livello %d", ranks[j])]
+            labels[
+              idx,
+              cluster_label_en := sprintf(
+                "Stable Employment - Level %d",
+                ranks[j]
+              )
+            ]
+            labels[
+              idx,
+              cluster_label_it := sprintf(
+                "Occupazione Stabile - Livello %d",
+                ranks[j]
+              )
+            ]
           }
         }
-
       } else if (label_type == "Precarious") {
         # Rank by employment rate
         ranks <- raw_metrics[dup_indices, ]$employment_rank
 
         # Define qualifiers for up to 6 clusters
-        qualifiers_en_all <- c("Extremely Precarious", "Severely Precarious", "Moderately Precarious",
-                              "Marginally Precarious", "Mildly Precarious", "Slightly Precarious")
-        qualifiers_it_all <- c("Precarietà Estrema", "Precarietà Grave", "Precarietà Moderata",
-                              "Precarietà Marginale", "Precarietà Lieve", "Precarietà Lievissima")
+        qualifiers_en_all <- c(
+          "Extremely Precarious",
+          "Severely Precarious",
+          "Moderately Precarious",
+          "Marginally Precarious",
+          "Mildly Precarious",
+          "Slightly Precarious"
+        )
+        qualifiers_it_all <- c(
+          "Precarietà Estrema",
+          "Precarietà Grave",
+          "Precarietà Moderata",
+          "Precarietà Marginale",
+          "Precarietà Lieve",
+          "Precarietà Lievissima"
+        )
 
         # Check if we have enough qualifiers
         if (max(ranks) <= length(qualifiers_en_all)) {
           for (j in seq_along(dup_indices)) {
             idx <- dup_indices[j]
-            labels[idx, cluster_label_en := paste0(qualifiers_en_all[ranks[j]], " Workers")]
-            labels[idx, cluster_label_it := paste0("Lavoratori con ", qualifiers_it_all[ranks[j]])]
+            labels[
+              idx,
+              cluster_label_en := paste0(
+                qualifiers_en_all[ranks[j]],
+                " Workers"
+              )
+            ]
+            labels[
+              idx,
+              cluster_label_it := paste0(
+                "Lavoratori con ",
+                qualifiers_it_all[ranks[j]]
+              )
+            ]
           }
         } else {
           # Fallback to numeric differentiation
           for (j in seq_along(dup_indices)) {
             idx <- dup_indices[j]
-            labels[idx, cluster_label_en := sprintf("Precarious Workers - Level %d", ranks[j])]
-            labels[idx, cluster_label_it := sprintf("Lavoratori Precari - Livello %d", ranks[j])]
+            labels[
+              idx,
+              cluster_label_en := sprintf(
+                "Precarious Workers - Level %d",
+                ranks[j]
+              )
+            ]
+            labels[
+              idx,
+              cluster_label_it := sprintf(
+                "Lavoratori Precari - Livello %d",
+                ranks[j]
+              )
+            ]
           }
         }
-
       } else if (label_type == "Entry") {
         # Rank by advancement
         ranks <- raw_metrics[dup_indices, ]$advancement_rank
 
         # Define qualifiers for up to 6 clusters
-        qualifiers_en_all <- c("Very Early Career", "Early Career Entry", "Entry-Level",
-                              "Junior Entry", "Basic Entry", "Initial Entry")
-        qualifiers_it_all <- c("Ingresso Inizialissimo", "Ingresso Iniziale", "Livello Base",
-                              "Ingresso Junior", "Ingresso Elementare", "Primo Ingresso")
+        qualifiers_en_all <- c(
+          "Very Early Career",
+          "Early Career Entry",
+          "Entry-Level",
+          "Junior Entry",
+          "Basic Entry",
+          "Initial Entry"
+        )
+        qualifiers_it_all <- c(
+          "Ingresso Inizialissimo",
+          "Ingresso Iniziale",
+          "Livello Base",
+          "Ingresso Junior",
+          "Ingresso Elementare",
+          "Primo Ingresso"
+        )
 
         # Check if we have enough qualifiers
         if (max(ranks) <= length(qualifiers_en_all)) {
           for (j in seq_along(dup_indices)) {
             idx <- dup_indices[j]
-            labels[idx, cluster_label_en := paste0(qualifiers_en_all[ranks[j]], " Workers")]
-            labels[idx, cluster_label_it := paste0("Lavoratori ", qualifiers_it_all[ranks[j]])]
+            labels[
+              idx,
+              cluster_label_en := paste0(
+                qualifiers_en_all[ranks[j]],
+                " Workers"
+              )
+            ]
+            labels[
+              idx,
+              cluster_label_it := paste0(
+                "Lavoratori ",
+                qualifiers_it_all[ranks[j]]
+              )
+            ]
           }
         } else {
           # Fallback to numeric differentiation
           for (j in seq_along(dup_indices)) {
             idx <- dup_indices[j]
-            labels[idx, cluster_label_en := sprintf("Entry Workers - Level %d", ranks[j])]
-            labels[idx, cluster_label_it := sprintf("Lavoratori Ingresso - Livello %d", ranks[j])]
+            labels[
+              idx,
+              cluster_label_en := sprintf("Entry Workers - Level %d", ranks[j])
+            ]
+            labels[
+              idx,
+              cluster_label_it := sprintf(
+                "Lavoratori Ingresso - Livello %d",
+                ranks[j]
+              )
+            ]
           }
         }
-
       } else {
         # Generic differentiation by cluster size rank
         for (j in seq_along(dup_indices)) {
           idx <- dup_indices[j]
           suffix <- c("Type A", "Type B", "Type C", "Type D")[j]
           labels[idx, cluster_label_en := paste0(label_type, " - ", suffix)]
-          labels[idx, cluster_label_it := paste0(label_type, " - Tipo ", LETTERS[j])]
+          labels[
+            idx,
+            cluster_label_it := paste0(label_type, " - Tipo ", LETTERS[j])
+          ]
         }
       }
     } else {
@@ -1616,10 +1993,14 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param memory_fraction Numeric. Fraction of available RAM to use (default 0.33)
 #' @return List with quality metrics
 #' @keywords internal
-.compute_cluster_quality <- function(features_matrix, clusters, method,
-                                     use_sampling = FALSE, sample_size = 50000,
-                                     memory_fraction = 0.33) {
-
+.compute_cluster_quality <- function(
+  features_matrix,
+  clusters,
+  method,
+  use_sampling = FALSE,
+  sample_size = 50000,
+  memory_fraction = 0.33
+) {
   # Use sampling for large datasets
   # CRITICAL: Silhouette requires dist() which needs O(n²) memory
   # Calculate memory-aware limit based on available RAM
@@ -1627,7 +2008,7 @@ cluster_career_trajectories <- function(career_metrics,
     memory_fraction = memory_fraction,
     p = ncol(features_matrix),
     method = "silhouette",
-    verbose = FALSE  # Don't print during quality computation
+    verbose = FALSE # Don't print during quality computation
   )
 
   if (use_sampling && nrow(features_matrix) > max_quality_sample) {
@@ -1635,14 +2016,19 @@ cluster_career_trajectories <- function(career_metrics,
     effective_sample_size <- min(sample_size, max_quality_sample)
 
     # Stratified sampling preserving cluster proportions
-    sample_indices <- .stratified_cluster_sample(clusters, effective_sample_size)
+    sample_indices <- .stratified_cluster_sample(
+      clusters,
+      effective_sample_size
+    )
     features_sample <- features_matrix[sample_indices, , drop = FALSE]
     clusters_sample <- clusters[sample_indices]
 
     is_approximate <- TRUE
-    approx_note <- sprintf("Metrics computed on stratified sample (%s/%s observations)",
-                          format(length(sample_indices), big.mark = ","),
-                          format(nrow(features_matrix), big.mark = ","))
+    approx_note <- sprintf(
+      "Metrics computed on stratified sample (%s/%s observations)",
+      format(length(sample_indices), big.mark = ","),
+      format(nrow(features_matrix), big.mark = ",")
+    )
   } else {
     features_sample <- features_matrix
     clusters_sample <- clusters
@@ -1651,18 +2037,21 @@ cluster_career_trajectories <- function(career_metrics,
   }
 
   # Silhouette analysis (with error handling)
-  overall_silhouette <- tryCatch({
-    sil <- silhouette(clusters_sample, dist(features_sample))
-    mean(sil[, "sil_width"])
-  }, error = function(e) {
-    warning(sprintf(
-      "Could not compute silhouette quality metric due to memory constraints.\nThis is not critical - other quality metrics are still available.\nError: %s",
-      e$message
-    ))
+  overall_silhouette <- tryCatch(
+    {
+      sil <- silhouette(clusters_sample, dist(features_sample))
+      mean(sil[, "sil_width"])
+    },
+    error = function(e) {
+      warning(sprintf(
+        "Could not compute silhouette quality metric due to memory constraints.\nThis is not critical - other quality metrics are still available.\nError: %s",
+        e$message
+      ))
 
-    # Return NA instead of crashing
-    NA_real_
-  })
+      # Return NA instead of crashing
+      NA_real_
+    }
+  )
 
   # Only compute per-cluster silhouettes if overall succeeded
   if (!is.na(overall_silhouette)) {
@@ -1703,7 +2092,6 @@ cluster_career_trajectories <- function(career_metrics,
 #' @return Numeric Dunn index value
 #' @keywords internal
 .compute_dunn_index <- function(features_matrix, clusters) {
-
   # Compute cluster centroids
   unique_clusters <- unique(clusters)
   n_clusters <- length(unique_clusters)
@@ -1745,7 +2133,6 @@ cluster_career_trajectories <- function(career_metrics,
 #' @return Numeric CH index value
 #' @keywords internal
 .compute_calinski_harabasz <- function(features_matrix, clusters) {
-
   n <- nrow(features_matrix)
   k <- length(unique(clusters))
 
@@ -1766,7 +2153,8 @@ cluster_career_trajectories <- function(career_metrics,
   for (cluster_id in unique(clusters)) {
     cluster_data <- features_matrix[clusters == cluster_id, , drop = FALSE]
     cluster_centroid <- colMeans(cluster_data)
-    wgss <- wgss + sum(apply(cluster_data, 1, function(x) sum((x - cluster_centroid)^2)))
+    wgss <- wgss +
+      sum(apply(cluster_data, 1, function(x) sum((x - cluster_centroid)^2)))
   }
 
   # CH index
@@ -1782,8 +2170,11 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param feature_names Character vector of feature names
 #' @return data.table with feature importance statistics
 #' @keywords internal
-.compute_feature_importance <- function(features_scaled, clusters, feature_names) {
-
+.compute_feature_importance <- function(
+  features_scaled,
+  clusters,
+  feature_names
+) {
   n_features <- ncol(features_scaled)
   importance_results <- data.table(
     feature = colnames(features_scaled),
@@ -1807,7 +2198,9 @@ cluster_career_trajectories <- function(career_metrics,
   # Normalize importance scores to sum to 1
   total_importance <- sum(importance_results$importance_score, na.rm = TRUE)
   if (total_importance > 0) {
-    importance_results[, importance_score := importance_score / total_importance]
+    importance_results[,
+      importance_score := importance_score / total_importance
+    ]
   }
 
   # Sort by importance
@@ -1825,9 +2218,12 @@ cluster_career_trajectories <- function(career_metrics,
 #' @param batch_size Integer. Batch size for processing (reduces memory spikes)
 #' @return Numeric vector of distances
 #' @keywords internal
-.compute_distance_to_centroid <- function(features_matrix, cluster_ids, cluster_result,
-                                          batch_size = 100000) {
-
+.compute_distance_to_centroid <- function(
+  features_matrix,
+  cluster_ids,
+  cluster_result,
+  batch_size = 100000
+) {
   n <- nrow(features_matrix)
 
   # Process in batches if dataset is large
@@ -1869,7 +2265,6 @@ cluster_career_trajectories <- function(career_metrics,
 #' @return Integer vector of sample indices
 #' @keywords internal
 .stratified_sample <- function(features_matrix, sample_size, seed = 123) {
-
   n <- nrow(features_matrix)
 
   if (n <= sample_size) {
@@ -1893,7 +2288,6 @@ cluster_career_trajectories <- function(career_metrics,
 #' @return Integer vector of sample indices
 #' @keywords internal
 .stratified_cluster_sample <- function(clusters, sample_size) {
-
   n <- length(clusters)
 
   if (n <= sample_size) {
@@ -1914,7 +2308,7 @@ cluster_career_trajectories <- function(career_metrics,
 
     # Target sample size for this cluster
     target_n <- max(1, round(sample_size * cluster_props[cluster_id]))
-    target_n <- min(target_n, n_cluster)  # Don't sample more than available
+    target_n <- min(target_n, n_cluster) # Don't sample more than available
 
     # Sample from this cluster
     cluster_sample <- sample(cluster_indices, size = target_n, replace = FALSE)
@@ -2000,17 +2394,23 @@ cluster_career_trajectories <- function(career_metrics,
 #' @importFrom ggplot2 ggplot aes geom_bar geom_tile geom_polygon coord_polar
 #'   facet_wrap scale_fill_brewer scale_fill_manual theme_minimal labs
 #'   theme element_text element_blank
-plot_cluster_profiles <- function(cluster_result,
-                                  metrics = c("employment_rate", "career_advancement_index",
-                                            "employment_stability_index"),
-                                  plot_type = "radar",
-                                  language = "en",
-                                  color_palette = "Set2",
-                                  title = NULL,
-                                  theme_base = theme_minimal()) {
-
-  if (!inherits(cluster_result, "list") ||
-      !all(c("cluster_profiles", "cluster_labels") %in% names(cluster_result))) {
+plot_cluster_profiles <- function(
+  cluster_result,
+  metrics = c(
+    "employment_rate",
+    "career_advancement_index",
+    "employment_stability_index"
+  ),
+  plot_type = "radar",
+  language = "en",
+  color_palette = "Set2",
+  title = NULL,
+  theme_base = theme_minimal()
+) {
+  if (
+    !inherits(cluster_result, "list") ||
+      !all(c("cluster_profiles", "cluster_labels") %in% names(cluster_result))
+  ) {
     stop("cluster_result must be output from cluster_career_trajectories()")
   }
 
@@ -2027,11 +2427,17 @@ plot_cluster_profiles <- function(cluster_result,
 
   # Select metrics to visualize
   if ("all" %in% metrics) {
-    available_metrics <- c("employment_rate", "employment_stability_index",
-                          "career_advancement_index", "career_success_index",
-                          "contract_quality_score", "employment_intensity_score",
-                          "avg_employment_spell", "job_turnover_rate",
-                          "career_complexity_index")
+    available_metrics <- c(
+      "employment_rate",
+      "employment_stability_index",
+      "career_advancement_index",
+      "career_success_index",
+      "contract_quality_score",
+      "employment_intensity_score",
+      "avg_employment_spell",
+      "job_turnover_rate",
+      "career_complexity_index"
+    )
     metrics <- intersect(available_metrics, names(profiles))
   } else {
     metrics <- intersect(metrics, names(profiles))
@@ -2046,8 +2452,11 @@ plot_cluster_profiles <- function(cluster_result,
     profiles[, cluster_label := cluster_label_en]
   } else if (language == "it") {
     profiles[, cluster_label := cluster_label_it]
-  } else { # both
-    profiles[, cluster_label := paste0(cluster_label_en, "\n(", cluster_label_it, ")")]
+  } else {
+    # both
+    profiles[,
+      cluster_label := paste0(cluster_label_en, "\n(", cluster_label_it, ")")
+    ]
   }
 
   # Normalize metrics to 0-1 scale for visualization
@@ -2067,15 +2476,33 @@ plot_cluster_profiles <- function(cluster_result,
 
   # Generate plots based on type
   if (plot_type == "radar" || plot_type == "all") {
-    radar_plot <- .create_radar_plot(profiles_norm, metrics, color_palette, title, theme_base)
+    radar_plot <- .create_radar_plot(
+      profiles_norm,
+      metrics,
+      color_palette,
+      title,
+      theme_base
+    )
   }
 
   if (plot_type == "bar" || plot_type == "all") {
-    bar_plot <- .create_bar_plot(profiles, metrics, color_palette, title, theme_base)
+    bar_plot <- .create_bar_plot(
+      profiles,
+      metrics,
+      color_palette,
+      title,
+      theme_base
+    )
   }
 
   if (plot_type == "heatmap" || plot_type == "all") {
-    heatmap_plot <- .create_heatmap_plot(profiles_norm, metrics, color_palette, title, theme_base)
+    heatmap_plot <- .create_heatmap_plot(
+      profiles_norm,
+      metrics,
+      color_palette,
+      title,
+      theme_base
+    )
   }
 
   # Return appropriate plot(s)
@@ -2085,7 +2512,8 @@ plot_cluster_profiles <- function(cluster_result,
     return(bar_plot)
   } else if (plot_type == "heatmap") {
     return(heatmap_plot)
-  } else { # all
+  } else {
+    # all
     return(list(
       radar = radar_plot,
       bar = bar_plot,
@@ -2106,8 +2534,13 @@ plot_cluster_profiles <- function(cluster_result,
 #' @keywords internal
 #' @importFrom ggplot2 ggplot aes geom_polygon coord_polar scale_fill_brewer
 #'   scale_color_brewer scale_fill_manual scale_color_manual labs theme element_text
-.create_radar_plot <- function(profiles_norm, metrics, color_palette, title, theme_base) {
-
+.create_radar_plot <- function(
+  profiles_norm,
+  metrics,
+  color_palette,
+  title,
+  theme_base
+) {
   # Reshape data for radar chart
   radar_data <- melt(
     profiles_norm[, c("cluster_id", "cluster_label", metrics), with = FALSE],
@@ -2125,13 +2558,25 @@ plot_cluster_profiles <- function(cluster_result,
     title <- "Career Cluster Profiles"
   }
 
-  p <- ggplot(radar_data, aes(x = metric_label, y = value, group = cluster_label,
-                              fill = cluster_label, color = cluster_label)) +
+  p <- ggplot(
+    radar_data,
+    aes(
+      x = metric_label,
+      y = value,
+      group = cluster_label,
+      fill = cluster_label,
+      color = cluster_label
+    )
+  ) +
     geom_polygon(alpha = 0.3, linewidth = 1) +
     coord_polar() +
     labs(
       title = title,
-      subtitle = paste("Comparing", length(unique(radar_data$cluster_id)), "career trajectory segments"),
+      subtitle = paste(
+        "Comparing",
+        length(unique(radar_data$cluster_id)),
+        "career trajectory segments"
+      ),
       fill = "Cluster",
       color = "Cluster"
     ) +
@@ -2143,11 +2588,13 @@ plot_cluster_profiles <- function(cluster_result,
 
   # Apply color palette
   if (is.character(color_palette) && length(color_palette) == 1) {
-    p <- p + scale_fill_brewer(palette = color_palette) +
-         scale_color_brewer(palette = color_palette)
+    p <- p +
+      scale_fill_brewer(palette = color_palette) +
+      scale_color_brewer(palette = color_palette)
   } else {
-    p <- p + scale_fill_manual(values = color_palette) +
-         scale_color_manual(values = color_palette)
+    p <- p +
+      scale_fill_manual(values = color_palette) +
+      scale_color_manual(values = color_palette)
   }
 
   return(p)
@@ -2165,8 +2612,13 @@ plot_cluster_profiles <- function(cluster_result,
 #' @keywords internal
 #' @importFrom ggplot2 ggplot aes geom_bar position_dodge scale_fill_brewer
 #'   facet_wrap labs theme
-.create_bar_plot <- function(profiles, metrics, color_palette, title, theme_base) {
-
+.create_bar_plot <- function(
+  profiles,
+  metrics,
+  color_palette,
+  title,
+  theme_base
+) {
   # Reshape data for bar chart
   bar_data <- melt(
     profiles[, c("cluster_id", "cluster_label", metrics), with = FALSE],
@@ -2183,9 +2635,12 @@ plot_cluster_profiles <- function(cluster_result,
     title <- "Career Metrics by Cluster"
   }
 
-  p <- ggplot(bar_data, aes(x = cluster_label, y = value, fill = cluster_label)) +
+  p <- ggplot(
+    bar_data,
+    aes(x = cluster_label, y = value, fill = cluster_label)
+  ) +
     geom_bar(stat = "identity", position = "dodge") +
-    facet_wrap(~ metric_label, scales = "free_y", ncol = 3) +
+    facet_wrap(~metric_label, scales = "free_y", ncol = 3) +
     labs(
       title = title,
       x = "Cluster",
@@ -2220,8 +2675,13 @@ plot_cluster_profiles <- function(cluster_result,
 #' @keywords internal
 #' @importFrom ggplot2 ggplot aes geom_tile scale_fill_gradient2 labs theme
 #'   element_text element_blank
-.create_heatmap_plot <- function(profiles_norm, metrics, color_palette, title, theme_base) {
-
+.create_heatmap_plot <- function(
+  profiles_norm,
+  metrics,
+  color_palette,
+  title,
+  theme_base
+) {
   # Reshape data for heatmap
   heatmap_data <- melt(
     profiles_norm[, c("cluster_id", "cluster_label", metrics), with = FALSE],
@@ -2238,10 +2698,15 @@ plot_cluster_profiles <- function(cluster_result,
     title <- "Cluster Profile Heatmap"
   }
 
-  p <- ggplot(heatmap_data, aes(x = metric_label, y = cluster_label, fill = value)) +
+  p <- ggplot(
+    heatmap_data,
+    aes(x = metric_label, y = cluster_label, fill = value)
+  ) +
     geom_tile(color = "white", linewidth = 0.5) +
     scale_fill_gradient2(
-      low = "#2166AC", mid = "#F7F7F7", high = "#B2182B",
+      low = "#2166AC",
+      mid = "#F7F7F7",
+      high = "#B2182B",
       midpoint = 0.5,
       limits = c(0, 1),
       name = "Normalized\nValue"

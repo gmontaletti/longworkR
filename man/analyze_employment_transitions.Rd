@@ -10,6 +10,10 @@ analyze_employment_transitions(
   statistics_variables = NULL,
   min_unemployment_duration = 1,
   max_unemployment_duration = NULL,
+  consolidation_mode = "none",
+  consolidation_type = "both",
+  employer_var = NULL,
+  min_lag = 8,
   output_transition_matrix = FALSE,
   eval_chain = "last",
   show_progress = TRUE
@@ -36,6 +40,27 @@ to consider a transition (default: 1).}
 to consider a transition. If NULL (default), no upper limit is applied. When not
 NULL, only transitions with unemployment duration between min_unemployment_duration
 and max_unemployment_duration (inclusive) are included.}
+
+\item{consolidation_mode}{Character string specifying the consolidation strategy
+to apply before transition analysis (default: "none"). Options:
+\itemize{
+\item{\code{"none"}}: No consolidation (default, backward-compatible)
+\item{\code{"temporal"}}: Consolidate overlapping periods using over_id
+\item{\code{"employer"}}: Consolidate consecutive contracts from the same employer
+\item{\code{"both"}}: Apply employer consolidation first, then temporal
+}}
+
+\item{consolidation_type}{Character string specifying the temporal consolidation
+approach (default: "both"). Only used when \code{consolidation_mode} includes
+temporal consolidation. Options: "both", "overlapping", "employment_only".}
+
+\item{employer_var}{Character string specifying the column name containing
+employer identifiers. Required when \code{consolidation_mode} is "employer"
+or "both". Ignored for other modes (with a warning if provided).}
+
+\item{min_lag}{Numeric value specifying the maximum gap in days between
+consecutive contracts from the same employer to be consolidated (default: 8).
+Only used with employer-based consolidation modes.}
 
 \item{output_transition_matrix}{Logical. If TRUE, returns a square transition matrix
 instead of the normal aggregated data.table. Rows represent "from" states, columns
@@ -83,12 +108,10 @@ Analyzes employment transitions from the output of process_employment_pipeline()
 Identifies transitions between employment periods that are separated by unemployment
 periods and provides transition pattern analysis. The function allows specification
 of which variable to use for transition analysis and which variables to compute
-statistics for.
-
-\strong{BREAKING CHANGE in v0.6.0}: Internal consolidation has been removed. Users should now
-pre-consolidate data using the new consolidation functions (\code{consolidate_overlapping()},
-\code{consolidate_adjacent()}, \code{consolidate_short_gaps()}) before calling this function.
-See \code{vignette("consolidation-strategies")} for migration guide.
+statistics for. Supports optional inline consolidation via the
+\code{consolidation_mode} parameter, or users can pre-consolidate data using
+the composable consolidation functions (\code{consolidate_overlapping()},
+\code{consolidate_adjacent()}, \code{consolidate_short_gaps()}).
 }
 \details{
 A transition occurs when there are consecutive employment periods (arco >= 1)
@@ -118,9 +141,9 @@ library(data.table)
 employment_data <- data.table(
   id = 1:6,
   cf = c("PERSON001", "PERSON001", "PERSON001", "PERSON002", "PERSON002", "PERSON002"),
-  INIZIO = as.Date(c("2023-01-01", "2023-04-01", "2023-08-01", 
+  INIZIO = as.Date(c("2023-01-01", "2023-04-01", "2023-08-01",
                      "2023-02-01", "2023-06-01", "2023-10-01")),
-  FINE = as.Date(c("2023-02-28", "2023-05-31", "2023-12-31", 
+  FINE = as.Date(c("2023-02-28", "2023-05-31", "2023-12-31",
                    "2023-04-30", "2023-08-31", "2023-12-31")),
   prior = c(1, 0, 1, 1, 1, 0),
   company = c("CompanyA", "CompanyB", "CompanyC", "CompanyD", "CompanyE", "CompanyF"),
@@ -145,7 +168,7 @@ transitions <- analyze_employment_transitions(
 # Compare with no consolidation
 transitions_original <- analyze_employment_transitions(
   pipeline_result = result,
-  transition_variable = "company", 
+  transition_variable = "company",
   statistics_variables = c("salary"),
   consolidation_mode = "none"
 )
@@ -164,7 +187,7 @@ transitions_both <- analyze_employment_transitions(
   pipeline_result = result_with_employer,
   transition_variable = "company",
   consolidation_mode = "both",
-  employer_var = "employer_id", 
+  employer_var = "employer_id",
   min_lag = 8,
   consolidation_type = "both"
 )
@@ -226,7 +249,7 @@ transitions_full <- analyze_employment_transitions(
 
 # Create realistic example data with employer information
 result_with_employer <- copy(result)
-result_with_employer[, employer_id := c("ACME_CORP", "ACME_CORP", "BETA_LTD", 
+result_with_employer[, employer_id := c("ACME_CORP", "ACME_CORP", "BETA_LTD",
                                        "GAMMA_INC", "GAMMA_INC", "DELTA_CO")]
 
 # Example 1: TEMPORAL CONSOLIDATION (default behavior)
@@ -238,7 +261,7 @@ transitions_temporal <- analyze_employment_transitions(
   consolidation_type = "both"          # Consolidate overlapping + consecutive
 )
 
-# Example 2: EMPLOYER-BASED CONSOLIDATION  
+# Example 2: EMPLOYER-BASED CONSOLIDATION
 # Only consolidates contracts from same employer within time gap
 transitions_employer <- analyze_employment_transitions(
   pipeline_result = result_with_employer,

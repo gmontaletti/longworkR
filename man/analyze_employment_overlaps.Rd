@@ -130,17 +130,17 @@ library(data.table)
 employment_data <- data.table(
   id = 1:12,
   cf = c(rep("PERSON001", 8), rep("PERSON002", 4)),
-  INIZIO = as.Date(c("2023-01-01", "2023-02-01", "2023-02-15", "2023-05-01", 
+  INIZIO = as.Date(c("2023-01-01", "2023-02-01", "2023-02-15", "2023-05-01",
                      "2023-05-15", "2023-08-01", "2023-10-01", "2023-11-01",
                      "2023-01-15", "2023-03-01", "2023-06-01", "2023-09-01")),
   FINE = as.Date(c("2023-01-31", "2023-04-30", "2023-04-30", "2023-07-31",
                    "2023-07-15", "2023-09-30", "2023-10-31", "2023-12-31",
                    "2023-02-28", "2023-05-31", "2023-08-31", "2023-12-31")),
   prior = c(1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1),
-  company = c("CompanyA", "CompanyB", "CompanyA", "CompanyC", "CompanyD", 
-              "CompanyE", "CompanyF", "CompanyG", "CompanyH", "CompanyI", 
+  company = c("CompanyA", "CompanyB", "CompanyA", "CompanyC", "CompanyD",
+              "CompanyE", "CompanyF", "CompanyG", "CompanyH", "CompanyI",
               "CompanyJ", "CompanyK"),
-  industry = c("Tech", "Retail", "Tech", "Finance", "Tech", "Retail", 
+  industry = c("Tech", "Retail", "Tech", "Finance", "Tech", "Retail",
                "Finance", "Tech", "Healthcare", "Education", "Finance", "Tech")
 )
 

@@ -16,3 +16,5 @@
 ^\.DS_Store$
 ^doc$
 ^Meta$
+^tests/benchmark_optimizations\.R$
+^tests/benchmark_consolidation\.R$

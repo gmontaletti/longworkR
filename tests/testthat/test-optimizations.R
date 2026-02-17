@@ -4,8 +4,7 @@
 # Tests cover:
 # - Numerical equivalence with originals
 # - Edge cases for all helper functions
-# - Performance verification
-# - Memory usage improvements
+# - Numerical accuracy verification
 
 # 1. Setup and test data generation -----
 
@@ -70,7 +69,10 @@ test_that(".convert_types_optimized converts integer to numeric correctly", {
   )
 
   # Apply optimization
-  result <- longworkR:::.convert_types_optimized(test_dt, modify_in_place = FALSE)
+  result <- longworkR:::.convert_types_optimized(
+    test_dt,
+    modify_in_place = FALSE
+  )
 
   # Check that integer columns were converted to numeric
   expect_type(result$int_col1, "double")
@@ -94,7 +96,10 @@ test_that(".convert_types_optimized handles empty data.table", {
     char_col = character(0)
   )
 
-  result <- longworkR:::.convert_types_optimized(empty_dt, modify_in_place = FALSE)
+  result <- longworkR:::.convert_types_optimized(
+    empty_dt,
+    modify_in_place = FALSE
+  )
 
   expect_equal(nrow(result), 0)
   expect_type(result$int_col, "double")
@@ -106,7 +111,10 @@ test_that(".convert_types_optimized preserves original when modify_in_place = FA
   original_dt <- data.table(int_col = 1:5)
   original_class <- class(original_dt$int_col)
 
-  result <- longworkR:::.convert_types_optimized(original_dt, modify_in_place = FALSE)
+  result <- longworkR:::.convert_types_optimized(
+    original_dt,
+    modify_in_place = FALSE
+  )
 
   # Original should be unchanged
   expect_equal(class(original_dt$int_col), original_class)
@@ -124,7 +132,10 @@ test_that(".convert_types_optimized handles data.table with no integer columns",
     date_col = as.Date("2020-01-01") + 0:9
   )
 
-  result <- longworkR:::.convert_types_optimized(test_dt, modify_in_place = FALSE)
+  result <- longworkR:::.convert_types_optimized(
+    test_dt,
+    modify_in_place = FALSE
+  )
 
   # Should return identical structure since no conversion needed
   expect_equal(names(result), names(test_dt))
@@ -137,7 +148,7 @@ test_that(".convert_types_optimized handles data.table with no integer columns",
 test_that(".calculate_weighted_median_optimized calculates correct weighted median", {
   # Simple test case
   values <- c(1, 2, 3, 4, 5)
-  weights <- c(1, 1, 10, 1, 1)  # Weight heavily towards 3
+  weights <- c(1, 1, 10, 1, 1) # Weight heavily towards 3
 
   result <- longworkR:::.calculate_weighted_median_optimized(values, weights)
 
@@ -155,7 +166,10 @@ test_that(".calculate_weighted_median_optimized handles equal weights", {
 })
 
 test_that(".calculate_weighted_median_optimized handles empty input", {
-  result <- longworkR:::.calculate_weighted_median_optimized(numeric(0), numeric(0))
+  result <- longworkR:::.calculate_weighted_median_optimized(
+    numeric(0),
+    numeric(0)
+  )
 
   expect_true(is.na(result))
 })
@@ -164,7 +178,11 @@ test_that(".calculate_weighted_median_optimized handles NA values", {
   values <- c(1, 2, NA, 4, 5)
   weights <- c(1, 1, 1, 1, 1)
 
-  result <- longworkR:::.calculate_weighted_median_optimized(values, weights, na.rm = TRUE)
+  result <- longworkR:::.calculate_weighted_median_optimized(
+    values,
+    weights,
+    na.rm = TRUE
+  )
 
   expect_false(is.na(result))
   expect_equal(result, median(c(1, 2, 4, 5)))
@@ -192,7 +210,7 @@ test_that(".calculate_weighted_median_optimized handles mismatched lengths", {
 test_that(".calculate_weighted_median_optimized handles large weights", {
   # Test case that would cause memory issues with rep() approach
   values <- c(100, 200, 300)
-  weights <- c(1e6, 1e6, 1e6)  # Very large weights
+  weights <- c(1e6, 1e6, 1e6) # Very large weights
 
   # Should not error and should return median
   result <- longworkR:::.calculate_weighted_median_optimized(values, weights)
@@ -265,13 +283,26 @@ test_that(".calculate_mode_optimized handles numeric input", {
 
 test_that(".normalize_transition_matrix_optimized normalizes by row correctly", {
   # Create simple transition matrix
-  mat <- matrix(c(
-    10, 5, 5,
-    2, 8, 0,
-    1, 1, 8
-  ), nrow = 3, byrow = TRUE)
+  mat <- matrix(
+    c(
+      10,
+      5,
+      5,
+      2,
+      8,
+      0,
+      1,
+      1,
+      8
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
 
-  result <- longworkR:::.normalize_transition_matrix_optimized(mat, normalize_by = "row")
+  result <- longworkR:::.normalize_transition_matrix_optimized(
+    mat,
+    normalize_by = "row"
+  )
 
   # Check row sums equal 1
   row_sums <- rowSums(result)
@@ -279,13 +310,26 @@ test_that(".normalize_transition_matrix_optimized normalizes by row correctly", 
 })
 
 test_that(".normalize_transition_matrix_optimized normalizes by column correctly", {
-  mat <- matrix(c(
-    10, 5, 5,
-    2, 8, 0,
-    1, 1, 8
-  ), nrow = 3, byrow = TRUE)
+  mat <- matrix(
+    c(
+      10,
+      5,
+      5,
+      2,
+      8,
+      0,
+      1,
+      1,
+      8
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
 
-  result <- longworkR:::.normalize_transition_matrix_optimized(mat, normalize_by = "column")
+  result <- longworkR:::.normalize_transition_matrix_optimized(
+    mat,
+    normalize_by = "column"
+  )
 
   # Check column sums equal 1
   col_sums <- colSums(result)
@@ -301,13 +345,26 @@ test_that(".normalize_transition_matrix_optimized handles empty matrix", {
 })
 
 test_that(".normalize_transition_matrix_optimized handles zero rows", {
-  mat <- matrix(c(
-    0, 0, 0,
-    2, 8, 0,
-    1, 1, 8
-  ), nrow = 3, byrow = TRUE)
+  mat <- matrix(
+    c(
+      0,
+      0,
+      0,
+      2,
+      8,
+      0,
+      1,
+      1,
+      8
+    ),
+    nrow = 3,
+    byrow = TRUE
+  )
 
-  result <- longworkR:::.normalize_transition_matrix_optimized(mat, normalize_by = "row")
+  result <- longworkR:::.normalize_transition_matrix_optimized(
+    mat,
+    normalize_by = "row"
+  )
 
   # First row should remain 0
   expect_equal(result[1, ], c(0, 0, 0))
@@ -320,7 +377,10 @@ test_that(".normalize_transition_matrix_optimized handles zero rows", {
 test_that(".normalize_transition_matrix_optimized handles single element matrix", {
   mat <- matrix(5, nrow = 1, ncol = 1)
 
-  result <- longworkR:::.normalize_transition_matrix_optimized(mat, normalize_by = "row")
+  result <- longworkR:::.normalize_transition_matrix_optimized(
+    mat,
+    normalize_by = "row"
+  )
 
   expect_equal(result[1, 1], 1)
 })
@@ -328,7 +388,10 @@ test_that(".normalize_transition_matrix_optimized handles single element matrix"
 test_that(".normalize_transition_matrix_optimized preserves matrix dimensions", {
   mat <- matrix(1:12, nrow = 3, ncol = 4)
 
-  result <- longworkR:::.normalize_transition_matrix_optimized(mat, normalize_by = "row")
+  result <- longworkR:::.normalize_transition_matrix_optimized(
+    mat,
+    normalize_by = "row"
+  )
 
   expect_equal(dim(result), dim(mat))
 })
@@ -508,73 +571,7 @@ test_that("analyze_employment_transitions with optimizations produces consistent
   expect_type(result$salary_from_median, "double")
 })
 
-# 9. Performance regression tests (optional) -----
-
-test_that("optimized functions are faster than naive implementations (benchmark)", {
-  skip_if_not(interactive(), "Performance tests only in interactive mode")
-  skip_if_not_installed("microbenchmark")
-
-  library(microbenchmark)
-  library(data.table)
-
-  # Test .calculate_mode_optimized vs base R
-  test_vec <- sample(letters[1:10], 10000, replace = TRUE)
-
-  # Naive mode calculation
-  mode_base <- function(x) {
-    tbl <- table(x)
-    names(tbl)[which.max(tbl)]
-  }
-
-  bench_mode <- microbenchmark(
-    optimized = longworkR:::.calculate_mode_optimized(test_vec),
-    base = mode_base(test_vec),
-    times = 100
-  )
-
-  # Optimized should be faster
-  median_times <- summary(bench_mode)$median
-  expect_lt(median_times[1], median_times[2])
-
-  message("Mode calculation speedup: ",
-          round(median_times[2] / median_times[1], 2), "x")
-})
-
-test_that(".process_chain_value vectorized approach is faster (benchmark)", {
-  skip_if_not(interactive(), "Performance tests only in interactive mode")
-  skip_if_not_installed("microbenchmark")
-
-  library(microbenchmark)
-
-  # Create test data with chains
-  test_chains <- replicate(10000, {
-    n_parts <- sample(1:5, 1)
-    paste(sample(LETTERS, n_parts, replace = TRUE), collapse = "->")
-  })
-
-  # Naive implementation with sapply + strsplit
-  process_chain_naive <- function(values, eval_chain) {
-    if (eval_chain == "last") {
-      sapply(strsplit(values, "->"), function(x) trimws(x[length(x)]))
-    } else {
-      sapply(strsplit(values, "->"), function(x) trimws(x[1]))
-    }
-  }
-
-  bench_chain <- microbenchmark(
-    optimized = longworkR:::.process_chain_value(test_chains, "last"),
-    naive = process_chain_naive(test_chains, "last"),
-    times = 50
-  )
-
-  median_times <- summary(bench_chain)$median
-  expect_lt(median_times[1], median_times[2])
-
-  message("Chain processing speedup: ",
-          round(median_times[2] / median_times[1], 2), "x")
-})
-
-# 10. Edge case tests for full workflow -----
+# 9. Edge case tests for full workflow -----
 
 test_that("analyze_employment_transitions handles single person with single contract", {
   library(data.table)
@@ -637,10 +634,10 @@ test_that("analyze_employment_transitions handles large dataset efficiently", {
 
   # Generate large dataset
   set.seed(456)
-  large_data <- generate_test_data(n_persons = 1000, n_contracts_per_person = 10)
-
-  # Should complete without error and in reasonable time
-  start_time <- Sys.time()
+  large_data <- generate_test_data(
+    n_persons = 1000,
+    n_contracts_per_person = 10
+  )
 
   result <- suppressMessages(
     analyze_employment_transitions(
@@ -651,72 +648,11 @@ test_that("analyze_employment_transitions handles large dataset efficiently", {
     )
   )
 
-  elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-
   expect_s3_class(result, "data.table")
   expect_true(nrow(result) > 0)
-
-  # Should complete in reasonable time (< 10 seconds for 1000 persons)
-  expect_lt(elapsed, 10)
-
-  message("Large dataset (1000 persons, 10 contracts each) processed in ",
-          round(elapsed, 2), " seconds")
 })
 
-# 11. Memory efficiency tests -----
-
-test_that(".calculate_weighted_median_optimized uses less memory than rep() approach", {
-  skip_on_cran()
-  skip_if_not_installed("profmem")
-
-  library(profmem)
-
-  # Test with large weights that would cause memory issues with rep()
-  values <- runif(100)
-  weights <- rep(10000, 100)  # Would create 1M element vector with rep()
-
-  # Measure memory allocation
-  mem_usage <- profmem({
-    result <- longworkR:::.calculate_weighted_median_optimized(values, weights)
-  })
-
-  # Check that memory usage is reasonable (< 1MB for this operation)
-  total_bytes <- sum(mem_usage$bytes, na.rm = TRUE)
-  expect_lt(total_bytes, 1e6)
-
-  message("Weighted median memory usage: ", round(total_bytes / 1024, 2), " KB")
-})
-
-test_that(".convert_types_optimized processes data efficiently", {
-  skip_on_cran()
-
-  library(data.table)
-
-  # Create large data.table with many integer columns
-  n_rows <- 10000
-  n_cols <- 50
-
-  test_data <- as.data.table(
-    lapply(1:n_cols, function(i) sample(1:100, n_rows, replace = TRUE))
-  )
-  setnames(test_data, paste0("col_", 1:n_cols))
-
-  # Should process efficiently
-  start_time <- Sys.time()
-  result <- longworkR:::.convert_types_optimized(test_data, modify_in_place = FALSE)
-  elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-
-  # Should complete quickly
-  expect_lt(elapsed, 1)
-
-  # All columns should be numeric
-  expect_true(all(sapply(result, is.numeric)))
-
-  message("Type conversion for ", n_rows, " rows x ", n_cols,
-          " columns: ", round(elapsed * 1000, 2), " ms")
-})
-
-# 12. Numerical accuracy tests -----
+# 10. Numerical accuracy tests -----
 
 test_that("optimizations produce numerically equivalent results to naive implementations", {
   library(data.table)
@@ -733,7 +669,10 @@ test_that("optimizations produce numerically equivalent results to naive impleme
     median(expanded)
   }
 
-  result_optimized <- longworkR:::.calculate_weighted_median_optimized(values, weights)
+  result_optimized <- longworkR:::.calculate_weighted_median_optimized(
+    values,
+    weights
+  )
   result_naive <- naive_weighted_median(values, weights)
 
   # Should be nearly identical (allowing for floating point tolerance)
@@ -743,13 +682,15 @@ test_that("optimizations produce numerically equivalent results to naive impleme
 test_that("matrix normalization produces correct probability distributions", {
   # Create transition matrix
   mat <- matrix(
-    c(100, 50, 30,
-      20, 150, 40,
-      10, 20, 200),
-    nrow = 3, byrow = TRUE
+    c(100, 50, 30, 20, 150, 40, 10, 20, 200),
+    nrow = 3,
+    byrow = TRUE
   )
 
-  result <- longworkR:::.normalize_transition_matrix_optimized(mat, normalize_by = "row")
+  result <- longworkR:::.normalize_transition_matrix_optimized(
+    mat,
+    normalize_by = "row"
+  )
 
   # Each row should sum to exactly 1.0
   row_sums <- rowSums(result)
@@ -760,12 +701,12 @@ test_that("matrix normalization produces correct probability distributions", {
 
   # Check that proportions are preserved
   # First row: 100/180, 50/180, 30/180
-  expect_equal(result[1, 1], 100/180, tolerance = 1e-15)
-  expect_equal(result[1, 2], 50/180, tolerance = 1e-15)
-  expect_equal(result[1, 3], 30/180, tolerance = 1e-15)
+  expect_equal(result[1, 1], 100 / 180, tolerance = 1e-15)
+  expect_equal(result[1, 2], 50 / 180, tolerance = 1e-15)
+  expect_equal(result[1, 3], 30 / 180, tolerance = 1e-15)
 })
 
-# 13. Test %chin% optimization usage -----
+# 11. Test %chin% optimization usage -----
 
 test_that("analyze_employment_transitions uses %chin% for character filtering", {
   # This is more of a code inspection test
@@ -793,16 +734,22 @@ test_that("analyze_employment_transitions uses %chin% for character filtering", 
   expect_true(all(result$to %in% valid_types))
 })
 
-# 14. Test with real sample.rds data (if available) -----
+# 12. Test with real sample.rds data (if available) -----
 
 test_that("optimizations work with real sample.rds data", {
-  skip_if_not(file.exists("/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"),
-              "sample.rds not found")
+  skip_if_not(
+    file.exists(
+      "/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"
+    ),
+    "sample.rds not found"
+  )
 
   library(data.table)
 
   # Load real sample data
-  sample_data <- readRDS("/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds")
+  sample_data <- readRDS(
+    "/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"
+  )
 
   # Take subset for faster testing
   sample_subset <- sample_data[cf %in% unique(sample_data$cf)[1:100]]
@@ -822,10 +769,16 @@ test_that("optimizations work with real sample.rds data", {
   expect_true(nrow(result) > 0)
 
   # Verify output structure
-  expect_true(all(c("from", "to", "weight", "transition_duration") %in% names(result)))
+  expect_true(all(
+    c("from", "to", "weight", "transition_duration") %in% names(result)
+  ))
 
   # Check that statistics were calculated
   if ("prior" %in% names(sample_subset)) {
-    expect_true("prior_from_median" %in% names(result) || "prior_from_mode" %in% names(result))
+    expect_true(
+      "prior_from_median" %in%
+        names(result) ||
+        "prior_from_mode" %in% names(result)
+    )
   }
 })

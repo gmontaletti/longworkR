@@ -186,7 +186,7 @@ global_matrices <- create_monthly_transition_matrices(
 )
 
 # All matrices have identical dimensions in global mode
-identical(dim(global_matrices$matrices$jan2022), 
+identical(dim(global_matrices$matrices$jan2022),
           dim(global_matrices$matrices$feb2022))  # TRUE
 
 # Sparse matrices for large datasets
@@ -200,7 +200,7 @@ sparse_matrices <- create_monthly_transition_matrices(
 # Quarterly matrices with probability normalization
 quarterly_prob <- create_monthly_transition_matrices(
   sample_data,
-  transition_variable = "COD_TIPOLOGIA_CONTRATTUALE", 
+  transition_variable = "COD_TIPOLOGIA_CONTRATTUALE",
   time_format = "quarterly",
   matrix_type = "probability",
   normalize_by = "row"
