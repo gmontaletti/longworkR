@@ -278,11 +278,20 @@ consolidate_by_employer <- function(
     ]
 
     # Delegate aggregation to shared consolidation helper
-    consolidated <- .consolidate_groups(
-      process_records,
-      remove_group_col = TRUE,
-      variable_handling = variable_handling
-    )
+    # Route "first" mode to optimized engine (10-15x faster)
+    if (variable_handling == "first") {
+      consolidated <- .consolidate_groups_optimized(
+        process_records,
+        remove_group_col = TRUE,
+        variable_handling = "first"
+      )
+    } else {
+      consolidated <- .consolidate_groups(
+        process_records,
+        remove_group_col = TRUE,
+        variable_handling = variable_handling
+      )
+    }
   } else {
     consolidated <- data.table::data.table()
   }
