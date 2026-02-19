@@ -1,3 +1,11 @@
+# longworkR 0.8.1
+
+## Enhancements
+
+- **Route 'first' mode to optimized consolidation engine**: The `consolidate_by_employer()` and `consolidate_adjacent()` functions now route the 'first' variable handling mode to the optimized consolidation engine, matching the behavior of `consolidate_short_gaps()`. This optimization delivers 10-15x faster consolidation on large datasets by avoiding unnecessary aggregation computations and leveraging efficient C++ operations.
+
+---
+
 # longworkR 0.7.0
 
 ## BREAKING CHANGES ⚠️
