@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">longworkR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,14 @@
       <small>Source: <a href="https://github.com/gmontaletti/longworkR/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8.1" id="longworkr-081">longworkR 0.8.1<a class="anchor" aria-label="anchor" href="#longworkr-081"></a></h2>
+<div class="section level3">
+<h3 id="enhancements-0-8-1">Enhancements<a class="anchor" aria-label="anchor" href="#enhancements-0-8-1"></a></h3>
+<ul><li>
+<strong>Route ‘first’ mode to optimized consolidation engine</strong>: The <code><a href="../reference/consolidate_by_employer.html">consolidate_by_employer()</a></code> and <code><a href="../reference/consolidate_adjacent.html">consolidate_adjacent()</a></code> functions now route the ‘first’ variable handling mode to the optimized consolidation engine, matching the behavior of <code><a href="../reference/consolidate_short_gaps.html">consolidate_short_gaps()</a></code>. This optimization delivers 10-15x faster consolidation on large datasets by avoiding unnecessary aggregation computations and leveraging efficient C++ operations.</li>
+</ul><hr></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.0" id="longworkr-070">longworkR 0.7.0<a class="anchor" aria-label="anchor" href="#longworkr-070"></a></h2>
 <div class="section level3">

@@ -11,13 +11,13 @@ Source:
 [`DESCRIPTION`](https://github.com/gmontaletti/longworkR/blob/main/DESCRIPTION)
 
 Montaletti G (2026). *longworkR: Longitudinal Employment Analytics for
-vecshift Data*. R package version 0.8.0,
+vecshift Data*. R package version 0.8.1,
 <https://github.com/gmontaletti/longworkR>.
 
     @Manual{,
       title = {longworkR: Longitudinal Employment Analytics for vecshift Data},
       author = {Giampaolo Montaletti},
       year = {2026},
-      note = {R package version 0.8.0},
+      note = {R package version 0.8.1},
       url = {https://github.com/gmontaletti/longworkR},
     }
