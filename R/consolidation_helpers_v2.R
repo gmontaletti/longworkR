@@ -118,26 +118,26 @@
   )
   group_sizes <- grp[[3L]]
 
-  # 4. All-single-record fast path -----
+  # 4. All-single-record fast path (works in-place; callers pass -----
+  #    disposable subsets so no copy needed)
   if (max(group_sizes) == 1L) {
-    result <- data.table::copy(data)
-    result[, n_periods_consolidated := 1L]
+    data[, n_periods_consolidated := 1L]
     if (durata_is_integer) {
-      result[, durata := as.integer(fine - inizio + 1L)]
+      data[, durata := as.integer(fine - inizio + 1L)]
     } else {
-      result[, durata := as.numeric(fine - inizio + 1)]
+      data[, durata := as.numeric(fine - inizio + 1)]
     }
 
     if (remove_group_col) {
-      result[, consolidation_group := NULL]
+      data[, consolidation_group := NULL]
     }
 
-    original_data_cols <- intersect(all_cols, names(result))
+    original_data_cols <- intersect(all_cols, names(data))
     original_data_cols <- setdiff(original_data_cols, "consolidation_group")
-    new_metric_cols <- setdiff(names(result), all_cols)
-    data.table::setcolorder(result, c(original_data_cols, new_metric_cols))
-    data.table::setindex(result, cf)
-    return(result)
+    new_metric_cols <- setdiff(names(data), all_cols)
+    data.table::setcolorder(data, c(original_data_cols, new_metric_cols))
+    data.table::setindex(data, cf)
+    return(data)
   }
 
   # 5. Core aggregation -----

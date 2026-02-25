@@ -182,44 +182,52 @@ consolidate_employer_gaps <- function(
     return(result)
   }
 
-  # 3. Work on single copy, validate types -----
-  dt <- data.table::copy(data)
+  # 3. In-place split to avoid full copy of input -----
+  needs_arco <- !"arco" %in% names(data)
 
-  if (!inherits(dt$inizio, "Date")) {
-    dt[, inizio := as.Date(inizio)]
-  }
-  if (!inherits(dt$fine, "Date")) {
-    dt[, fine := as.Date(fine)]
-  }
-  if (!"arco" %in% names(dt)) {
-    dt[, arco := 1L]
-  }
+  # Compute per-cf counts temporarily on input, then clean up
+  data[, .n_temp__ := .N, by = cf]
+  skip_mask_a <- data$.n_temp__ == 1L
+  data[, .n_temp__ := NULL]
 
-  # 4. PHASE A: Employer consolidation -----
-  # 4a. Sort by person, employer, start date
-  data.table::setkeyv(dt, c("cf", employer_var, "inizio"))
-
-  # 4b. Single-period worker bypass
-  dt[, .n_periods_temp := .N, by = cf]
-
-  skip_mask_a <- dt$.n_periods_temp == 1L
+  # Subset into independent allocations (no full copy of input)
   skip_records_a <- if (any(skip_mask_a)) {
-    dt[skip_mask_a]
+    data[skip_mask_a]
   } else {
     data.table::data.table()
   }
   process_records_a <- if (any(!skip_mask_a)) {
-    dt[!skip_mask_a]
+    data[!skip_mask_a]
   } else {
     data.table::data.table()
   }
 
+  # Prepare subsets without modifying original data
   if (nrow(skip_records_a) > 0) {
-    skip_records_a[, .n_periods_temp := NULL]
+    if (needs_arco) {
+      skip_records_a[, arco := 1L]
+    }
+    if (!inherits(skip_records_a$inizio, "Date")) {
+      skip_records_a[, inizio := as.Date(inizio)]
+    }
+    if (!inherits(skip_records_a$fine, "Date")) {
+      skip_records_a[, fine := as.Date(fine)]
+    }
   }
   if (nrow(process_records_a) > 0) {
-    process_records_a[, .n_periods_temp := NULL]
+    if (needs_arco) {
+      process_records_a[, arco := 1L]
+    }
+    if (!inherits(process_records_a$inizio, "Date")) {
+      process_records_a[, inizio := as.Date(inizio)]
+    }
+    if (!inherits(process_records_a$fine, "Date")) {
+      process_records_a[, fine := as.Date(fine)]
+    }
+    data.table::setkeyv(process_records_a, c("cf", employer_var, "inizio"))
   }
+
+  # 4. PHASE A: Employer consolidation -----
 
   # 4c-4g. Employer grouping and consolidation
   if (nrow(process_records_a) > 0) {

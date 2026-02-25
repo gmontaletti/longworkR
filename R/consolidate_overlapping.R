@@ -155,43 +155,35 @@ consolidate_overlapping <- function(
     return(data)
   }
 
-  # 3. Copy data to avoid modifying original
-  dt <- data.table::copy(data)
+  # 3. In-place split to avoid full copy of input -----
+  needs_arco <- !"arco" %in% names(data)
 
-  # 4. Set key for performance
-  data.table::setkey(dt, cf, over_id)
+  # Compute per-cf counts temporarily on input, then clean up
+  data[, .n_temp__ := .N, by = cf]
+  skip_mask <- data$.n_temp__ == 1L & data$over_id == 0L
+  data[, .n_temp__ := NULL]
 
-  # 5. Add arco if missing (employment indicator)
-  if (!"arco" %in% names(dt)) {
-    dt[, arco := ifelse(over_id > 0, 1, 0)]
-  }
-
-  # ===== PHASE 4 OPTIMIZATION: Single-Period Worker Split =====
-  # Workers with only 1 period AND over_id == 0 cannot have overlapping periods
-  # Split them out to skip expensive consolidation logic
-
-  dt[, .n_periods_temp := .N, by = cf]
-
-  # Skip: single-period workers with over_id == 0 (no overlapping possible)
-  # Process: multi-period workers OR single-period with over_id > 0
-  skip_mask <- dt$.n_periods_temp == 1L & dt$over_id == 0L
+  # Subset into independent allocations (no full copy of input)
   skip_records <- if (any(skip_mask)) {
-    dt[skip_mask]
+    data[skip_mask]
   } else {
     data.table::data.table()
   }
   process_records <- if (any(!skip_mask)) {
-    dt[!skip_mask]
+    data[!skip_mask]
   } else {
     data.table::data.table()
   }
 
-  # Clean up temporary column from both splits
-  if (nrow(skip_records) > 0) {
-    skip_records[, .n_periods_temp := NULL]
+  # Prepare subsets without modifying original data
+  if (nrow(skip_records) > 0 && needs_arco) {
+    skip_records[, arco := ifelse(over_id > 0, 1, 0)]
   }
   if (nrow(process_records) > 0) {
-    process_records[, .n_periods_temp := NULL]
+    data.table::setkey(process_records, cf, over_id)
+    if (needs_arco) {
+      process_records[, arco := ifelse(over_id > 0, 1, 0)]
+    }
   }
 
   # Process records that need consolidation checking

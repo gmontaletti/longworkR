@@ -228,50 +228,49 @@ consolidate_short_gaps <- function(
     return(result)
   }
 
-  # Work on copy to avoid modifying original
-  dt <- data.table::copy(data)
+  # In-place split to avoid full copy of input -----
+  needs_arco <- !"arco" %in% names(data)
 
-  # Set key for efficient operations
-  data.table::setkey(dt, cf, inizio, fine)
+  # Compute per-cf counts temporarily on input, then clean up
+  data[, .n_temp__ := .N, by = cf]
+  skip_mask <- data$.n_temp__ == 1L
+  data[, .n_temp__ := NULL]
 
-  # Add arco column if missing (assume employment)
-  if (!"arco" %in% names(dt)) {
-    dt[, arco := 1L]
-  }
-
-  # Ensure date columns are Date type
-  if (!inherits(dt$inizio, "Date")) {
-    dt[, inizio := as.Date(inizio)]
-  }
-  if (!inherits(dt$fine, "Date")) {
-    dt[, fine := as.Date(fine)]
-  }
-
-  # ===== PHASE 4 OPTIMIZATION: Single-Period Worker Split =====
-  # Workers with only 1 period cannot have gaps to bridge
-  # Split them out to skip expensive consolidation logic
-
-  dt[, .n_periods_temp := .N, by = cf]
-
-  # Skip: single-period workers (no gaps to bridge)
-  skip_mask <- dt$.n_periods_temp == 1L
+  # Subset into independent allocations (no full copy of input)
   skip_records <- if (any(skip_mask)) {
-    dt[skip_mask]
+    data[skip_mask]
   } else {
     data.table::data.table()
   }
   process_records <- if (any(!skip_mask)) {
-    dt[!skip_mask]
+    data[!skip_mask]
   } else {
     data.table::data.table()
   }
 
-  # Clean up temporary column from both splits
+  # Prepare subsets without modifying original data
   if (nrow(skip_records) > 0) {
-    skip_records[, .n_periods_temp := NULL]
+    if (needs_arco) {
+      skip_records[, arco := 1L]
+    }
+    if (!inherits(skip_records$inizio, "Date")) {
+      skip_records[, inizio := as.Date(inizio)]
+    }
+    if (!inherits(skip_records$fine, "Date")) {
+      skip_records[, fine := as.Date(fine)]
+    }
   }
   if (nrow(process_records) > 0) {
-    process_records[, .n_periods_temp := NULL]
+    if (needs_arco) {
+      process_records[, arco := 1L]
+    }
+    if (!inherits(process_records$inizio, "Date")) {
+      process_records[, inizio := as.Date(inizio)]
+    }
+    if (!inherits(process_records$fine, "Date")) {
+      process_records[, fine := as.Date(fine)]
+    }
+    data.table::setkey(process_records, cf, inizio, fine)
   }
 
   # Process multi-period workers only
