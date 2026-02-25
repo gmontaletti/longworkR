@@ -37,6 +37,7 @@ reference:
       - consolidate_adjacent
       - consolidate_short_gaps
       - consolidate_by_employer
+      - consolidate_employer_gaps
       - mark_employer_consolidation
       - summarize_consolidation
       - extract_consolidation_metrics
