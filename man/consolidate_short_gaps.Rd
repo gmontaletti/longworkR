@@ -4,7 +4,12 @@
 \alias{consolidate_short_gaps}
 \title{Consolidate Employment Periods with Short Gaps}
 \usage{
-consolidate_short_gaps(data, max_gap_days = 8, variable_handling = "first")
+consolidate_short_gaps(
+  data,
+  max_gap_days = 8,
+  variable_handling = "first",
+  engine = "v2"
+)
 }
 \arguments{
 \item{data}{data.table with employment records. Must contain columns:
@@ -22,6 +27,10 @@ Common values:
 
 \item{variable_handling}{Character string specifying aggregation strategy for variables:
 \code{"first"} takes first non-NA value (default), \code{"weight"} uses weighted mean/mode}
+
+\item{engine}{Character string specifying the consolidation engine: \code{"v2"}
+(default) uses the collapse-native engine for maximum performance, \code{"v1"}
+uses the original data.table J-expression engine for backward compatibility.}
 }
 \value{
 data.table with periods consolidated across short gaps. Includes all

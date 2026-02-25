@@ -11,6 +11,9 @@
 #'   is used if present to identify employment vs unemployment periods.
 #' @param variable_handling Character string specifying aggregation strategy for variables:
 #'   \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value
+#' @param engine Character string specifying the consolidation engine: \code{"v2"}
+#'   (default) uses the collapse-native engine for maximum performance, \code{"v1"}
+#'   uses the original data.table J-expression engine for backward compatibility.
 #'
 #' @return data.table with adjacent employment periods consolidated. Includes all
 #'   original columns plus \code{n_periods_consolidated} indicating how many
@@ -156,7 +159,11 @@
 #' \code{\link{consolidation_helpers}} for internal aggregation functions
 #'
 #' @export
-consolidate_adjacent <- function(data, variable_handling = "weight") {
+consolidate_adjacent <- function(
+  data,
+  variable_handling = "weight",
+  engine = "v2"
+) {
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
@@ -166,6 +173,8 @@ consolidate_adjacent <- function(data, variable_handling = "weight") {
   if (!variable_handling %in% c("weight", "first")) {
     stop("variable_handling must be 'weight' or 'first'")
   }
+
+  engine <- match.arg(engine, c("v2", "v1"))
 
   # Check required columns
   required <- c("cf", "inizio", "fine", "durata")
@@ -262,8 +271,7 @@ consolidate_adjacent <- function(data, variable_handling = "weight") {
 
     # Create consolidation group IDs
     process_records[,
-      consolidation_group := paste(cf, cumsum(new_group), sep = "_"),
-      by = cf
+      consolidation_group := data.table::rleid(cf, cumsum(new_group))
     ]
 
     # Clean up temporary columns
@@ -272,8 +280,13 @@ consolidate_adjacent <- function(data, variable_handling = "weight") {
     ]
 
     # Call shared consolidation helper
-    # Route "first" mode to optimized engine (10-15x faster)
-    if (variable_handling == "first") {
+    if (engine == "v2") {
+      consolidated <- .consolidate_groups_v2(
+        process_records,
+        remove_group_col = TRUE,
+        variable_handling = variable_handling
+      )
+    } else if (variable_handling == "first") {
       consolidated <- .consolidate_groups_optimized(
         process_records,
         remove_group_col = TRUE,

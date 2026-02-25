@@ -11,6 +11,9 @@
 #'   `arco` (employment indicator).
 #' @param variable_handling Character string specifying aggregation strategy for variables:
 #'   \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value
+#' @param engine Character string specifying the consolidation engine: \code{"v2"}
+#'   (default) uses the collapse-native engine for maximum performance, \code{"v1"}
+#'   uses the original data.table J-expression engine for backward compatibility.
 #'
 #' @return A data.table with consolidated employment periods, where:
 #'   - Periods with the same `over_id > 0` are merged into single periods
@@ -111,7 +114,11 @@
 #' \code{\link{consolidate_short_gaps}} to bridge short unemployment gaps
 #'
 #' @export
-consolidate_overlapping <- function(data, variable_handling = "weight") {
+consolidate_overlapping <- function(
+  data,
+  variable_handling = "weight",
+  engine = "v2"
+) {
   # 1. Input validation
   if (!data.table::is.data.table(data)) {
     stop(
@@ -123,6 +130,8 @@ consolidate_overlapping <- function(data, variable_handling = "weight") {
   if (!variable_handling %in% c("weight", "first")) {
     stop("variable_handling must be 'weight' or 'first'")
   }
+
+  engine <- match.arg(engine, c("v2", "v1"))
 
   required_cols <- c("cf", "inizio", "fine", "durata")
   missing_cols <- setdiff(required_cols, names(data))
@@ -190,25 +199,38 @@ consolidate_overlapping <- function(data, variable_handling = "weight") {
     # 6. Create consolidation_group
     # Employment with over_id > 0: group by cf and over_id
     # Others: unique group per record (no consolidation)
-    process_records[,
-      consolidation_group := {
-        if (over_id[1] > 0) {
-          # All records in this group get the same consolidation_group
-          paste(cf[1], over_id[1], sep = "_")
-        } else {
-          # Each record gets unique group (no consolidation)
-          paste(cf, "single", seq_len(.N), sep = "_")
-        }
-      },
-      by = .(cf, over_id)
-    ]
+    # First assign .GRP per (cf, over_id) combo
+    process_records[, consolidation_group := .GRP, by = .(cf, over_id)]
+    # Then make non-overlapping records unique (over_id <= 0 should not be consolidated)
+    non_overlap_idx <- which(process_records$over_id <= 0L)
+    if (length(non_overlap_idx) > 0L) {
+      max_grp <- max(process_records$consolidation_group)
+      process_records[
+        non_overlap_idx,
+        consolidation_group := max_grp + seq_len(.N)
+      ]
+    }
 
     # 7. Call shared consolidation helper
-    consolidated <- .consolidate_groups(
-      process_records,
-      remove_group_col = TRUE,
-      variable_handling = variable_handling
-    )
+    if (engine == "v2") {
+      consolidated <- .consolidate_groups_v2(
+        process_records,
+        remove_group_col = TRUE,
+        variable_handling = variable_handling
+      )
+    } else if (variable_handling == "first") {
+      consolidated <- .consolidate_groups_optimized(
+        process_records,
+        remove_group_col = TRUE,
+        variable_handling = "first"
+      )
+    } else {
+      consolidated <- .consolidate_groups(
+        process_records,
+        remove_group_col = TRUE,
+        variable_handling = variable_handling
+      )
+    }
   } else {
     # No records to process
     consolidated <- data.table::data.table()

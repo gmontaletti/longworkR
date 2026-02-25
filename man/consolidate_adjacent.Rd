@@ -4,7 +4,7 @@
 \alias{consolidate_adjacent}
 \title{Consolidate Adjacent Employment Periods}
 \usage{
-consolidate_adjacent(data, variable_handling = "weight")
+consolidate_adjacent(data, variable_handling = "weight", engine = "v2")
 }
 \arguments{
 \item{data}{data.table with employment records. Must contain columns:
@@ -13,6 +13,10 @@ is used if present to identify employment vs unemployment periods.}
 
 \item{variable_handling}{Character string specifying aggregation strategy for variables:
 \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value}
+
+\item{engine}{Character string specifying the consolidation engine: \code{"v2"}
+(default) uses the collapse-native engine for maximum performance, \code{"v1"}
+uses the original data.table J-expression engine for backward compatibility.}
 }
 \value{
 data.table with adjacent employment periods consolidated. Includes all

@@ -8,7 +8,8 @@ consolidate_by_employer(
   data,
   employer_var,
   max_gap_days = 8,
-  variable_handling = "weight"
+  variable_handling = "weight",
+  engine = "v2"
 )
 }
 \arguments{
@@ -25,6 +26,10 @@ Must be non-negative.}
 
 \item{variable_handling}{Character string specifying aggregation strategy for variables:
 \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value}
+
+\item{engine}{Character string specifying the consolidation engine: \code{"v2"}
+(default) uses the collapse-native engine for maximum performance, \code{"v1"}
+uses the original data.table J-expression engine for backward compatibility.}
 }
 \value{
 data.table with employer-consolidated employment periods. Includes all

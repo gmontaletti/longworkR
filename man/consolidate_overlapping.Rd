@@ -4,7 +4,7 @@
 \alias{consolidate_overlapping}
 \title{Consolidate Overlapping Employment Periods}
 \usage{
-consolidate_overlapping(data, variable_handling = "weight")
+consolidate_overlapping(data, variable_handling = "weight", engine = "v2")
 }
 \arguments{
 \item{data}{A data.table containing employment periods processed by vecshift,
@@ -14,6 +14,10 @@ with columns: \code{cf} (person ID), \code{inizio} (start date), \code{fine} (en
 
 \item{variable_handling}{Character string specifying aggregation strategy for variables:
 \code{"weight"} uses weighted mean/mode (default), \code{"first"} takes first non-NA value}
+
+\item{engine}{Character string specifying the consolidation engine: \code{"v2"}
+(default) uses the collapse-native engine for maximum performance, \code{"v1"}
+uses the original data.table J-expression engine for backward compatibility.}
 }
 \value{
 A data.table with consolidated employment periods, where:

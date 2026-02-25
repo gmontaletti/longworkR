@@ -18,6 +18,9 @@
 #'   }
 #' @param variable_handling Character string specifying aggregation strategy for variables:
 #'   \code{"first"} takes first non-NA value (default), \code{"weight"} uses weighted mean/mode
+#' @param engine Character string specifying the consolidation engine: \code{"v2"}
+#'   (default) uses the collapse-native engine for maximum performance, \code{"v1"}
+#'   uses the original data.table J-expression engine for backward compatibility.
 #'
 #' @return data.table with periods consolidated across short gaps. Includes all
 #'   original columns plus:
@@ -187,7 +190,8 @@
 consolidate_short_gaps <- function(
   data,
   max_gap_days = 8,
-  variable_handling = "first"
+  variable_handling = "first",
+  engine = "v2"
 ) {
   # Input validation
   if (!inherits(data, "data.table")) {
@@ -203,6 +207,8 @@ consolidate_short_gaps <- function(
   if (!variable_handling %in% c("weight", "first")) {
     stop("variable_handling must be 'weight' or 'first'")
   }
+
+  engine <- match.arg(engine, c("v2", "v1"))
 
   # Check required columns
   required <- c("cf", "inizio", "fine", "durata")
@@ -306,8 +312,7 @@ consolidate_short_gaps <- function(
 
     # Create consolidation group IDs
     process_records[,
-      consolidation_group := paste(cf, cumsum(new_group), sep = "_"),
-      by = cf
+      consolidation_group := data.table::rleid(cf, cumsum(new_group))
     ]
 
     # Calculate non_working_days per group BEFORE consolidation
@@ -336,12 +341,26 @@ consolidate_short_gaps <- function(
       ) := NULL
     ]
 
-    # Call optimized consolidation helper (Phase 5: 10-15x faster for "first" mode)
-    consolidated <- .consolidate_groups_optimized(
-      process_records,
-      remove_group_col = FALSE,
-      variable_handling = variable_handling
-    )
+    # Call consolidation helper with engine routing
+    if (engine == "v2") {
+      consolidated <- .consolidate_groups_v2(
+        process_records,
+        remove_group_col = FALSE,
+        variable_handling = variable_handling
+      )
+    } else if (variable_handling == "first") {
+      consolidated <- .consolidate_groups_optimized(
+        process_records,
+        remove_group_col = FALSE,
+        variable_handling = variable_handling
+      )
+    } else {
+      consolidated <- .consolidate_groups(
+        process_records,
+        remove_group_col = FALSE,
+        variable_handling = variable_handling
+      )
+    }
 
     # Merge non_working_days back to result
     consolidated <- merge(

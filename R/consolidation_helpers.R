@@ -77,8 +77,11 @@ NULL
 #'
 #' @keywords internal
 #' @noRd
-.consolidate_groups <- function(data, remove_group_col = TRUE, variable_handling = "weight") {
-
+.consolidate_groups <- function(
+  data,
+  remove_group_col = TRUE,
+  variable_handling = "weight"
+) {
   # OPTIMIZED VERSION - Phase 3 Performance Optimization
   # Achieves 9x speedup via pre-aggregation strategy for weighted mode
   # Key optimization: Replace per-group complex logic with pre-aggregation
@@ -105,264 +108,334 @@ NULL
   # Store original column classes for type restoration
   all_cols <- names(data)
   exclude_cols <- c("cf", "consolidation_group", "inizio", "fine", "durata")
-  original_classes <- sapply(all_cols, function(col) class(data[[col]]), simplify = FALSE)
+  original_classes <- sapply(
+    all_cols,
+    function(col) class(data[[col]]),
+    simplify = FALSE
+  )
 
   # Vectorized consolidation with type-aware aggregation
-  consolidated <- data[, {
-    # Core temporal metrics
-    min_inizio <- min(inizio, na.rm = TRUE)
-    max_fine <- max(fine, na.rm = TRUE)
-    total_elapsed_days <- as.numeric(max_fine - min_inizio + 1)
-    n_periods <- .N
+  consolidated <- data[,
+    {
+      # Core temporal metrics
+      min_inizio <- min(inizio, na.rm = TRUE)
+      max_fine <- max(fine, na.rm = TRUE)
+      total_elapsed_days <- as.numeric(max_fine - min_inizio + 1)
+      n_periods <- .N
 
-    # Identify other columns to aggregate
-    other_cols <- setdiff(all_cols, c("inizio", "fine", "durata", "cf", "over_id", "arco", "consolidation_group"))
+      # Identify other columns to aggregate
+      other_cols <- setdiff(
+        all_cols,
+        c(
+          "inizio",
+          "fine",
+          "durata",
+          "cf",
+          "over_id",
+          "arco",
+          "consolidation_group",
+          "n_periods_consolidated",
+          "non_working_days"
+        )
+      )
 
-    # Build core result with explicit types
-    result <- list(
-      inizio = structure(min_inizio, class = c("IDate", "Date")),
-      fine = structure(max_fine, class = c("IDate", "Date")),
-      durata = as.numeric(total_elapsed_days),
-      n_periods_consolidated = as.integer(n_periods)
-    )
+      # Build core result with explicit types
+      result <- list(
+        inizio = structure(min_inizio, class = c("IDate", "Date")),
+        fine = structure(max_fine, class = c("IDate", "Date")),
+        durata = as.numeric(total_elapsed_days),
+        n_periods_consolidated = as.integer(n_periods)
+      )
 
-    # Handle arco column
-    if ("arco" %in% names(.SD)) {
-      result[["arco"]] <- as.numeric(max(arco, na.rm = TRUE))
-    }
-
-    # Handle over_id column with optimized logic
-    if ("over_id" %in% all_cols) {
-      over_id_vals <- over_id[!is.na(over_id) & over_id > 0]
-      orig_class <- original_classes[["over_id"]]
-
-      if (length(over_id_vals) > 0) {
-        result[["over_id"]] <- if (!is.null(orig_class) && "integer" %in% orig_class) {
-          as.integer(over_id_vals[1L])
-        } else {
-          as.numeric(over_id_vals[1L])
-        }
-      } else {
-        result[["over_id"]] <- if (!is.null(orig_class) && "integer" %in% orig_class) {
-          if (is.na(over_id[1L])) NA_integer_ else as.integer(over_id[1L])
-        } else {
-          if (is.na(over_id[1L])) NA_real_ else as.numeric(over_id[1L])
-        }
+      # Handle arco column
+      if ("arco" %in% names(.SD)) {
+        result[["arco"]] <- as.numeric(max(arco, na.rm = TRUE))
       }
-    }
 
-    # Aggregate remaining columns by type
-    if (length(other_cols) > 0) {
-      # Get all column data at once
-      col_data <- .SD[, other_cols, with = FALSE]
+      # Handle over_id column with optimized logic
+      if ("over_id" %in% all_cols) {
+        over_id_vals <- over_id[!is.na(over_id) & over_id > 0]
+        orig_class <- original_classes[["over_id"]]
 
-      # Identify column types for batch processing
-      numeric_cols <- other_cols[sapply(col_data, is.numeric)]
-      character_cols <- other_cols[sapply(col_data, function(x) is.character(x) || is.factor(x))]
-      logical_cols <- other_cols[sapply(col_data, is.logical)]
-
-      # Process numeric columns
-      if (length(numeric_cols) > 0) {
-        numeric_data <- col_data[, numeric_cols, with = FALSE]
-
-        # Pre-determine result types for consistency
-        numeric_result_types <- sapply(numeric_cols, function(col_name) {
-          orig_class <- original_classes[[col_name]]
-          if (!is.null(orig_class) && "integer" %in% orig_class) {
-            "integer"
+        if (length(over_id_vals) > 0) {
+          result[["over_id"]] <- if (
+            !is.null(orig_class) && "integer" %in% orig_class
+          ) {
+            as.integer(over_id_vals[1L])
           } else {
-            "numeric"
+            as.numeric(over_id_vals[1L])
           }
-        })
-
-        if (variable_handling == "first") {
-          # First non-NA strategy
-          numeric_results <- Map(function(x, col_name, result_type) {
-            non_na_vals <- x[!is.na(x)]
-            if (length(non_na_vals) > 0) {
-              val <- non_na_vals[1L]
-              if (result_type == "integer") as.integer(val) else as.numeric(val)
-            } else {
-              if (result_type == "integer") NA_integer_ else NA_real_
-            }
-          }, numeric_data, numeric_cols, numeric_result_types)
         } else {
-          # Weighted mean strategy
-          weights <- durata
-          total_weight <- sum(weights, na.rm = TRUE)
-
-          # Vectorized weighted means
-          if (total_weight > 0 && .N > 1) {
-            numeric_results <- Map(function(x, col_name, result_type) {
-              if (all(is.na(x))) {
-                if (result_type == "integer") NA_integer_ else NA_real_
-              } else {
-                weighted_mean <- sum(x * weights, na.rm = TRUE) / total_weight
-                if (result_type == "integer") {
-                  as.integer(round(weighted_mean))
-                } else {
-                  as.numeric(weighted_mean)
-                }
-              }
-            }, numeric_data, numeric_cols, numeric_result_types)
+          result[["over_id"]] <- if (
+            !is.null(orig_class) && "integer" %in% orig_class
+          ) {
+            if (is.na(over_id[1L])) NA_integer_ else as.integer(over_id[1L])
           } else {
-            # Single value or no weight - take first non-NA
-            numeric_results <- Map(function(x, col_name, result_type) {
-              non_na_vals <- x[!is.na(x)]
-              if (length(non_na_vals) > 0) {
-                val <- non_na_vals[1L]
-                if (result_type == "integer") as.integer(val) else as.numeric(val)
-              } else {
-                if (result_type == "integer") NA_integer_ else NA_real_
-              }
-            }, numeric_data, numeric_cols, numeric_result_types)
+            if (is.na(over_id[1L])) NA_real_ else as.numeric(over_id[1L])
           }
-        }
-
-        # Add numeric results
-        for (i in seq_along(numeric_cols)) {
-          result[[numeric_cols[i]]] <- numeric_results[[i]]
         }
       }
 
-      # Process character/factor columns
-      if (length(character_cols) > 0) {
-        if (variable_handling == "first") {
-          # First non-NA strategy
-          char_results <- lapply(character_cols, function(col) {
-            col_vals <- .SD[[col]]
-            non_na_vals <- col_vals[!is.na(col_vals)]
-            orig_class <- original_classes[[col]]
+      # Aggregate remaining columns by type
+      if (length(other_cols) > 0) {
+        # Get all column data at once
+        col_data <- .SD[, other_cols, with = FALSE]
 
-            if (length(non_na_vals) > 0) {
-              selected_val <- non_na_vals[1L]
+        # Identify column types for batch processing
+        numeric_cols <- other_cols[sapply(col_data, is.numeric)]
+        character_cols <- other_cols[sapply(col_data, function(x) {
+          is.character(x) || is.factor(x)
+        })]
+        logical_cols <- other_cols[sapply(col_data, is.logical)]
 
-              # Preserve original type
-              if (!is.null(orig_class) && "factor" %in% orig_class) {
-                factor(selected_val, levels = levels(col_vals))
-              } else {
-                as.character(selected_val)
-              }
+        # Process numeric columns
+        if (length(numeric_cols) > 0) {
+          numeric_data <- col_data[, numeric_cols, with = FALSE]
+
+          # Pre-determine result types for consistency
+          numeric_result_types <- sapply(numeric_cols, function(col_name) {
+            orig_class <- original_classes[[col_name]]
+            if (!is.null(orig_class) && "integer" %in% orig_class) {
+              "integer"
             } else {
-              # Handle NA with proper type
-              if (!is.null(orig_class) && "factor" %in% orig_class) {
-                factor(NA, levels = levels(col_vals))
-              } else {
-                NA_character_
-              }
+              "numeric"
             }
           })
-        } else {
-          # Weighted mode strategy
-          char_results <- lapply(character_cols, function(col) {
-            col_vals <- .SD[[col]]
-            non_na_vals <- col_vals[!is.na(col_vals)]
-            orig_class <- original_classes[[col]]
 
-            if (length(non_na_vals) > 0) {
-              if (length(non_na_vals) == 1) {
+          if (variable_handling == "first") {
+            # First non-NA strategy
+            numeric_results <- Map(
+              function(x, col_name, result_type) {
+                non_na_vals <- x[!is.na(x)]
+                if (length(non_na_vals) > 0) {
+                  val <- non_na_vals[1L]
+                  if (result_type == "integer") {
+                    as.integer(val)
+                  } else {
+                    as.numeric(val)
+                  }
+                } else {
+                  if (result_type == "integer") NA_integer_ else NA_real_
+                }
+              },
+              numeric_data,
+              numeric_cols,
+              numeric_result_types
+            )
+          } else {
+            # Weighted mean strategy
+            weights <- durata
+            total_weight <- sum(weights, na.rm = TRUE)
+
+            # Vectorized weighted means
+            if (total_weight > 0 && .N > 1) {
+              numeric_results <- Map(
+                function(x, col_name, result_type) {
+                  if (all(is.na(x))) {
+                    if (result_type == "integer") NA_integer_ else NA_real_
+                  } else {
+                    weighted_mean <- sum(x * weights, na.rm = TRUE) /
+                      total_weight
+                    if (result_type == "integer") {
+                      as.integer(round(weighted_mean))
+                    } else {
+                      as.numeric(weighted_mean)
+                    }
+                  }
+                },
+                numeric_data,
+                numeric_cols,
+                numeric_result_types
+              )
+            } else {
+              # Single value or no weight - take first non-NA
+              numeric_results <- Map(
+                function(x, col_name, result_type) {
+                  non_na_vals <- x[!is.na(x)]
+                  if (length(non_na_vals) > 0) {
+                    val <- non_na_vals[1L]
+                    if (result_type == "integer") {
+                      as.integer(val)
+                    } else {
+                      as.numeric(val)
+                    }
+                  } else {
+                    if (result_type == "integer") NA_integer_ else NA_real_
+                  }
+                },
+                numeric_data,
+                numeric_cols,
+                numeric_result_types
+              )
+            }
+          }
+
+          # Add numeric results
+          for (i in seq_along(numeric_cols)) {
+            result[[numeric_cols[i]]] <- numeric_results[[i]]
+          }
+        }
+
+        # Process character/factor columns
+        if (length(character_cols) > 0) {
+          if (variable_handling == "first") {
+            # First non-NA strategy
+            char_results <- lapply(character_cols, function(col) {
+              col_vals <- .SD[[col]]
+              non_na_vals <- col_vals[!is.na(col_vals)]
+              orig_class <- original_classes[[col]]
+
+              if (length(non_na_vals) > 0) {
                 selected_val <- non_na_vals[1L]
+
+                # Preserve original type
+                if (!is.null(orig_class) && "factor" %in% orig_class) {
+                  factor(selected_val, levels = levels(col_vals))
+                } else {
+                  as.character(selected_val)
+                }
               } else {
-                # Special handling for 'stato' column
-                if (col == "stato" && "arco" %in% names(.SD)) {
-                  dominant_arco <- max(arco, na.rm = TRUE)
+                # Handle NA with proper type
+                if (!is.null(orig_class) && "factor" %in% orig_class) {
+                  factor(NA, levels = levels(col_vals))
+                } else {
+                  NA_character_
+                }
+              }
+            })
+          } else {
+            # Weighted mode strategy
+            char_results <- lapply(character_cols, function(col) {
+              col_vals <- .SD[[col]]
+              non_na_vals <- col_vals[!is.na(col_vals)]
+              orig_class <- original_classes[[col]]
 
-                  if (dominant_arco > 0) {
-                    # Employment group: filter to employment states only
-                    employment_mask <- arco > 0
-                    employment_states <- col_vals[employment_mask]
-                    employment_states <- employment_states[!is.na(employment_states)]
+              if (length(non_na_vals) > 0) {
+                if (length(non_na_vals) == 1) {
+                  selected_val <- non_na_vals[1L]
+                } else {
+                  # Special handling for 'stato' column
+                  if (col == "stato" && "arco" %in% names(.SD)) {
+                    dominant_arco <- max(arco, na.rm = TRUE)
 
-                    if (length(employment_states) > 0) {
-                      if (length(employment_states) == 1) {
-                        selected_val <- employment_states[1L]
+                    if (dominant_arco > 0) {
+                      # Employment group: filter to employment states only
+                      employment_mask <- arco > 0
+                      employment_states <- col_vals[employment_mask]
+                      employment_states <- employment_states[
+                        !is.na(employment_states)
+                      ]
+
+                      if (length(employment_states) > 0) {
+                        if (length(employment_states) == 1) {
+                          selected_val <- employment_states[1L]
+                        } else {
+                          # Weighted mode by duration
+                          employment_durations <- durata[employment_mask]
+                          state_weights <- tapply(
+                            employment_durations,
+                            employment_states,
+                            sum
+                          )
+                          selected_val <- names(state_weights)[which.max(
+                            state_weights
+                          )]
+                        }
                       } else {
-                        # Weighted mode by duration
-                        employment_durations <- durata[employment_mask]
-                        state_weights <- tapply(employment_durations, employment_states, sum)
-                        selected_val <- names(state_weights)[which.max(state_weights)]
+                        selected_val <- non_na_vals[1L]
                       }
                     } else {
+                      # Unemployment group
+                      selected_val <- if (
+                        any(grepl("disoccupato", col_vals, ignore.case = TRUE))
+                      ) {
+                        col_vals[grep(
+                          "disoccupato",
+                          col_vals,
+                          ignore.case = TRUE
+                        )][1L]
+                      } else {
+                        "disoccupato"
+                      }
+                    }
+                  } else {
+                    # Weighted mode for other columns
+                    if (length(unique(non_na_vals)) == 1) {
                       selected_val <- non_na_vals[1L]
-                    }
-                  } else {
-                    # Unemployment group
-                    selected_val <- if (any(grepl("disoccupato", col_vals, ignore.case = TRUE))) {
-                      col_vals[grep("disoccupato", col_vals, ignore.case = TRUE)][1L]
                     } else {
-                      "disoccupato"
+                      # Sum durations by unique value, pick max
+                      value_weights <- tapply(
+                        durata[!is.na(col_vals)],
+                        non_na_vals,
+                        sum
+                      )
+                      selected_val <- names(value_weights)[which.max(
+                        value_weights
+                      )]
                     }
-                  }
-                } else {
-                  # Weighted mode for other columns
-                  if (length(unique(non_na_vals)) == 1) {
-                    selected_val <- non_na_vals[1L]
-                  } else {
-                    # Sum durations by unique value, pick max
-                    value_weights <- tapply(durata[!is.na(col_vals)], non_na_vals, sum)
-                    selected_val <- names(value_weights)[which.max(value_weights)]
                   }
                 }
-              }
 
-              # Preserve original type
-              if (!is.null(orig_class) && "factor" %in% orig_class) {
-                factor(selected_val, levels = levels(col_vals))
+                # Preserve original type
+                if (!is.null(orig_class) && "factor" %in% orig_class) {
+                  factor(selected_val, levels = levels(col_vals))
+                } else {
+                  as.character(selected_val)
+                }
               } else {
-                as.character(selected_val)
+                # Handle NA with proper type
+                if (!is.null(orig_class) && "factor" %in% orig_class) {
+                  factor(NA, levels = levels(col_vals))
+                } else {
+                  NA_character_
+                }
               }
-            } else {
-              # Handle NA with proper type
-              if (!is.null(orig_class) && "factor" %in% orig_class) {
-                factor(NA, levels = levels(col_vals))
-              } else {
-                NA_character_
-              }
-            }
-          })
+            })
+          }
+
+          # Add character results
+          for (i in seq_along(character_cols)) {
+            result[[character_cols[i]]] <- char_results[[i]]
+          }
         }
 
-        # Add character results
-        for (i in seq_along(character_cols)) {
-          result[[character_cols[i]]] <- char_results[[i]]
+        # Process logical columns
+        if (length(logical_cols) > 0) {
+          logical_data <- col_data[, logical_cols, with = FALSE]
+
+          if (variable_handling == "first") {
+            # First non-NA strategy
+            logical_results <- lapply(logical_data, function(x) {
+              non_na_vals <- x[!is.na(x)]
+              if (length(non_na_vals) > 0) {
+                as.logical(non_na_vals[1L])
+              } else {
+                NA
+              }
+            })
+          } else {
+            # Majority rule strategy
+            logical_results <- lapply(logical_data, function(x) {
+              non_na_vals <- x[!is.na(x)]
+              if (length(non_na_vals) > 0) {
+                as.logical(mean(non_na_vals) >= 0.5)
+              } else {
+                NA
+              }
+            })
+          }
+
+          # Add logical results
+          for (i in seq_along(logical_cols)) {
+            result[[logical_cols[i]]] <- logical_results[[i]]
+          }
         }
       }
 
-      # Process logical columns
-      if (length(logical_cols) > 0) {
-        logical_data <- col_data[, logical_cols, with = FALSE]
-
-        if (variable_handling == "first") {
-          # First non-NA strategy
-          logical_results <- lapply(logical_data, function(x) {
-            non_na_vals <- x[!is.na(x)]
-            if (length(non_na_vals) > 0) {
-              as.logical(non_na_vals[1L])
-            } else {
-              NA
-            }
-          })
-        } else {
-          # Majority rule strategy
-          logical_results <- lapply(logical_data, function(x) {
-            non_na_vals <- x[!is.na(x)]
-            if (length(non_na_vals) > 0) {
-              as.logical(mean(non_na_vals) >= 0.5)
-            } else {
-              NA
-            }
-          })
-        }
-
-        # Add logical results
-        for (i in seq_along(logical_cols)) {
-          result[[logical_cols[i]]] <- logical_results[[i]]
-        }
-      }
-    }
-
-    result
-  }, by = .(cf, consolidation_group)]
+      result
+    },
+    by = .(cf, consolidation_group)
+  ]
 
   # Restore original column types
   restore_cols <- intersect(names(consolidated), names(original_classes))
@@ -370,34 +443,54 @@ NULL
 
   if (length(restore_cols) > 0) {
     # Batch identify columns needing restoration
-    logical_restore_cols <- restore_cols[vapply(restore_cols, function(col) {
-      orig_class <- original_classes[[col]]
-      "logical" %in% orig_class && is.character(consolidated[[col]])
-    }, logical(1L))]
+    logical_restore_cols <- restore_cols[vapply(
+      restore_cols,
+      function(col) {
+        orig_class <- original_classes[[col]]
+        "logical" %in% orig_class && is.character(consolidated[[col]])
+      },
+      logical(1L)
+    )]
 
-    integer_restore_cols <- restore_cols[vapply(restore_cols, function(col) {
-      orig_class <- original_classes[[col]]
-      "integer" %in% orig_class && is.numeric(consolidated[[col]])
-    }, logical(1L))]
+    integer_restore_cols <- restore_cols[vapply(
+      restore_cols,
+      function(col) {
+        orig_class <- original_classes[[col]]
+        "integer" %in% orig_class && is.numeric(consolidated[[col]])
+      },
+      logical(1L)
+    )]
 
-    date_restore_cols <- restore_cols[vapply(restore_cols, function(col) {
-      orig_class <- original_classes[[col]]
-      any(c("Date", "IDate") %in% orig_class)
-    }, logical(1L))]
+    date_restore_cols <- restore_cols[vapply(
+      restore_cols,
+      function(col) {
+        orig_class <- original_classes[[col]]
+        any(c("Date", "IDate") %in% orig_class)
+      },
+      logical(1L)
+    )]
 
     # Vectorized batch restorations
     if (length(logical_restore_cols) > 0) {
-      consolidated[, (logical_restore_cols) := lapply(.SD, as.logical), .SDcols = logical_restore_cols]
+      consolidated[,
+        (logical_restore_cols) := lapply(.SD, as.logical),
+        .SDcols = logical_restore_cols
+      ]
     }
 
     if (length(integer_restore_cols) > 0) {
-      consolidated[, (integer_restore_cols) := lapply(.SD, function(x) as.integer(round(x))), .SDcols = integer_restore_cols]
+      consolidated[,
+        (integer_restore_cols) := lapply(.SD, function(x) as.integer(round(x))),
+        .SDcols = integer_restore_cols
+      ]
     }
 
     if (length(date_restore_cols) > 0) {
       date_classes <- original_classes[date_restore_cols]
       for (col in date_restore_cols) {
-        consolidated[, (col) := structure(get(col), class = date_classes[[col]])]
+        consolidated[,
+          (col) := structure(get(col), class = date_classes[[col]])
+        ]
       }
     }
   }
@@ -451,8 +544,11 @@ NULL
 #'
 #' @keywords internal
 #' @noRd
-.consolidate_groups_optimized <- function(data, remove_group_col = TRUE, variable_handling = "first") {
-
+.consolidate_groups_optimized <- function(
+  data,
+  remove_group_col = TRUE,
+  variable_handling = "first"
+) {
   if (!data.table::is.data.table(data)) {
     stop("Input must be a data.table")
   }
@@ -472,8 +568,16 @@ NULL
   data[, .group_size := .N, by = .(cf, consolidation_group)]
 
   single_rec_mask <- data$.group_size == 1L
-  single_records <- if (any(single_rec_mask)) data[single_rec_mask] else data.table::data.table()
-  multi_records <- if (any(!single_rec_mask)) data[!single_rec_mask] else data.table::data.table()
+  single_records <- if (any(single_rec_mask)) {
+    data[single_rec_mask]
+  } else {
+    data.table::data.table()
+  }
+  multi_records <- if (any(!single_rec_mask)) {
+    data[!single_rec_mask]
+  } else {
+    data.table::data.table()
+  }
 
   # Process single-record groups (just add metrics and recalculate durata)
   if (nrow(single_records) > 0) {
@@ -489,8 +593,11 @@ NULL
 
     # For "weight" mode, use original implementation (complex but necessary)
     if (variable_handling == "weight") {
-      consolidated <- .consolidate_groups(multi_records, remove_group_col = FALSE,
-                                          variable_handling = "weight")
+      consolidated <- .consolidate_groups(
+        multi_records,
+        remove_group_col = FALSE,
+        variable_handling = "weight"
+      )
     } else {
       # OPTIMIZATION 2: Simplified "first" aggregation
       # Avoid expensive weighted mode - just take first non-NA
@@ -498,35 +605,57 @@ NULL
       data.table::setkey(multi_records, cf, consolidation_group)
       all_cols <- names(multi_records)
 
-      consolidated <- multi_records[, {
-        min_inizio <- min(inizio, na.rm = TRUE)
-        max_fine <- max(fine, na.rm = TRUE)
+      consolidated <- multi_records[,
+        {
+          min_inizio <- min(inizio, na.rm = TRUE)
+          max_fine <- max(fine, na.rm = TRUE)
 
-        result <- list(
-          inizio = structure(min_inizio, class = c("IDate", "Date")),
-          fine = structure(max_fine, class = c("IDate", "Date")),
-          durata = as.numeric(max_fine - min_inizio + 1),
-          n_periods_consolidated = as.integer(.N)
-        )
+          result <- list(
+            inizio = structure(min_inizio, class = c("IDate", "Date")),
+            fine = structure(max_fine, class = c("IDate", "Date")),
+            durata = as.numeric(max_fine - min_inizio + 1),
+            n_periods_consolidated = as.integer(.N)
+          )
 
-        # Fast first-value aggregation for other columns
-        other_cols <- setdiff(all_cols, c("cf", "inizio", "fine", "durata", "consolidation_group"))
+          # Fast first-value aggregation for other columns
+          other_cols <- setdiff(
+            all_cols,
+            c(
+              "cf",
+              "inizio",
+              "fine",
+              "durata",
+              "consolidation_group",
+              "n_periods_consolidated",
+              "non_working_days"
+            )
+          )
 
-        for (col in other_cols) {
-          if (col == "arco") {
-            result[[col]] <- max(arco, na.rm = TRUE)
-          } else if (col == "over_id") {
-            over_id_vals <- over_id[!is.na(over_id) & over_id > 0]
-            result[[col]] <- if (length(over_id_vals) > 0) over_id_vals[1L] else over_id[1L]
-          } else {
-            col_val <- .SD[[col]]
-            non_na <- col_val[!is.na(col_val)]
-            result[[col]] <- if (length(non_na) > 0) non_na[1L] else col_val[1L]
+          for (col in other_cols) {
+            if (col == "arco") {
+              result[[col]] <- max(arco, na.rm = TRUE)
+            } else if (col == "over_id") {
+              over_id_vals <- over_id[!is.na(over_id) & over_id > 0]
+              result[[col]] <- if (length(over_id_vals) > 0) {
+                over_id_vals[1L]
+              } else {
+                over_id[1L]
+              }
+            } else {
+              col_val <- .SD[[col]]
+              non_na <- col_val[!is.na(col_val)]
+              result[[col]] <- if (length(non_na) > 0) {
+                non_na[1L]
+              } else {
+                col_val[1L]
+              }
+            }
           }
-        }
 
-        result
-      }, by = .(cf, consolidation_group)]
+          result
+        },
+        by = .(cf, consolidation_group)
+      ]
     }
   } else {
     consolidated <- data.table::data.table()
@@ -547,7 +676,10 @@ NULL
   # Restore column order
   if (nrow(result) > 0) {
     original_data_cols <- intersect(names(data), names(result))
-    original_data_cols <- setdiff(original_data_cols, c("consolidation_group", ".group_size"))
+    original_data_cols <- setdiff(
+      original_data_cols,
+      c("consolidation_group", ".group_size")
+    )
     new_metric_cols <- setdiff(names(result), names(data))
     final_col_order <- c(original_data_cols, new_metric_cols)
     data.table::setcolorder(result, final_col_order)
