@@ -155,5 +155,8 @@ cat("After consolidation:", nrow(result), "\n")
 
 \code{\link{consolidate_short_gaps}} for gap-bridging consolidation
 
+\code{\link{consolidate_employer_gaps}} for combined employer + gap-bridging
+consolidation in a single pass
+
 \code{\link{consolidation_helpers}} for internal aggregation functions
 }

@@ -184,6 +184,9 @@
 #'
 #' \code{\link{consolidate_by_employer}} for same-employer consolidation
 #'
+#' \code{\link{consolidate_employer_gaps}} for combined employer + gap-bridging
+#'   consolidation in a single pass
+#'
 #' \code{\link{consolidation_helpers}} for internal aggregation functions
 #'
 #' @export
