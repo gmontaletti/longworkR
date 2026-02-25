@@ -13,6 +13,8 @@ periods.
   : Consolidate Employment Periods with Short Gaps
 - [`consolidate_by_employer()`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md)
   : Consolidate Employment Periods by Employer
+- [`consolidate_employer_gaps()`](https://gmontaletti.github.io/longworkR/reference/consolidate_employer_gaps.md)
+  : Consolidate Employment Periods by Employer and Short Gaps (Combined)
 - [`mark_employer_consolidation()`](https://gmontaletti.github.io/longworkR/reference/mark_employer_consolidation.md)
   : Mark Records for Employer Consolidation (Lightweight)
 - [`summarize_consolidation()`](https://gmontaletti.github.io/longworkR/reference/summarize_consolidation.md)

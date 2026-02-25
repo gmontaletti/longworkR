@@ -139,6 +139,9 @@ for contiguous period consolidation
 [`consolidate_short_gaps`](https://gmontaletti.github.io/longworkR/reference/consolidate_short_gaps.md)
 for gap-bridging consolidation
 
+[`consolidate_employer_gaps`](https://gmontaletti.github.io/longworkR/reference/consolidate_employer_gaps.md)
+for combined employer + gap-bridging consolidation in a single pass
+
 [`consolidation_helpers`](https://gmontaletti.github.io/longworkR/reference/consolidation_helpers.md)
 for internal aggregation functions
 
