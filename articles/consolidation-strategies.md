@@ -999,6 +999,6 @@ sessionInfo()
 #> [41] pillar_1.11.1      gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1        
 #> [45] systemfonts_1.3.1  collapse_2.1.6     xfun_0.56          tibble_3.3.1      
 #> [49] tidyselect_1.2.1   knitr_1.51         farver_2.1.2       htmltools_0.5.9   
-#> [53] rmarkdown_2.30     ggalluvial_0.12.5  compiler_4.5.2     prettyunits_1.2.0 
+#> [53] rmarkdown_2.30     ggalluvial_0.12.6  compiler_4.5.2     prettyunits_1.2.0 
 #> [57] S7_0.2.1
 ```

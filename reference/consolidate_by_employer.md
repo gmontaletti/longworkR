@@ -13,7 +13,8 @@ consolidate_by_employer(
   data,
   employer_var,
   max_gap_days = 8,
-  variable_handling = "weight"
+  variable_handling = "weight",
+  engine = "v2"
 )
 ```
 
@@ -41,6 +42,13 @@ consolidate_by_employer(
   Character string specifying aggregation strategy for variables:
   `"weight"` uses weighted mean/mode (default), `"first"` takes first
   non-NA value
+
+- engine:
+
+  Character string specifying the consolidation engine: `"v2"` (default)
+  uses the collapse-native engine for maximum performance, `"v1"` uses
+  the original data.table J-expression engine for backward
+  compatibility.
 
 ## Value
 

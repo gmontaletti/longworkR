@@ -53,7 +53,7 @@ processing and consolidates them into single periods with aggregated attributes.
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">consolidate_overlapping</span><span class="op">(</span><span class="va">data</span>, variable_handling <span class="op">=</span> <span class="st">"weight"</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">consolidate_overlapping</span><span class="op">(</span><span class="va">data</span>, variable_handling <span class="op">=</span> <span class="st">"weight"</span>, engine <span class="op">=</span> <span class="st">"v2"</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -70,6 +70,12 @@ with columns: <code>cf</code> (person ID), <code>inizio</code> (start date), <co
 <dt id="arg-variable-handling">variable_handling<a class="anchor" aria-label="anchor" href="#arg-variable-handling"></a></dt>
 <dd><p>Character string specifying aggregation strategy for variables:
 <code>"weight"</code> uses weighted mean/mode (default), <code>"first"</code> takes first non-NA value</p></dd>
+
+
+<dt id="arg-engine">engine<a class="anchor" aria-label="anchor" href="#arg-engine"></a></dt>
+<dd><p>Character string specifying the consolidation engine: <code>"v2"</code>
+(default) uses the collapse-native engine for maximum performance, <code>"v1"</code>
+uses the original data.table J-expression engine for backward compatibility.</p></dd>
 
 </dl></div>
     <div class="section level2">

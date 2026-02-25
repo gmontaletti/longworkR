@@ -63,7 +63,8 @@ periods act as barriers that prevent consolidation.</p>
 <span>  <span class="va">data</span>,</span>
 <span>  <span class="va">employer_var</span>,</span>
 <span>  max_gap_days <span class="op">=</span> <span class="fl">8</span>,</span>
-<span>  variable_handling <span class="op">=</span> <span class="st">"weight"</span></span>
+<span>  variable_handling <span class="op">=</span> <span class="st">"weight"</span>,</span>
+<span>  engine <span class="op">=</span> <span class="st">"v2"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -91,6 +92,12 @@ Must be non-negative.</p></dd>
 <dt id="arg-variable-handling">variable_handling<a class="anchor" aria-label="anchor" href="#arg-variable-handling"></a></dt>
 <dd><p>Character string specifying aggregation strategy for variables:
 <code>"weight"</code> uses weighted mean/mode (default), <code>"first"</code> takes first non-NA value</p></dd>
+
+
+<dt id="arg-engine">engine<a class="anchor" aria-label="anchor" href="#arg-engine"></a></dt>
+<dd><p>Character string specifying the consolidation engine: <code>"v2"</code>
+(default) uses the collapse-native engine for maximum performance, <code>"v1"</code>
+uses the original data.table J-expression engine for backward compatibility.</p></dd>
 
 </dl></div>
     <div class="section level2">

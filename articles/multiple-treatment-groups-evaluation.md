@@ -2833,6 +2833,6 @@ print(sessionInfo())
 #> [55] xfun_0.56           tibble_3.3.1        tidyselect_1.2.1   
 #> [58] knitr_1.51          farver_2.1.2        nlme_3.1-168       
 #> [61] htmltools_0.5.9     labeling_0.4.3      rmarkdown_2.30     
-#> [64] ggalluvial_0.12.5   compiler_4.5.2      prettyunits_1.2.0  
+#> [64] ggalluvial_0.12.6   compiler_4.5.2      prettyunits_1.2.0  
 #> [67] S7_0.2.1
 ```

@@ -8,7 +8,7 @@ Unemployment periods act as barriers that prevent consolidation.
 ## Usage
 
 ``` r
-consolidate_adjacent(data, variable_handling = "weight")
+consolidate_adjacent(data, variable_handling = "weight", engine = "v2")
 ```
 
 ## Arguments
@@ -24,6 +24,13 @@ consolidate_adjacent(data, variable_handling = "weight")
   Character string specifying aggregation strategy for variables:
   `"weight"` uses weighted mean/mode (default), `"first"` takes first
   non-NA value
+
+- engine:
+
+  Character string specifying the consolidation engine: `"v2"` (default)
+  uses the collapse-native engine for maximum performance, `"v1"` uses
+  the original data.table J-expression engine for backward
+  compatibility.
 
 ## Value
 

@@ -8,7 +8,12 @@ stability.
 ## Usage
 
 ``` r
-consolidate_short_gaps(data, max_gap_days = 8, variable_handling = "first")
+consolidate_short_gaps(
+  data,
+  max_gap_days = 8,
+  variable_handling = "first",
+  engine = "v2"
+)
 ```
 
 ## Arguments
@@ -36,6 +41,13 @@ consolidate_short_gaps(data, max_gap_days = 8, variable_handling = "first")
   Character string specifying aggregation strategy for variables:
   `"first"` takes first non-NA value (default), `"weight"` uses weighted
   mean/mode
+
+- engine:
+
+  Character string specifying the consolidation engine: `"v2"` (default)
+  uses the collapse-native engine for maximum performance, `"v1"` uses
+  the original data.table J-expression engine for backward
+  compatibility.
 
 ## Value
 
