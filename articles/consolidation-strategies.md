@@ -962,9 +962,9 @@ plot_transitions_network(transitions)
 
 ``` r
 sessionInfo()
-#> R version 4.5.2 (2025-10-31)
+#> R version 4.5.3 (2026-03-11)
 #> Platform: x86_64-pc-linux-gnu
-#> Running under: Ubuntu 24.04.3 LTS
+#> Running under: Ubuntu 24.04.4 LTS
 #> 
 #> Matrix products: default
 #> BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -983,22 +983,22 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] data.table_1.18.2.1 longworkR_0.8.1     vecshift_1.0.4     
+#> [1] data.table_1.18.2.1 longworkR_0.8.2     vecshift_1.0.5     
 #> 
 #> loaded via a namespace (and not attached):
-#>  [1] sass_0.4.10        generics_0.1.4     lattice_0.22-7     hms_1.1.4         
-#>  [5] digest_0.6.39      magrittr_2.0.4     evaluate_1.0.5     grid_4.5.2        
+#>  [1] sass_0.4.10        generics_0.1.4     lattice_0.22-9     hms_1.1.4         
+#>  [5] digest_0.6.39      magrittr_2.0.5     evaluate_1.0.5     grid_4.5.3        
 #>  [9] RColorBrewer_1.1-3 fastmap_1.2.0      jsonlite_2.0.0     Matrix_1.7-4      
-#> [13] progress_1.2.3     survival_3.8-3     scales_1.4.0       textshaping_1.0.4 
-#> [17] jquerylib_0.1.4    cli_3.6.5          rlang_1.1.7        crayon_1.5.3      
-#> [21] splines_4.5.2      cachem_1.1.0       yaml_2.3.12        otel_0.2.0        
-#> [25] tools_4.5.2        parallel_4.5.2     dplyr_1.2.0        ggplot2_4.0.2     
-#> [29] vctrs_0.7.1        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
-#> [33] fs_1.6.6           htmlwidgets_1.6.4  ragg_1.5.0         cluster_2.1.8.1   
+#> [13] progress_1.2.3     survival_3.8-6     scales_1.4.0       textshaping_1.0.5 
+#> [17] jquerylib_0.1.4    cli_3.6.5          rlang_1.2.0        crayon_1.5.3      
+#> [21] splines_4.5.3      cachem_1.1.0       yaml_2.3.12        otel_0.2.0        
+#> [25] tools_4.5.3        parallel_4.5.3     dplyr_1.2.1        ggplot2_4.0.2     
+#> [29] vctrs_0.7.2        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
+#> [33] fs_2.0.1           htmlwidgets_1.6.4  ragg_1.5.2         cluster_2.1.8.2   
 #> [37] pkgconfig_2.0.3    desc_1.4.3         pkgdown_2.2.0      bslib_0.10.0      
 #> [41] pillar_1.11.1      gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1        
-#> [45] systemfonts_1.3.1  collapse_2.1.6     xfun_0.56          tibble_3.3.1      
+#> [45] systemfonts_1.3.2  collapse_2.1.6     xfun_0.57          tibble_3.3.1      
 #> [49] tidyselect_1.2.1   knitr_1.51         farver_2.1.2       htmltools_0.5.9   
-#> [53] rmarkdown_2.30     ggalluvial_0.12.6  compiler_4.5.2     prettyunits_1.2.0 
+#> [53] rmarkdown_2.31     ggalluvial_0.12.6  compiler_4.5.3     prettyunits_1.2.0 
 #> [57] S7_0.2.1
 ```

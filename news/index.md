@@ -2,16 +2,11 @@
 
 ## longworkR 0.8.2
 
-### New Features
+### Maintenance
 
-- **[`consolidate_employer_gaps()`](https://gmontaletti.github.io/longworkR/reference/consolidate_employer_gaps.md)**:
-  New combined function that performs employer consolidation followed by
-  short-gap bridging in a single pass. Semantically equivalent to
-  `consolidate_by_employer() |> consolidate_short_gaps()` but eliminates
-  duplicate overhead (copy, sort, worker-split, recombination), yielding
-  approximately 15-25% wall-clock reduction for the two-step pipeline.
-  Supports both `"v2"` and `"v1"` engines and `"first"`/`"weight"`
-  variable handling modes.
+- **Project cleanup and documentation refresh**: Removed obsolete build
+  artifacts and temporary development files. Updated citation in
+  README.md to reflect current version.
 
 ------------------------------------------------------------------------
 
