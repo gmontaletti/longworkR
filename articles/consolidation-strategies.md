@@ -983,7 +983,7 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] data.table_1.18.2.1 longworkR_0.8.2     vecshift_1.0.5     
+#> [1] data.table_1.18.2.1 longworkR_0.9.0     vecshift_2.0.0     
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] sass_0.4.10        generics_0.1.4     lattice_0.22-9     hms_1.1.4         

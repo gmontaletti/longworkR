@@ -97,6 +97,12 @@ Based on output_format:
 
   Named list with separate data.tables for each metric type
 
+## Deprecated in v0.9.0
+
+Use
+[`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+with `indicators = "all"` instead. Scheduled for removal in v1.0.0.
+
 ## Examples
 
 ``` r

@@ -161,18 +161,18 @@ Reference materials: `../reference/longworkR/`
 
 To cite longworkR in publications, please use:
 
-Montaletti, G. (2025). *longworkR: Longitudinal Employment Analytics for
-vecshift Data* (Version 0.8.2) \[R package\].
+Montaletti, G. (2026). *longworkR: Longitudinal Employment Analytics for
+vecshift Data* (Version 0.9.0) \[R package\].
 <https://github.com/gmontaletti/longworkR>
 
 BibTeX entry:
 
 ``` bibtex
-@software{montaletti2025longworkr,
+@software{montaletti2026longworkr,
   author = {Montaletti, Giampaolo},
   title = {longworkR: Longitudinal Employment Analytics for vecshift Data},
-  version = {0.8.2},
-  year = {2025},
+  version = {0.9.0},
+  year = {2026},
   url = {https://github.com/gmontaletti/longworkR}
 }
 ```
@@ -235,6 +235,25 @@ Analyze employment transitions, overlaps, and network structures.
 
 Calculate career complexity, stability, success, and transition metrics.
 
+- [`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+  : Unified per-person career profile
+- [`calculate_contract_quality_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_contract_quality_metrics.md)
+  : Calculate Contract Quality Metrics
+- [`calculate_employment_stability_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_employment_stability_metrics.md)
+  : Calculate Employment Stability Metrics
+- [`calculate_transition_pattern_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_transition_pattern_metrics.md)
+  : Calculate Transition Pattern Metrics
+- [`calculate_comprehensive_impact_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_comprehensive_impact_metrics.md)
+  : Comprehensive Impact Metrics Calculation
+- [`calculate_impact_career_complexity_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_impact_career_complexity_metrics.md)
+  : Calculate Career Complexity Metrics
+
+## Deprecated
+
+Legacy functions scheduled for removal in v1.0.0. Use
+[`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+instead.
+
 - [`calculate_career_complexity_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_complexity_metrics.md)
   : Calculate Career Complexity Metrics for General Career Analysis
 - [`calculate_career_stability_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_stability_metrics.md)
@@ -247,16 +266,6 @@ Calculate career complexity, stability, success, and transition metrics.
   Analysis
 - [`calculate_comprehensive_career_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_comprehensive_career_metrics.md)
   : Comprehensive Career Metrics Analysis
-- [`calculate_contract_quality_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_contract_quality_metrics.md)
-  : Calculate Contract Quality Metrics
-- [`calculate_employment_stability_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_employment_stability_metrics.md)
-  : Calculate Employment Stability Metrics
-- [`calculate_transition_pattern_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_transition_pattern_metrics.md)
-  : Calculate Transition Pattern Metrics
-- [`calculate_comprehensive_impact_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_comprehensive_impact_metrics.md)
-  : Comprehensive Impact Metrics Calculation
-- [`calculate_impact_career_complexity_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_impact_career_complexity_metrics.md)
-  : Calculate Career Complexity Metrics
 
 ## Career Clustering
 
@@ -532,8 +541,20 @@ Sample data generation, synthetic data, and accessibility reports.
 
 Internal helper functions and documentation pages.
 
+- [`calculate_career_complexity_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_complexity_metrics.md)
+  : Calculate Career Complexity Metrics for General Career Analysis
+- [`calculate_career_stability_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_stability_metrics.md)
+  : Calculate Career Stability Metrics for General Career Analysis
 - [`calculate_career_success_index_for_impact()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_success_index_for_impact.md)
   : Calculate Career Success Index for Impact Analysis
+- [`calculate_career_success_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_success_metrics.md)
+  : Calculate Career Success Metrics Combining Quality and Stability
+  (Optimized)
+- [`calculate_career_transition_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_transition_metrics.md)
+  : Calculate Career Transition Metrics with Duration and Salary
+  Analysis
+- [`calculate_comprehensive_career_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_comprehensive_career_metrics.md)
+  : Comprehensive Career Metrics Analysis
 - [`calculate_employer_trajectories_vectorized()`](https://gmontaletti.github.io/longworkR/reference/calculate_employer_trajectories_vectorized.md)
   : Vectorized employer trajectory calculation helper function
 - [`calculate_l1_imbalance()`](https://gmontaletti.github.io/longworkR/reference/calculate_l1_imbalance.md)
@@ -559,6 +580,8 @@ Internal helper functions and documentation pages.
   : Consolidation Helper Functions
 - [`consolidation_metrics`](https://gmontaletti.github.io/longworkR/reference/consolidation_metrics.md)
   : Consolidation Metrics Functions for longworkR Package
+- [`contract_quality_lookup`](https://gmontaletti.github.io/longworkR/reference/contract_quality_lookup.md)
+  : Shared survival-based contract-quality lookup
 - [`.add_circular_titles()`](https://gmontaletti.github.io/longworkR/reference/dot-add_circular_titles.md)
   : Add Circular Plot Titles
 - [`.add_consolidation_info()`](https://gmontaletti.github.io/longworkR/reference/dot-add_consolidation_info.md)
@@ -785,6 +808,8 @@ Internal helper functions and documentation pages.
   : Validate Animation Setup
 - [`validate_integration_setup()`](https://gmontaletti.github.io/longworkR/reference/validate_integration_setup.md)
   : Validate Integration Setup
+- [`vecshift_input_helpers`](https://gmontaletti.github.io/longworkR/reference/vecshift_input_helpers.md)
+  : Internal helpers for the vecshift v2 input contract
 - [`career_clustering`](https://gmontaletti.github.io/longworkR/reference/career_clustering.md)
   : Career Trajectory Clustering and Segmentation
 - [`career_metrics`](https://gmontaletti.github.io/longworkR/reference/career_metrics.md)

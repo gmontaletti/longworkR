@@ -105,6 +105,13 @@ A data.table with transition metrics:
 
   Comprehensive career progression score
 
+## Deprecated in v0.9.0
+
+Use
+[`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+with `indicators = c("core", "transitions")` instead. Scheduled for
+removal in v1.0.0.
+
 ## Examples
 
 ``` r

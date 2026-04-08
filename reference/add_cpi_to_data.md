@@ -51,22 +51,13 @@ format (with leading zero) for matching.
 ## Examples
 
 ``` r
+if (FALSE) { # \dontrun{
 # Add CPI to a data.table with comune codes
-dt <- data.table(PRO_COM_T = c("015146", "016124", "018084"))
-#> Error in data.table(PRO_COM_T = c("015146", "016124", "018084")): could not find function "data.table"
+dt <- data.table::data.table(PRO_COM_T = c("015146", "016124", "018084"))
 dt <- add_cpi_to_data(dt, comune_col = "PRO_COM_T")
-#> Error in add_cpi_to_data(dt, comune_col = "PRO_COM_T"): Input must be a data.table
 print(dt)
-#> function (x, df, ncp, log = FALSE) 
-#> {
-#>     if (missing(ncp)) 
-#>         .Call(C_dt, x, df, log)
-#>     else .Call(C_dnt, x, df, ncp, log)
-#> }
-#> <bytecode: 0x55e5a7a3af80>
-#> <environment: namespace:stats>
 
 # Add only CPI code without name
 dt <- add_cpi_to_data(dt, comune_col = "PRO_COM_T", add_name = FALSE)
-#> Error in add_cpi_to_data(dt, comune_col = "PRO_COM_T", add_name = FALSE): Input must be a data.table
+} # }
 ```

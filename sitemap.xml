@@ -47,6 +47,7 @@
 <url><loc>https://gmontaletti.github.io/longworkR/reference/calculate_unified_career_metrics_optimized.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/career_clustering.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/career_metrics.html</loc></url>
+<url><loc>https://gmontaletti.github.io/longworkR/reference/career_profile.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/cem_fallback_implementation.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/cem_native_implementation.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/cluster_career_trajectories.html</loc></url>
@@ -61,6 +62,7 @@
 <url><loc>https://gmontaletti.github.io/longworkR/reference/consolidate_short_gaps.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/consolidation_helpers.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/consolidation_metrics.html</loc></url>
+<url><loc>https://gmontaletti.github.io/longworkR/reference/contract_quality_lookup.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/convert_transitions_to_g6r.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/create_accessibility_report.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/create_comune_cpi_lookup.html</loc></url>
@@ -278,6 +280,7 @@
 <url><loc>https://gmontaletti.github.io/longworkR/reference/vecshift-plots-extensions.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/vecshift-plots.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/vecshift_colors.html</loc></url>
+<url><loc>https://gmontaletti.github.io/longworkR/reference/vecshift_input_helpers.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/vecshift_linetypes.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/vecshift_patterns.html</loc></url>
 <url><loc>https://gmontaletti.github.io/longworkR/reference/visualize_contract_survival.html</loc></url>

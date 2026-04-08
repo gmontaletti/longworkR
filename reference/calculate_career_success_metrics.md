@@ -130,6 +130,13 @@ This comprehensive success index combines contract quality, employment
 intensity, career stability, and growth opportunity into a single
 interpretable 0-1 scale metric.
 
+## Deprecated in v0.9.0
+
+Use
+[`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+with `indicators = "core"` (and optionally `"stability"`) instead.
+Scheduled for removal in v1.0.0.
+
 ## See also
 
 [`estimate_contract_survival_optimized`](https://gmontaletti.github.io/longworkR/reference/estimate_contract_survival_optimized.md)

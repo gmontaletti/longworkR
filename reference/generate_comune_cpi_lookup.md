@@ -24,11 +24,8 @@ Invisibly returns the lookup data.table and prints summary statistics.
 ## Examples
 
 ``` r
+if (FALSE) { # \dontrun{
 # Generate and save lookup table with default path
 generate_comune_cpi_lookup()
-#> 
-#> === Generating Comune-CPI Lookup Table ===
-#> 
-#> Loading spatial data...
-#> Error in Sys.getenv("SHARED_DATA_DIR", default = "~/Documents/funzioni/shared_data"): unused argument (default = "~/Documents/funzioni/shared_data")
+} # }
 ```

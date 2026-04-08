@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">longworkR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,55 @@
       <small>Source: <a href="https://github.com/gmontaletti/longworkR/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.0" id="longworkr-090">longworkR 0.9.0<a class="anchor" aria-label="anchor" href="#longworkr-090"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-9-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-9-0"></a></h3>
+<ul><li>
+<strong>Minimum vecshift version</strong>: now requires <code>vecshift (&gt;= 2.0.0)</code>. Public entry points validate their input via the new internal <code>.assert_vecshift_input()</code> helper and emit a warning if a plain data.table is passed instead of a <code>vecshift_result</code> object. Consolidation functions preserve the <code>vecshift_result</code> class and metadata on their output.</li>
+<li>
+<strong>Career indicator surface reduced</strong>. A single new function <code><a href="../reference/career_profile.html">career_profile()</a></code> replaces five legacy functions:
+<ul><li><code><a href="../reference/calculate_career_success_metrics.html">calculate_career_success_metrics()</a></code></li>
+<li><code><a href="../reference/calculate_career_transition_metrics.html">calculate_career_transition_metrics()</a></code></li>
+<li><code><a href="../reference/calculate_career_stability_metrics.html">calculate_career_stability_metrics()</a></code></li>
+<li><code><a href="../reference/calculate_career_complexity_metrics.html">calculate_career_complexity_metrics()</a></code></li>
+<li>
+<code><a href="../reference/calculate_comprehensive_career_metrics.html">calculate_comprehensive_career_metrics()</a></code> The legacy functions still work but emit <code><a href="https://rdrr.io/r/base/Deprecated.html" class="external-link">.Deprecated()</a></code> warnings and will be removed in v1.0.0. <code><a href="../reference/career_profile.html">career_profile()</a></code> returns a tidy per-<code>cf</code> data.table with a core group (6 indicators) and four optional groups: <code>stability</code>, <code>complexity</code>, <code>transitions</code>, <code>wages</code>. Values are not bit-identical to the legacy outputs: <code>contract_quality</code> is always derived from Kaplan–Meier median survival (per project policy); <code>intensity</code>, <code>employment_rate</code>, <code>total_days_employed</code> use cleaner denominators. See <code><a href="../reference/career_profile.html">?career_profile</a></code> for details.</li>
+</ul></li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-9-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-9-0"></a></h3>
+<ul><li>
+<code>career_profile(data, indicators = c("core", "stability", "complexity", "transitions", "wages", "all"))</code> — unified per-person career indicator function backed by a single survival-based contract-quality lookup shared with <code><a href="../reference/compute_temporal_employment_indicators.html">compute_temporal_employment_indicators()</a></code>.</li>
+<li>New internal helpers <code>R/vecshift_input.R</code> and <code>R/contract_quality_lookup.R</code>.</li>
+<li>
+<code>_pkgdown.yml</code> gains a <code>Deprecated</code> reference group.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="performance-0-9-0">Performance<a class="anchor" aria-label="anchor" href="#performance-0-9-0"></a></h3>
+<ul><li>
+<strong>vecshift v2 engine</strong>: <code>consolidation_helpers_v2.R</code> now coerces <code>difftime</code> <code>durata</code> to integer days at the engine boundary (previously errored); column-type classification reduced from four <code><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply()</a></code> passes to one; the single-record fast path no longer overwrites pre-existing <code>n_periods_consolidated</code>, preserving idempotency under chained consolidation.</li>
+<li>
+<strong><code><a href="../reference/analyze_employment_transitions.html">analyze_employment_transitions()</a></code></strong>: lag/lead <code><a href="https://rdrr.io/pkg/data.table/man/shift.html" class="external-link">shift()</a></code> calls batched per grouping, eliminating the largest self-time hotspot on the transition-detection path. Regression snapshot test added at <code>tests/testthat/test-analyze-transitions-regression.R</code>.</li>
+<li>
+<strong><code><a href="https://rdrr.io/pkg/data.table/man/copy.html" class="external-link">copy()</a></code> audit</strong>: 14 redundant <code><a href="https://rdrr.io/pkg/data.table/man/copy.html" class="external-link">data.table::copy()</a></code> calls removed across <code>trajectory_analysis.R</code>, <code>temporal_indicators.R</code>, <code>survival_visualization.R</code>, and <code>interactive_transitions_g6r.R</code>; 60 defensive copies preserved. Audit recorded at <code>reference/longworkR/copy-audit-v0.9.0.csv</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-9-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-9-0"></a></h3>
+<ul><li>Chained consolidation now produces consistent <code>n_periods_consolidated</code> counts across both the v1 and v2 engines and between <code><a href="../reference/consolidate_employer_gaps.html">consolidate_employer_gaps()</a></code> and the equivalent <code>consolidate_by_employer() |&gt; consolidate_short_gaps()</code> pipeline.</li>
+<li>
+<code><a href="../reference/estimate_contract_survival_optimized.html">estimate_contract_survival_optimized()</a></code> and all entry points now emit clear errors when required columns are missing, through the shared <code>.assert_vecshift_input()</code> helper.</li>
+<li>
+<code><a href="../reference/add_contract_survival_metrics.html">add_contract_survival_metrics()</a></code> test suite updated to match the lowercase <code>inizio</code>/<code>fine</code> column convention used elsewhere.</li>
+<li>
+<code><a href="../reference/dot-calculate_memory_aware_limit.html">.calculate_memory_aware_limit()</a></code> is now deterministic for repeated calls (absorbs sub-100 MB OS fluctuations).</li>
+<li>Monthly transition-matrix and consolidation integration tests fixed.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-0-9-0">Internal<a class="anchor" aria-label="anchor" href="#internal-0-9-0"></a></h3>
+<ul><li>New <code>.call_silencing_w2_deprecation()</code> helper in <code>R/impact_metrics.R</code> to keep the impact-evaluation suite clean of W2 deprecation warnings until the impact callers are properly migrated to <code><a href="../reference/career_profile.html">career_profile()</a></code> in v0.10.x.</li>
+</ul><hr></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8.2" id="longworkr-082">longworkR 0.8.2<a class="anchor" aria-label="anchor" href="#longworkr-082"></a></h2>
 <div class="section level3">

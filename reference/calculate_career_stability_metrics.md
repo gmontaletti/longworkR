@@ -102,6 +102,13 @@ A data.table with employment stability metrics:
 
   Backward compatibility alias for employment_stability_index
 
+## Deprecated in v0.9.0
+
+Use
+[`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+with `indicators = c("core", "stability")` instead. Scheduled for
+removal in v1.0.0.
+
 ## Examples
 
 ``` r

@@ -49,18 +49,10 @@ This function performs two sequential joins:
 ## Examples
 
 ``` r
+if (FALSE) { # \dontrun{
 # Add CPI to employment data with Belfiore codes
-dt <- data.table(COMUNE_LAVORATORE = c("F205", "B292", "D869"))
-#> Error in data.table(COMUNE_LAVORATORE = c("F205", "B292", "D869")): could not find function "data.table"
+dt <- data.table::data.table(COMUNE_LAVORATORE = c("F205", "B292", "D869"))
 dt <- add_cpi_via_belfiore(dt)
-#> Error in add_cpi_via_belfiore(dt): Input must be a data.table
 print(dt)
-#> function (x, df, ncp, log = FALSE) 
-#> {
-#>     if (missing(ncp)) 
-#>         .Call(C_dt, x, df, log)
-#>     else .Call(C_dnt, x, df, ncp, log)
-#> }
-#> <bytecode: 0x55e5a7a3af80>
-#> <environment: namespace:stats>
+} # }
 ```

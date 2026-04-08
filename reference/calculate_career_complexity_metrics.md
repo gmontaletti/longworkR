@@ -82,6 +82,13 @@ The complexity score has been enhanced for better discriminatory power,
 using an improved formula that provides greater variability across
 different career patterns.
 
+## Deprecated in v0.9.0
+
+Use
+[`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+with `indicators = c("core", "complexity")` instead. Scheduled for
+removal in v1.0.0.
+
 ## Examples
 
 ``` r

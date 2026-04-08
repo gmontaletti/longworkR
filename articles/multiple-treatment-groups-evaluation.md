@@ -2809,7 +2809,7 @@ print(sessionInfo())
 #> other attached packages:
 #> [1] RColorBrewer_1.1-3  viridis_0.6.5       viridisLite_0.4.3  
 #> [4] tidyr_1.3.2         dplyr_1.2.1         ggplot2_4.0.2      
-#> [7] data.table_1.18.2.1 longworkR_0.8.2     vecshift_1.0.5     
+#> [7] data.table_1.18.2.1 longworkR_0.9.0     vecshift_2.0.0     
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] sandwich_3.1-1      sass_0.4.10         generics_0.1.4     

@@ -76,7 +76,7 @@ synthetic_data <- generate_synthetic_employment_data()
 
 # Generate smaller dataset for testing
 test_data <- generate_synthetic_employment_data(
-  n_individuals = 100, 
+  n_individuals = 100,
   n_contracts = 1000
 )
 

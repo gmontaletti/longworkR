@@ -67,7 +67,7 @@ indicators[, treatment_group := sample(c("control", "treatment"), nrow(indicator
 
 # Generate group summary
 group_summary <- create_temporal_indicators_summary(
-  indicators, 
+  indicators,
   group_var = "treatment_group",
   indicator_vars = c("employment_rate", "contract_quality"),
   statistical_tests = TRUE

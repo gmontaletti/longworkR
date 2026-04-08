@@ -1,5 +1,96 @@
 # Changelog
 
+## longworkR 0.9.0
+
+### Breaking changes
+
+- **Minimum vecshift version**: now requires `vecshift (>= 2.0.0)`.
+  Public entry points validate their input via the new internal
+  `.assert_vecshift_input()` helper and emit a warning if a plain
+  data.table is passed instead of a `vecshift_result` object.
+  Consolidation functions preserve the `vecshift_result` class and
+  metadata on their output.
+- **Career indicator surface reduced**. A single new function
+  [`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+  replaces five legacy functions:
+  - [`calculate_career_success_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_success_metrics.md)
+  - [`calculate_career_transition_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_transition_metrics.md)
+  - [`calculate_career_stability_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_stability_metrics.md)
+  - [`calculate_career_complexity_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_career_complexity_metrics.md)
+  - [`calculate_comprehensive_career_metrics()`](https://gmontaletti.github.io/longworkR/reference/calculate_comprehensive_career_metrics.md)
+    The legacy functions still work but emit
+    [`.Deprecated()`](https://rdrr.io/r/base/Deprecated.html) warnings
+    and will be removed in v1.0.0.
+    [`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+    returns a tidy per-`cf` data.table with a core group (6 indicators)
+    and four optional groups: `stability`, `complexity`, `transitions`,
+    `wages`. Values are not bit-identical to the legacy outputs:
+    `contract_quality` is always derived from Kaplan–Meier median
+    survival (per project policy); `intensity`, `employment_rate`,
+    `total_days_employed` use cleaner denominators. See
+    [`?career_profile`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+    for details.
+
+### New features
+
+- `career_profile(data, indicators = c("core", "stability", "complexity", "transitions", "wages", "all"))`
+  — unified per-person career indicator function backed by a single
+  survival-based contract-quality lookup shared with
+  [`compute_temporal_employment_indicators()`](https://gmontaletti.github.io/longworkR/reference/compute_temporal_employment_indicators.md).
+- New internal helpers `R/vecshift_input.R` and
+  `R/contract_quality_lookup.R`.
+- `_pkgdown.yml` gains a `Deprecated` reference group.
+
+### Performance
+
+- **vecshift v2 engine**: `consolidation_helpers_v2.R` now coerces
+  `difftime` `durata` to integer days at the engine boundary (previously
+  errored); column-type classification reduced from four
+  [`vapply()`](https://rdrr.io/r/base/lapply.html) passes to one; the
+  single-record fast path no longer overwrites pre-existing
+  `n_periods_consolidated`, preserving idempotency under chained
+  consolidation.
+- **[`analyze_employment_transitions()`](https://gmontaletti.github.io/longworkR/reference/analyze_employment_transitions.md)**:
+  lag/lead [`shift()`](https://rdrr.io/pkg/data.table/man/shift.html)
+  calls batched per grouping, eliminating the largest self-time hotspot
+  on the transition-detection path. Regression snapshot test added at
+  `tests/testthat/test-analyze-transitions-regression.R`.
+- **[`copy()`](https://rdrr.io/pkg/data.table/man/copy.html) audit**: 14
+  redundant
+  [`data.table::copy()`](https://rdrr.io/pkg/data.table/man/copy.html)
+  calls removed across `trajectory_analysis.R`, `temporal_indicators.R`,
+  `survival_visualization.R`, and `interactive_transitions_g6r.R`; 60
+  defensive copies preserved. Audit recorded at
+  `reference/longworkR/copy-audit-v0.9.0.csv`.
+
+### Bug fixes
+
+- Chained consolidation now produces consistent `n_periods_consolidated`
+  counts across both the v1 and v2 engines and between
+  [`consolidate_employer_gaps()`](https://gmontaletti.github.io/longworkR/reference/consolidate_employer_gaps.md)
+  and the equivalent
+  `consolidate_by_employer() |> consolidate_short_gaps()` pipeline.
+- [`estimate_contract_survival_optimized()`](https://gmontaletti.github.io/longworkR/reference/estimate_contract_survival_optimized.md)
+  and all entry points now emit clear errors when required columns are
+  missing, through the shared `.assert_vecshift_input()` helper.
+- [`add_contract_survival_metrics()`](https://gmontaletti.github.io/longworkR/reference/add_contract_survival_metrics.md)
+  test suite updated to match the lowercase `inizio`/`fine` column
+  convention used elsewhere.
+- [`.calculate_memory_aware_limit()`](https://gmontaletti.github.io/longworkR/reference/dot-calculate_memory_aware_limit.md)
+  is now deterministic for repeated calls (absorbs sub-100 MB OS
+  fluctuations).
+- Monthly transition-matrix and consolidation integration tests fixed.
+
+### Internal
+
+- New `.call_silencing_w2_deprecation()` helper in `R/impact_metrics.R`
+  to keep the impact-evaluation suite clean of W2 deprecation warnings
+  until the impact callers are properly migrated to
+  [`career_profile()`](https://gmontaletti.github.io/longworkR/reference/career_profile.md)
+  in v0.10.x.
+
+------------------------------------------------------------------------
+
 ## longworkR 0.8.2
 
 ### Maintenance

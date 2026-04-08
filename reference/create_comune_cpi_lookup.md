@@ -38,9 +38,8 @@ The function handles edge cases including:
 ## Examples
 
 ``` r
+if (FALSE) { # \dontrun{
 lookup <- create_comune_cpi_lookup()
-#> Loading spatial data...
-#> Error in Sys.getenv("SHARED_DATA_DIR", default = "~/Documents/funzioni/shared_data"): unused argument (default = "~/Documents/funzioni/shared_data")
 head(lookup)
-#> Error: object 'lookup' not found
+} # }
 ```
