@@ -111,7 +111,7 @@ test_that("analyze_employment_transitions validates input parameters", {
   # Invalid pipeline_result
   expect_error(
     analyze_employment_transitions("not_a_data_table"),
-    "must be a data.table object"
+    "must be a data.table"
   )
 
   # Missing required columns

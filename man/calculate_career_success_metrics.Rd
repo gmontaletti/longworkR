@@ -71,6 +71,12 @@ access to better contracts) in a single interpretable 0-1 scale.
 This comprehensive success index combines contract quality, employment intensity,
 career stability, and growth opportunity into a single interpretable 0-1 scale metric.
 }
+\section{Deprecated in v0.9.0}{
+
+Use \code{\link[=career_profile]{career_profile()}} with \code{indicators = "core"} (and optionally
+\code{"stability"}) instead. Scheduled for removal in v1.0.0.
+}
+
 \examples{
 \dontrun{
 # Load sample employment data
@@ -108,3 +114,4 @@ yearly_index <- calculate_career_success_metrics(
 \code{\link{estimate_contract_survival_optimized}} for survival analysis,
 \code{\link{calculate_comprehensive_career_metrics}} for multiple metric analysis
 }
+\keyword{internal}

@@ -338,7 +338,7 @@ test_that("input validation: non-data.table input", {
   )
   expect_error(
     consolidate_employer_gaps(df, "datore"),
-    "data must be a data.table"
+    "must be a data.table"
   )
 })
 

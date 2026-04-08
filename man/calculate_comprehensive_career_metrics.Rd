@@ -57,6 +57,12 @@ Calculates all career evaluation metrics (quality index, transitions, stability,
 in a single function call with consistent formatting and validation. The main metric is now the
 unified career quality index that replaces separate quality and risk metrics.
 }
+\section{Deprecated in v0.9.0}{
+
+Use \code{\link[=career_profile]{career_profile()}} with \code{indicators = "all"} instead. Scheduled for
+removal in v1.0.0.
+}
+
 \examples{
 \dontrun{
 # Load sample employment data
@@ -95,3 +101,4 @@ yearly_metrics <- calculate_comprehensive_career_metrics(
 }
 
 }
+\keyword{internal}

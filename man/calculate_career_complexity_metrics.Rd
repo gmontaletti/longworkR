@@ -43,6 +43,12 @@ employment diversity measures, and complexity indices across any time period.
 The complexity score has been enhanced for better discriminatory power, using an
 improved formula that provides greater variability across different career patterns.
 }
+\section{Deprecated in v0.9.0}{
+
+Use \code{\link[=career_profile]{career_profile()}} with \code{indicators = c("core", "complexity")}
+instead. Scheduled for removal in v1.0.0.
+}
+
 \examples{
 \dontrun{
 # Analyze overall career complexity
@@ -59,3 +65,4 @@ yearly_complexity <- calculate_career_complexity_metrics(
 }
 
 }
+\keyword{internal}

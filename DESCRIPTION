@@ -1,7 +1,7 @@
 Package: longworkR
 Title: Longitudinal Employment Analytics for vecshift Data
-Version: 0.8.2
-Date: 2026-04-07
+Version: 0.9.0
+Date: 2026-04-08
 Authors@R: 
     person("Giampaolo", "Montaletti", , "giampaolo.montaletti@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0002-5327-1122"))
@@ -21,7 +21,7 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Depends:
     R (>= 4.0.0),
-    vecshift
+    vecshift (>= 2.0.0)
 Imports:
     data.table,
     ggplot2,
@@ -55,7 +55,8 @@ Suggests:
     MatchIt,
     rdrobust,
     lfe,
-    fixest
+    fixest,
+    sf
 Remotes:
     gmontaletti/vecshift,
     cynkra/g6R,

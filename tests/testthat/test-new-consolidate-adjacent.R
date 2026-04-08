@@ -13,7 +13,7 @@ test_that("consolidate_adjacent requires data.table input", {
 
   expect_error(
     consolidate_adjacent(df),
-    "data must be a data.table"
+    "must be a data.table"
   )
 })
 
@@ -46,7 +46,7 @@ test_that("consolidate_adjacent merges touching periods (no gap)", {
   result <- consolidate_adjacent(dt)
 
   expect_s3_class(result, "data.table")
-  expect_equal(nrow(result), 1)  # All three merged
+  expect_equal(nrow(result), 1) # All three merged
   expect_equal(result$n_periods_consolidated, 3)
 })
 
@@ -55,7 +55,7 @@ test_that("consolidate_adjacent does NOT merge periods with gap > 0", {
 
   dt <- data.table::data.table(
     cf = c(1, 1),
-    inizio = as.Date(c("2023-01-01", "2023-02-05")),  # 4-day gap
+    inizio = as.Date(c("2023-01-01", "2023-02-05")), # 4-day gap
     fine = as.Date(c("2023-01-31", "2023-02-28")),
     durata = c(31, 24),
     arco = c(1, 1)
@@ -63,7 +63,7 @@ test_that("consolidate_adjacent does NOT merge periods with gap > 0", {
 
   result <- consolidate_adjacent(dt)
 
-  expect_equal(nrow(result), 2)  # No consolidation
+  expect_equal(nrow(result), 2) # No consolidation
   expect_equal(result$n_periods_consolidated, c(1, 1))
 })
 
@@ -81,7 +81,7 @@ test_that("consolidate_adjacent identifies adjacency correctly", {
 
   result <- consolidate_adjacent(dt)
 
-  expect_equal(nrow(result), 1)  # Adjacent - merged
+  expect_equal(nrow(result), 1) # Adjacent - merged
   expect_equal(result$inizio, as.Date("2023-01-01"))
   expect_equal(result$fine, as.Date("2023-02-28"))
 })
@@ -94,12 +94,12 @@ test_that("consolidate_adjacent unemployment acts as barrier", {
     inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
     fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
     durata = c(31, 28, 31),
-    arco = c(1, 0, 1)  # Middle is unemployment
+    arco = c(1, 0, 1) # Middle is unemployment
   )
 
   result <- consolidate_adjacent(dt)
 
-  expect_equal(nrow(result), 3)  # Unemployment blocks consolidation
+  expect_equal(nrow(result), 3) # Unemployment blocks consolidation
   expect_equal(result$n_periods_consolidated, c(1, 1, 1))
 })
 
@@ -117,7 +117,7 @@ test_that("consolidate_adjacent adds arco if missing", {
   result <- consolidate_adjacent(dt)
 
   expect_true("arco" %in% names(result))
-  expect_equal(result$arco, 1)  # Defaults to employment
+  expect_equal(result$arco, 1) # Defaults to employment
 })
 
 test_that("consolidate_adjacent handles single record", {
@@ -169,7 +169,7 @@ test_that("consolidate_adjacent handles multiple persons separately", {
 
   result <- consolidate_adjacent(dt)
 
-  expect_equal(nrow(result), 2)  # One per person
+  expect_equal(nrow(result), 2) # One per person
   expect_equal(sort(unique(result$cf)), c(1, 2))
   expect_equal(result$n_periods_consolidated, c(2, 2))
 })
@@ -189,21 +189,21 @@ test_that("consolidate_adjacent computes temporal bounds correctly", {
 
   expect_equal(result$inizio, as.Date("2023-01-01"))
   expect_equal(result$fine, as.Date("2023-03-31"))
-  expect_equal(result$durata, 90)  # 2023-03-31 - 2023-01-01 + 1
+  expect_equal(result$durata, 90) # 2023-03-31 - 2023-01-01 + 1
 })
 
 test_that("consolidate_adjacent preserves column types", {
   skip_if_not_installed("data.table")
 
   dt <- data.table::data.table(
-    cf = 1L,  # integer
+    cf = 1L, # integer
     inizio = as.Date("2023-01-01"),
     fine = as.Date("2023-01-31"),
     durata = 31,
     arco = 1L,
-    age = 25L,  # integer
-    salary = 50000.50,  # numeric
-    contract = "permanent"  # character
+    age = 25L, # integer
+    salary = 50000.50, # numeric
+    contract = "permanent" # character
   )
 
   result <- consolidate_adjacent(dt)
@@ -228,7 +228,7 @@ test_that("consolidate_adjacent uses weighted aggregation", {
 
   result <- consolidate_adjacent(dt)
 
-  expected_salary <- (1000*31 + 2000*28) / 59
+  expected_salary <- (1000 * 31 + 2000 * 28) / 59
   expect_equal(result$salary, expected_salary, tolerance = 0.01)
 })
 
@@ -246,7 +246,7 @@ test_that("consolidate_adjacent does not modify original data", {
   original_rows <- nrow(dt)
   result <- consolidate_adjacent(dt)
 
-  expect_equal(nrow(dt), original_rows)  # Original unchanged
+  expect_equal(nrow(dt), original_rows) # Original unchanged
 })
 
 test_that("consolidate_adjacent handles partial adjacency", {
@@ -274,7 +274,7 @@ test_that("consolidate_adjacent handles unemployment at start", {
     inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
     fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
     durata = c(31, 28, 31),
-    arco = c(0, 1, 1)  # First is unemployment
+    arco = c(0, 1, 1) # First is unemployment
   )
 
   result <- consolidate_adjacent(dt)
@@ -291,7 +291,7 @@ test_that("consolidate_adjacent handles unemployment at end", {
     inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
     fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
     durata = c(31, 28, 31),
-    arco = c(1, 1, 0)  # Last is unemployment
+    arco = c(1, 1, 0) # Last is unemployment
   )
 
   result <- consolidate_adjacent(dt)
@@ -305,7 +305,7 @@ test_that("consolidate_adjacent converts non-Date columns to Date", {
 
   dt <- data.table::data.table(
     cf = 1,
-    inizio = "2023-01-01",  # character
+    inizio = "2023-01-01", # character
     fine = "2023-01-31",
     durata = 31,
     arco = 1
@@ -325,7 +325,7 @@ test_that("consolidate_adjacent handles all unemployment periods", {
     inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01")),
     fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31")),
     durata = c(31, 28, 31),
-    arco = c(0, 0, 0)  # All unemployment
+    arco = c(0, 0, 0) # All unemployment
   )
 
   result <- consolidate_adjacent(dt)
@@ -340,10 +340,22 @@ test_that("consolidate_adjacent handles alternating employment/unemployment", {
 
   dt <- data.table::data.table(
     cf = c(1, 1, 1, 1, 1),
-    inizio = as.Date(c("2023-01-01", "2023-02-01", "2023-03-01", "2023-04-01", "2023-05-01")),
-    fine = as.Date(c("2023-01-31", "2023-02-28", "2023-03-31", "2023-04-30", "2023-05-31")),
+    inizio = as.Date(c(
+      "2023-01-01",
+      "2023-02-01",
+      "2023-03-01",
+      "2023-04-01",
+      "2023-05-01"
+    )),
+    fine = as.Date(c(
+      "2023-01-31",
+      "2023-02-28",
+      "2023-03-31",
+      "2023-04-30",
+      "2023-05-31"
+    )),
     durata = c(31, 28, 31, 30, 31),
-    arco = c(1, 0, 1, 0, 1)  # Alternating
+    arco = c(1, 0, 1, 0, 1) # Alternating
   )
 
   result <- consolidate_adjacent(dt)
@@ -367,7 +379,10 @@ test_that("consolidate_adjacent returns all original columns", {
 
   result <- consolidate_adjacent(dt)
 
-  expect_true(all(c("cf", "inizio", "fine", "durata", "arco", "extra1", "extra2") %in% names(result)))
+  expect_true(all(
+    c("cf", "inizio", "fine", "durata", "arco", "extra1", "extra2") %in%
+      names(result)
+  ))
   expect_true("n_periods_consolidated" %in% names(result))
 })
 
@@ -385,8 +400,8 @@ test_that("consolidate_adjacent handles leap year correctly", {
 
   result <- consolidate_adjacent(dt)
 
-  expect_equal(nrow(result), 1)  # Adjacent
-  expect_equal(result$durata, 60)  # Feb 29 + Mar 31 days
+  expect_equal(nrow(result), 1) # Adjacent
+  expect_equal(result$durata, 60) # Feb 29 + Mar 31 days
 })
 
 test_that("consolidate_adjacent with mixed adjacent and non-adjacent", {
@@ -425,6 +440,6 @@ test_that("consolidate_adjacent performance with larger dataset", {
   result <- consolidate_adjacent(dt)
   elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 
-  expect_lt(elapsed, 2)  # Should complete in under 2 seconds
-  expect_equal(nrow(result), 10)  # All 100 periods per person consolidated
+  expect_lt(elapsed, 2) # Should complete in under 2 seconds
+  expect_equal(nrow(result), 10) # All 100 periods per person consolidated
 })

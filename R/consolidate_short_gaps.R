@@ -196,6 +196,11 @@ consolidate_short_gaps <- function(
   variable_handling = "first",
   engine = "v2"
 ) {
+  .assert_vecshift_input(
+    data,
+    required_cols = c("cf", "inizio", "fine", "durata")
+  )
+
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
@@ -225,7 +230,7 @@ consolidate_short_gaps <- function(
     result <- data.table::copy(data)
     result[, n_periods_consolidated := integer()]
     result[, non_working_days := integer()]
-    return(result)
+    return(.preserve_vecshift_class(result, data))
   }
 
   # In-place split to avoid full copy of input -----
@@ -379,10 +384,14 @@ consolidate_short_gaps <- function(
     consolidated <- data.table::data.table()
   }
 
-  # Prepare skip records (add required columns)
+  # Prepare skip records (add required columns if not present)
   if (nrow(skip_records) > 0) {
-    skip_records[, n_periods_consolidated := 1L]
-    skip_records[, non_working_days := 0L] # Single period = no gaps bridged
+    if (!"n_periods_consolidated" %in% names(skip_records)) {
+      skip_records[, n_periods_consolidated := 1L]
+    }
+    if (!"non_working_days" %in% names(skip_records)) {
+      skip_records[, non_working_days := 0L] # Single period = no gaps bridged
+    }
   }
 
   # Combine results
@@ -395,5 +404,5 @@ consolidate_short_gaps <- function(
   # Restore temporal order
   data.table::setkey(result, cf, inizio, fine)
 
-  return(result)
+  return(.preserve_vecshift_class(result, data))
 }

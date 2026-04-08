@@ -19,7 +19,9 @@ This function should be run once to precompute the lookup table, which
 can then be loaded quickly by add_cpi_to_data().
 }
 \examples{
+\dontrun{
 # Generate and save lookup table with default path
 generate_comune_cpi_lookup()
+}
 
 }

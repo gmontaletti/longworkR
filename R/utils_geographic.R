@@ -2,14 +2,18 @@
 # Geographic utility functions for comune-CPI mapping
 # Author: Giampaolo Montaletti (giampaolo.montaletti@gmail.com)
 
-# 1. Load required libraries -----
+# 1. Load spatial data -----
 
-suppressPackageStartupMessages({
-  library(sf)
-  library(data.table)
-})
+.require_sf <- function() {
+  if (!requireNamespace("sf", quietly = TRUE)) {
+    stop(
+      "Package 'sf' is required for geographic utilities. ",
+      "Install it with install.packages('sf').",
+      call. = FALSE
+    )
+  }
+}
 
-# 2. Load spatial data -----
 
 #' Load comuni and CPI spatial data
 #'
@@ -58,12 +62,14 @@ load_spatial_maps <- function() {
 #' - Missing values (uses existing cpi column as fallback)
 #'
 #' @examples
+#' \dontrun{
 #' lookup <- create_comune_cpi_lookup()
 #' head(lookup)
+#' }
 #'
 #' @export
 create_comune_cpi_lookup <- function() {
-
+  .require_sf()
   cat("Loading spatial data...\n")
   maps <- load_spatial_maps()
   comuni <- maps$comuni
@@ -83,35 +89,57 @@ create_comune_cpi_lookup <- function() {
   # Method 2: Verify with spatial join (optional validation)
   # Calculate centroids for point-in-polygon matching
   cat("Performing spatial validation...\n")
-  comuni_centroids <- st_centroid(st_geometry(comuni))
+  comuni_centroids <- sf::st_centroid(sf::st_geometry(comuni))
 
   # Add centroids to comuni sf object
   comuni_with_centroids <- comuni
-  st_geometry(comuni_with_centroids) <- comuni_centroids
+  sf::st_geometry(comuni_with_centroids) <- comuni_centroids
 
   # Spatial join: match comune centroids to CPI polygons
-  spatial_join <- st_join(
+  spatial_join <- sf::st_join(
     comuni_with_centroids[, c("PRO_COM_T", "COMUNE", "cpi", "denominazione")],
     cpi[, c("cpi", "denominazione")],
-    join = st_within,
+    join = sf::st_within,
     suffix = c("_comuni", "_spatial")
   )
 
   # Convert to data.table for comparison
-  spatial_lookup <- data.table(st_drop_geometry(spatial_join))
-  setnames(spatial_lookup,
-           old = c("PRO_COM_T", "COMUNE", "cpi_comuni", "denominazione_comuni",
-                   "cpi_spatial", "denominazione_spatial"),
-           new = c("comune_code", "comune_name", "cpi_code_original",
-                   "cpi_name_original", "cpi_code_spatial", "cpi_name_spatial"),
-           skip_absent = TRUE)
+  spatial_lookup <- data.table(sf::st_drop_geometry(spatial_join))
+  setnames(
+    spatial_lookup,
+    old = c(
+      "PRO_COM_T",
+      "COMUNE",
+      "cpi_comuni",
+      "denominazione_comuni",
+      "cpi_spatial",
+      "denominazione_spatial"
+    ),
+    new = c(
+      "comune_code",
+      "comune_name",
+      "cpi_code_original",
+      "cpi_name_original",
+      "cpi_code_spatial",
+      "cpi_name_spatial"
+    ),
+    skip_absent = TRUE
+  )
 
   # Use spatial join results where available, fall back to original where NA
   lookup_validated <- spatial_lookup[, .(
     comune_code,
     comune_name,
-    cpi_code = fifelse(is.na(cpi_code_spatial), cpi_code_original, cpi_code_spatial),
-    cpi_name = fifelse(is.na(cpi_name_spatial), cpi_name_original, cpi_name_spatial)
+    cpi_code = fifelse(
+      is.na(cpi_code_spatial),
+      cpi_code_original,
+      cpi_code_spatial
+    ),
+    cpi_name = fifelse(
+      is.na(cpi_name_spatial),
+      cpi_name_original,
+      cpi_name_spatial
+    )
   )]
 
   # Check for any remaining NAs
@@ -163,17 +191,23 @@ create_comune_cpi_lookup <- function() {
 #' leading zero) for matching.
 #'
 #' @examples
+#' \dontrun{
 #' # Add CPI to a data.table with comune codes
-#' dt <- data.table(PRO_COM_T = c("015146", "016124", "018084"))
+#' dt <- data.table::data.table(PRO_COM_T = c("015146", "016124", "018084"))
 #' dt <- add_cpi_to_data(dt, comune_col = "PRO_COM_T")
 #' print(dt)
 #'
 #' # Add only CPI code without name
 #' dt <- add_cpi_to_data(dt, comune_col = "PRO_COM_T", add_name = FALSE)
+#' }
 #'
 #' @export
-add_cpi_to_data <- function(dt, comune_col = "comune", lookup = NULL, add_name = TRUE) {
-
+add_cpi_to_data <- function(
+  dt,
+  comune_col = "comune",
+  lookup = NULL,
+  add_name = TRUE
+) {
   # Input validation
   if (!is.data.table(dt)) {
     stop("Input must be a data.table")
@@ -181,11 +215,19 @@ add_cpi_to_data <- function(dt, comune_col = "comune", lookup = NULL, add_name =
 
   if (!comune_col %in% names(dt)) {
     # Try to find comune column automatically
-    possible_cols <- c("PRO_COM_T", "PRO_COM", "comune_code", "comune", "COD_COMUNE")
+    possible_cols <- c(
+      "PRO_COM_T",
+      "PRO_COM",
+      "comune_code",
+      "comune",
+      "COD_COMUNE"
+    )
     found_cols <- intersect(possible_cols, names(dt))
 
     if (length(found_cols) == 0) {
-      stop("Could not find comune identifier column. Please specify comune_col parameter.")
+      stop(
+        "Could not find comune identifier column. Please specify comune_col parameter."
+      )
     }
 
     comune_col <- found_cols[1]
@@ -194,7 +236,10 @@ add_cpi_to_data <- function(dt, comune_col = "comune", lookup = NULL, add_name =
 
   # Load or use provided lookup table
   if (is.null(lookup)) {
-    SHARED_DATA_DIR <- path.expand(Sys.getenv("SHARED_DATA_DIR", unset = "~/Documents/funzioni/shared_data"))
+    SHARED_DATA_DIR <- path.expand(Sys.getenv(
+      "SHARED_DATA_DIR",
+      unset = "~/Documents/funzioni/shared_data"
+    ))
     lookup_path <- file.path(SHARED_DATA_DIR, "maps/comune_cpi_lookup.rds")
 
     if (file.exists(lookup_path)) {
@@ -241,7 +286,12 @@ add_cpi_to_data <- function(dt, comune_col = "comune", lookup = NULL, add_name =
   n_matched <- sum(!is.na(dt$cpi_code))
   match_pct <- round(100 * n_matched / n_total, 1)
 
-  cat(sprintf("Matched %d/%d records (%.1f%%)\n", n_matched, n_total, match_pct))
+  cat(sprintf(
+    "Matched %d/%d records (%.1f%%)\n",
+    n_matched,
+    n_total,
+    match_pct
+  ))
 
   if (n_matched < n_total) {
     n_unmatched <- n_total - n_matched
@@ -265,8 +315,10 @@ add_cpi_to_data <- function(dt, comune_col = "comune", lookup = NULL, add_name =
 #' @return Invisibly returns the lookup data.table and prints summary statistics.
 #'
 #' @examples
+#' \dontrun{
 #' # Generate and save lookup table with default path
 #' generate_comune_cpi_lookup()
+#' }
 #'
 #' @export
 generate_comune_cpi_lookup <- function(
@@ -274,7 +326,10 @@ generate_comune_cpi_lookup <- function(
 ) {
   # Use environment variable for output path if not specified
   if (is.null(output_path)) {
-    SHARED_DATA_DIR <- path.expand(Sys.getenv("SHARED_DATA_DIR", unset = "~/Documents/funzioni/shared_data"))
+    SHARED_DATA_DIR <- path.expand(Sys.getenv(
+      "SHARED_DATA_DIR",
+      unset = "~/Documents/funzioni/shared_data"
+    ))
     output_path <- file.path(SHARED_DATA_DIR, "maps/comune_cpi_lookup.rds")
   }
 
@@ -294,7 +349,9 @@ generate_comune_cpi_lookup <- function(
 
   # Distribution of comuni per CPI
   cat("\nComuni per CPI (top 10):\n")
-  cpi_counts <- lookup[!is.na(cpi_code), .N, by = .(cpi_name, cpi_code)][order(-N)]
+  cpi_counts <- lookup[!is.na(cpi_code), .N, by = .(cpi_name, cpi_code)][order(
+    -N
+  )]
   print(head(cpi_counts, 10))
 
   # Save to disk
@@ -325,12 +382,18 @@ generate_comune_cpi_lookup <- function(
 #'
 #' @export
 load_belfiore_mapping <- function() {
-  SHARED_DATA_DIR <- path.expand(Sys.getenv("SHARED_DATA_DIR", unset = "~/Documents/funzioni/shared_data"))
+  SHARED_DATA_DIR <- path.expand(Sys.getenv(
+    "SHARED_DATA_DIR",
+    unset = "~/Documents/funzioni/shared_data"
+  ))
   mapping_path <- file.path(SHARED_DATA_DIR, "maps/belfiore_istat_mapping.csv")
 
   if (!file.exists(mapping_path)) {
-    stop("Belfiore-ISTAT mapping file not found at: ", mapping_path,
-         "\nPlease run the script to download and create this file from ISTAT data.")
+    stop(
+      "Belfiore-ISTAT mapping file not found at: ",
+      mapping_path,
+      "\nPlease run the script to download and create this file from ISTAT data."
+    )
   }
 
   mapping <- fread(mapping_path)
@@ -367,14 +430,19 @@ load_belfiore_mapping <- function() {
 #' 2. Join ISTAT codes to CPI codes
 #'
 #' @examples
+#' \dontrun{
 #' # Add CPI to employment data with Belfiore codes
-#' dt <- data.table(COMUNE_LAVORATORE = c("F205", "B292", "D869"))
+#' dt <- data.table::data.table(COMUNE_LAVORATORE = c("F205", "B292", "D869"))
 #' dt <- add_cpi_via_belfiore(dt)
 #' print(dt)
+#' }
 #'
 #' @export
-add_cpi_via_belfiore <- function(dt, belfiore_col = "COMUNE_LAVORATORE", add_name = TRUE) {
-
+add_cpi_via_belfiore <- function(
+  dt,
+  belfiore_col = "COMUNE_LAVORATORE",
+  add_name = TRUE
+) {
   # Input validation
   if (!is.data.table(dt)) {
     stop("Input must be a data.table")
@@ -407,8 +475,12 @@ add_cpi_via_belfiore <- function(dt, belfiore_col = "COMUNE_LAVORATORE", add_nam
   n_matched_istat <- sum(!is.na(dt$pro_com_t))
   match_pct <- round(100 * n_matched_istat / n_total, 1)
 
-  cat(sprintf("  Matched %d/%d records to ISTAT codes (%.1f%%)\n",
-              n_matched_istat, n_total, match_pct))
+  cat(sprintf(
+    "  Matched %d/%d records to ISTAT codes (%.1f%%)\n",
+    n_matched_istat,
+    n_total,
+    match_pct
+  ))
 
   if (n_matched_istat < n_total) {
     n_unmatched <- n_total - n_matched_istat
@@ -422,7 +494,10 @@ add_cpi_via_belfiore <- function(dt, belfiore_col = "COMUNE_LAVORATORE", add_nam
   dt[nchar(pro_com_t) == 5, pro_com_t := paste0("0", pro_com_t)]
 
   # Load comune-CPI lookup
-  SHARED_DATA_DIR <- path.expand(Sys.getenv("SHARED_DATA_DIR", unset = "~/Documents/funzioni/shared_data"))
+  SHARED_DATA_DIR <- path.expand(Sys.getenv(
+    "SHARED_DATA_DIR",
+    unset = "~/Documents/funzioni/shared_data"
+  ))
   lookup_path <- file.path(SHARED_DATA_DIR, "maps/comune_cpi_lookup.rds")
 
   if (file.exists(lookup_path)) {
@@ -454,18 +529,25 @@ add_cpi_via_belfiore <- function(dt, belfiore_col = "COMUNE_LAVORATORE", add_nam
   # Data quality fix: Torre de' Busi (L257 → 016215) is missing from comune_cpi_lookup.rds
   # This comune in Bergamo province should map to CPI PONTE SAN PIETRO
   if (sum(dt$pro_com_t == "016215" & is.na(dt$cpi_code), na.rm = TRUE) > 0) {
-    dt[pro_com_t == "016215" & is.na(cpi_code), `:=`(
-      cpi_code = "G856C000065",
-      cpi_name = "CPI PONTE SAN PIETRO"
-    )]
+    dt[
+      pro_com_t == "016215" & is.na(cpi_code),
+      `:=`(
+        cpi_code = "G856C000065",
+        cpi_name = "CPI PONTE SAN PIETRO"
+      )
+    ]
   }
 
   # Report ISTAT → CPI matching
   n_matched_cpi <- sum(!is.na(dt$cpi_code))
   match_pct_cpi <- round(100 * n_matched_cpi / n_total, 1)
 
-  cat(sprintf("  Matched %d/%d records to CPI (%.1f%%)\n",
-              n_matched_cpi, n_total, match_pct_cpi))
+  cat(sprintf(
+    "  Matched %d/%d records to CPI (%.1f%%)\n",
+    n_matched_cpi,
+    n_total,
+    match_pct_cpi
+  ))
 
   if (n_matched_cpi < n_matched_istat) {
     n_lost <- n_matched_istat - n_matched_cpi
@@ -475,11 +557,4 @@ add_cpi_via_belfiore <- function(dt, belfiore_col = "COMUNE_LAVORATORE", add_nam
   cat("\nFinal result: Added CPI information to", n_matched_cpi, "records\n")
 
   return(dt)
-}
-
-# 7. Execute generation if run as script -----
-
-if (sys.nframe() == 0) {
-  # Script is being run directly, not sourced
-  lookup <- generate_comune_cpi_lookup()
 }

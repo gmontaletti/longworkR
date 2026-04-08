@@ -1056,6 +1056,11 @@ cluster_career_trajectories <- function(
   # Total memory ≈ n² × 8 + n × p × 8 + 0.2 × (n² × 8 + n × p × 8)
   # Simplified: memory_bytes ≈ n² × 8 × 1.2 + n × p × 8 × 1.2
 
+  # Round available RAM to nearest 0.1 GB before computation so that
+  # small OS-level fluctuations in vm_stat/MemAvailable do not alter
+  # the integer result (determinism guarantee).
+  available_ram_gb <- round(available_ram_gb, 1)
+
   available_bytes <- available_ram_gb * (1024^3) * memory_fraction
 
   # Solve quadratic equation: 9.6 × n² + 9.6 × p × n - available_bytes = 0

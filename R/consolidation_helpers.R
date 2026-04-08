@@ -140,11 +140,18 @@ NULL
       )
 
       # Build core result with explicit types
+      # n_periods_consolidated: sum existing values if column already present
+      # (idempotency: re-running on already-consolidated data preserves the count)
+      n_pc <- if ("n_periods_consolidated" %in% all_cols) {
+        as.integer(sum(n_periods_consolidated, na.rm = TRUE))
+      } else {
+        as.integer(n_periods)
+      }
       result <- list(
         inizio = structure(min_inizio, class = c("IDate", "Date")),
         fine = structure(max_fine, class = c("IDate", "Date")),
         durata = as.numeric(total_elapsed_days),
-        n_periods_consolidated = as.integer(n_periods)
+        n_periods_consolidated = n_pc
       )
 
       # Handle arco column
@@ -582,7 +589,9 @@ NULL
   # Process single-record groups (just add metrics and recalculate durata)
   if (nrow(single_records) > 0) {
     single_records[, .group_size := NULL]
-    single_records[, n_periods_consolidated := 1L]
+    if (!"n_periods_consolidated" %in% names(single_records)) {
+      single_records[, n_periods_consolidated := 1L]
+    }
     # Recalculate durata for consistency (original always recalculates)
     single_records[, durata := as.numeric(fine - inizio + 1)]
   }
@@ -610,11 +619,19 @@ NULL
           min_inizio <- min(inizio, na.rm = TRUE)
           max_fine <- max(fine, na.rm = TRUE)
 
+          # Sum existing n_periods_consolidated if column already present
+          # (idempotency: chained consolidation accumulates original counts)
+          n_pc <- if ("n_periods_consolidated" %in% all_cols) {
+            as.integer(sum(n_periods_consolidated, na.rm = TRUE))
+          } else {
+            as.integer(.N)
+          }
+
           result <- list(
             inizio = structure(min_inizio, class = c("IDate", "Date")),
             fine = structure(max_fine, class = c("IDate", "Date")),
             durata = as.numeric(max_fine - min_inizio + 1),
-            n_periods_consolidated = as.integer(.N)
+            n_periods_consolidated = n_pc
           )
 
           # Fast first-value aggregation for other columns

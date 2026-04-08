@@ -632,6 +632,11 @@ analyze_employment_transitions <- function(
   eval_chain = "last",
   show_progress = TRUE
 ) {
+  .assert_vecshift_input(
+    pipeline_result,
+    required_cols = c("cf", "arco", "inizio", "fine", "durata")
+  )
+
   # Load required packages
   if (!requireNamespace("data.table", quietly = TRUE)) {
     stop("Package 'data.table' is required but not installed.")
@@ -974,45 +979,60 @@ analyze_employment_transitions <- function(
   # Use shift operations to get previous, current, and next period information
   # Note: When consolidated periods are used, this operates on consolidated episodes
   # rather than individual contracts, providing cleaner transition patterns
-  dt[,
-    `:=`(
-      prev_arco = shift(arco, n = 1, type = "lag"),
-      next_arco = shift(arco, n = 1, type = "lead")
-    ),
-    by = cf
-  ]
-
-  # Add from/to values for transition variable
+  #
+  # OPTIMIZED (W3.2): all lag/lead shifts are batched into two grouped calls
+  # (one for lags, one for leads). Previously each column was shifted in its
+  # own `dt[, ..., by = cf]` statement, paying the per-group dispatch cost
+  # N times (6 + 2 * length(statistics_variables)). Profiling showed these
+  # lines dominated self-time (~88% on sample.rds). data.table::shift() accepts
+  # a list of columns and returns a list of shifted vectors, so two grouped
+  # calls now replace 6-10 separate ones.
   from_transition_col <- paste0("from_", transition_variable)
   to_transition_col <- paste0("to_", transition_variable)
+
+  lag_source_cols <- c(
+    "arco",
+    transition_variable,
+    "durata",
+    statistics_variables
+  )
+  lag_target_cols <- c(
+    "prev_arco",
+    from_transition_col,
+    "from_durata",
+    paste0("from_", statistics_variables)
+  )
+  lead_source_cols <- c(
+    "arco",
+    transition_variable,
+    "durata",
+    statistics_variables
+  )
+  lead_target_cols <- c(
+    "next_arco",
+    to_transition_col,
+    "to_durata",
+    paste0("to_", statistics_variables)
+  )
+
+  # Single grouped call per direction: shift all required columns in one pass
+  # by cf. shift() with mget() returns a list matched to the target vector.
   dt[,
-    (from_transition_col) := shift(
-      get(transition_variable),
-      n = 1,
+    (lag_target_cols) := data.table::shift(
+      mget(lag_source_cols),
+      n = 1L,
       type = "lag"
     ),
     by = cf
   ]
   dt[,
-    (to_transition_col) := shift(
-      get(transition_variable),
-      n = 1,
+    (lead_target_cols) := data.table::shift(
+      mget(lead_source_cols),
+      n = 1L,
       type = "lead"
     ),
     by = cf
   ]
-
-  # Add from/to values for statistics variables
-  for (stat_var in statistics_variables) {
-    from_stat_col <- paste0("from_", stat_var)
-    to_stat_col <- paste0("to_", stat_var)
-    dt[, (from_stat_col) := shift(get(stat_var), n = 1, type = "lag"), by = cf]
-    dt[, (to_stat_col) := shift(get(stat_var), n = 1, type = "lead"), by = cf]
-  }
-
-  # Also capture the durations of the from and to employment periods for weighting
-  dt[, from_durata := shift(durata, n = 1, type = "lag"), by = cf]
-  dt[, to_durata := shift(durata, n = 1, type = "lead"), by = cf]
 
   # Identify unemployment periods that are part of transitions
   # Current period: unemployment (arco == 0), previous: employment (prev_arco >= 1), next: employment (next_arco >= 1)

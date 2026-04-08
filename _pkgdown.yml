@@ -57,16 +57,23 @@ reference:
   - title: Career Metrics
     desc: Calculate career complexity, stability, success, and transition metrics.
     contents:
-      - calculate_career_complexity_metrics
-      - calculate_career_stability_metrics
-      - calculate_career_success_metrics
-      - calculate_career_transition_metrics
-      - calculate_comprehensive_career_metrics
+      - career_profile
       - calculate_contract_quality_metrics
       - calculate_employment_stability_metrics
       - calculate_transition_pattern_metrics
       - calculate_comprehensive_impact_metrics
       - calculate_impact_career_complexity_metrics
+
+  - title: Deprecated
+    desc: >
+      Legacy functions scheduled for removal in v1.0.0. Use `career_profile()`
+      instead.
+    contents:
+      - calculate_career_complexity_metrics
+      - calculate_career_stability_metrics
+      - calculate_career_success_metrics
+      - calculate_career_transition_metrics
+      - calculate_comprehensive_career_metrics
 
   - title: Career Clustering
     desc: Cluster career trajectories and visualize cluster profiles.

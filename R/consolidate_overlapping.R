@@ -119,6 +119,11 @@ consolidate_overlapping <- function(
   variable_handling = "weight",
   engine = "v2"
 ) {
+  .assert_vecshift_input(
+    data,
+    required_cols = c("cf", "inizio", "fine", "durata")
+  )
+
   # 1. Input validation
   if (!data.table::is.data.table(data)) {
     stop(
@@ -143,7 +148,7 @@ consolidate_overlapping <- function(
   if (nrow(data) == 0) {
     result <- data.table::copy(data)
     result[, n_periods_consolidated := integer()]
-    return(result)
+    return(.preserve_vecshift_class(result, data))
   }
 
   # 2. Check for over_id column
@@ -228,9 +233,11 @@ consolidate_overlapping <- function(
     consolidated <- data.table::data.table()
   }
 
-  # Prepare skip records (add n_periods_consolidated column)
+  # Prepare skip records (add n_periods_consolidated column if not present)
   if (nrow(skip_records) > 0) {
-    skip_records[, n_periods_consolidated := 1L]
+    if (!"n_periods_consolidated" %in% names(skip_records)) {
+      skip_records[, n_periods_consolidated := 1L]
+    }
   }
 
   # Combine results
@@ -244,5 +251,5 @@ consolidate_overlapping <- function(
   data.table::setkey(result, cf, inizio, fine)
 
   # 8. Return result
-  return(result)
+  return(.preserve_vecshift_class(result, data))
 }

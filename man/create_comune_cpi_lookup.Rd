@@ -30,7 +30,9 @@ The function handles edge cases including:
 }
 }
 \examples{
+\dontrun{
 lookup <- create_comune_cpi_lookup()
 head(lookup)
+}
 
 }

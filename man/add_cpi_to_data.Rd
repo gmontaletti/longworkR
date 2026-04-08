@@ -38,12 +38,14 @@ under common names. It standardizes 5-digit codes to 6-digit format (with
 leading zero) for matching.
 }
 \examples{
+\dontrun{
 # Add CPI to a data.table with comune codes
-dt <- data.table(PRO_COM_T = c("015146", "016124", "018084"))
+dt <- data.table::data.table(PRO_COM_T = c("015146", "016124", "018084"))
 dt <- add_cpi_to_data(dt, comune_col = "PRO_COM_T")
 print(dt)
 
 # Add only CPI code without name
 dt <- add_cpi_to_data(dt, comune_col = "PRO_COM_T", add_name = FALSE)
+}
 
 }

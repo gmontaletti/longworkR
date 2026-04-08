@@ -16,7 +16,7 @@ test_that("consolidate_by_employer rejects non-data.table input", {
 
   expect_error(
     consolidate_by_employer(df, employer_var = "datore"),
-    "data must be a data.table"
+    "must be a data.table"
   )
 })
 

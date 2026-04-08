@@ -45,7 +45,18 @@
 
   # 2. Column classification — ONCE -----
   all_cols <- names(data)
+
+  # Normalize durata: vecshift v2 emits durata as difftime; all downstream
+  # arithmetic (weighted means, fsum(x*w)/fsum(w)) requires numeric/integer.
+  # Coerce in place on the caller-owned subset, remember the original class
+  # so we can restore it on output.
+  durata_orig_class <- class(data$durata)
+  durata_was_difftime <- inherits(data$durata, "difftime")
+  if (durata_was_difftime) {
+    data[, durata := as.integer(as.numeric(durata, units = "days"))]
+  }
   durata_is_integer <- is.integer(data$durata)
+
   exclude_cols <- c(
     "cf",
     "consolidation_group",
@@ -58,39 +69,26 @@
   special_cols <- c("arco", "over_id", "stato")
   standard_cols <- setdiff(all_cols, c(exclude_cols, special_cols))
 
-  # Classify column types using vapply
+  # Classify column types in a single pass over standard_cols -----
+  col_classes <- vapply(
+    standard_cols,
+    function(col) class(data[[col]])[1L],
+    character(1L)
+  )
   col_is_numeric <- vapply(
     standard_cols,
     function(col) is.numeric(data[[col]]),
     logical(1L)
   )
-  col_is_character <- vapply(
-    standard_cols,
-    function(col) is.character(data[[col]]),
-    logical(1L)
-  )
-  col_is_factor <- vapply(
-    standard_cols,
-    function(col) is.factor(data[[col]]),
-    logical(1L)
-  )
-  col_is_logical <- vapply(
-    standard_cols,
-    function(col) is.logical(data[[col]]),
-    logical(1L)
-  )
+  col_is_integer <- col_classes == "integer"
+  col_is_character <- col_classes == "character"
+  col_is_factor <- col_classes == "factor"
+  col_is_logical <- col_classes == "logical"
 
   numeric_cols <- standard_cols[col_is_numeric]
   character_cols <- standard_cols[col_is_character | col_is_factor]
   logical_cols <- standard_cols[col_is_logical]
-
-  # Record integer columns (subset of numeric)
-  integer_cols <- vapply(
-    numeric_cols,
-    function(col) is.integer(data[[col]]),
-    logical(1L)
-  )
-  integer_col_names <- numeric_cols[integer_cols]
+  integer_col_names <- standard_cols[col_is_integer]
 
   # Record IDate columns for inizio/fine
   inizio_is_idate <- inherits(data$inizio, "IDate")
@@ -121,7 +119,11 @@
   # 4. All-single-record fast path (works in-place; callers pass -----
   #    disposable subsets so no copy needed)
   if (max(group_sizes) == 1L) {
-    data[, n_periods_consolidated := 1L]
+    # Preserve existing n_periods_consolidated for idempotency: if the column
+    # is already present, keep the cumulative count; otherwise initialise to 1L.
+    if (!"n_periods_consolidated" %in% all_cols) {
+      data[, n_periods_consolidated := 1L]
+    }
     if (durata_is_integer) {
       data[, durata := as.integer(fine - inizio + 1L)]
     } else {
@@ -130,6 +132,17 @@
 
     if (remove_group_col) {
       data[, consolidation_group := NULL]
+    }
+
+    # Restore difftime class on durata if input was difftime
+    if (durata_was_difftime) {
+      data[,
+        durata := structure(
+          as.numeric(durata),
+          class = "difftime",
+          units = "days"
+        )
+      ]
     }
 
     original_data_cols <- intersect(all_cols, names(data))
@@ -275,8 +288,17 @@
     }
   }
 
-  # n_periods_consolidated
-  result[, n_periods_consolidated := as.integer(group_sizes)]
+  # n_periods_consolidated: sum existing counts if column present (idempotency),
+  # otherwise use the raw group size (first-pass consolidation).
+  if ("n_periods_consolidated" %in% all_cols) {
+    result[,
+      n_periods_consolidated := as.integer(
+        collapse::fsum(data$n_periods_consolidated, g = grp, na.rm = TRUE)
+      )
+    ]
+  } else {
+    result[, n_periods_consolidated := as.integer(group_sizes)]
+  }
 
   # 6. Type restoration -----
 
@@ -301,6 +323,17 @@
   # 7. Column ordering + cleanup -----
   if (remove_group_col) {
     result[, consolidation_group := NULL]
+  }
+
+  # Restore difftime class on durata if input was difftime
+  if (durata_was_difftime && "durata" %in% names(result)) {
+    result[,
+      durata := structure(
+        as.numeric(durata),
+        class = "difftime",
+        units = "days"
+      )
+    ]
   }
 
   original_data_cols <- intersect(all_cols, names(result))

@@ -127,6 +127,11 @@ consolidate_employer_gaps <- function(
   variable_handling = "first",
   engine = "v2"
 ) {
+  .assert_vecshift_input(
+    data,
+    required_cols = c("cf", "inizio", "fine", "durata")
+  )
+
   # 1. Input validation -----
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
@@ -179,7 +184,7 @@ consolidate_employer_gaps <- function(
     result <- data.table::copy(data)
     result[, n_periods_consolidated := integer()]
     result[, non_working_days := integer()]
-    return(result)
+    return(.preserve_vecshift_class(result, data))
   }
 
   # 3. In-place split to avoid full copy of input -----
@@ -432,9 +437,15 @@ consolidate_employer_gaps <- function(
   }
 
   # Prepare skip records for Phase B
+  # n_periods_consolidated is already set by Phase A; preserve it.
+  # Only initialise to 1L if the column is somehow absent (defensive).
   if (nrow(skip_records_b) > 0) {
-    skip_records_b[, n_periods_consolidated := 1L]
-    skip_records_b[, non_working_days := 0L]
+    if (!"n_periods_consolidated" %in% names(skip_records_b)) {
+      skip_records_b[, n_periods_consolidated := 1L]
+    }
+    if (!"non_working_days" %in% names(skip_records_b)) {
+      skip_records_b[, non_working_days := 0L]
+    }
   }
 
   # 6. Final combine and return -----
@@ -446,5 +457,5 @@ consolidate_employer_gaps <- function(
 
   data.table::setkey(result, cf, inizio, fine)
 
-  return(result)
+  return(.preserve_vecshift_class(result, data))
 }

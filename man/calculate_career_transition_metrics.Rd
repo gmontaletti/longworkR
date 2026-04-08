@@ -52,6 +52,12 @@ Analyzes career transitions incorporating contract duration expectations from su
 analysis and salary progression. Identifies moves to longer-lasting contracts and
 salary improvements as positive career transitions.
 }
+\section{Deprecated in v0.9.0}{
+
+Use \code{\link[=career_profile]{career_profile()}} with \code{indicators = c("core", "transitions")}
+instead. Scheduled for removal in v1.0.0.
+}
+
 \examples{
 \dontrun{
 # Analyze transitions with survival data
@@ -64,3 +70,4 @@ transitions <- calculate_career_transition_metrics(
 }
 
 }
+\keyword{internal}

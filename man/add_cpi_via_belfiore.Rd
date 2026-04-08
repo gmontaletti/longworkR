@@ -37,9 +37,11 @@ This function performs two sequential joins:
 }
 }
 \examples{
+\dontrun{
 # Add CPI to employment data with Belfiore codes
-dt <- data.table(COMUNE_LAVORATORE = c("F205", "B292", "D869"))
+dt <- data.table::data.table(COMUNE_LAVORATORE = c("F205", "B292", "D869"))
 dt <- add_cpi_via_belfiore(dt)
 print(dt)
+}
 
 }

@@ -48,6 +48,12 @@ Calculates employment stability metrics for generalized career trajectory analys
 extending beyond pre/post event evaluation. Analyzes employment rates, spell durations,
 and job turnover measures across any time period or overall career.
 }
+\section{Deprecated in v0.9.0}{
+
+Use \code{\link[=career_profile]{career_profile()}} with \code{indicators = c("core", "stability")}
+instead. Scheduled for removal in v1.0.0.
+}
+
 \examples{
 \dontrun{
 # Analyze overall career stability
@@ -64,3 +70,4 @@ yearly_stability <- calculate_career_stability_metrics(
 }
 
 }
+\keyword{internal}

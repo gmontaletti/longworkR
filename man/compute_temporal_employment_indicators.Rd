@@ -138,7 +138,7 @@ quarterly_indicators <- compute_temporal_employment_indicators(
 # Monthly indicators with wage analysis
 monthly_indicators <- compute_temporal_employment_indicators(
   data = employment_data,
-  period_type = "monthly", 
+  period_type = "monthly",
   indicators = c("employment_rate", "contract_quality", "wage_statistics"),
   wage_var = "retribuzione_media"
 )
@@ -146,7 +146,7 @@ monthly_indicators <- compute_temporal_employment_indicators(
 # Comprehensive analysis with transitions
 comprehensive_indicators <- compute_temporal_employment_indicators(
   data = employment_data,
-  indicators = c("employment_rate", "contract_quality", "stability_index", 
+  indicators = c("employment_rate", "contract_quality", "stability_index",
                 "contract_types", "transition_patterns"),
   group_vars = c("gender", "education"),
   output_format = "wide"
@@ -163,7 +163,7 @@ print(quality_by_type)  # Higher scores = more durable contract types
 # Integration with impact evaluation
 treatment_assignment <- data.table(
   cf = unique(employment_data$cf),
-  treatment_group = sample(c("control", "training", "subsidy"), 
+  treatment_group = sample(c("control", "training", "subsidy"),
                           length(unique(employment_data$cf)), replace = TRUE)
 )
 
@@ -174,7 +174,7 @@ did_analysis <- difference_in_differences(
   data = indicators_with_treatment,
   outcome_vars = c("employment_rate", "contract_quality", "stability_index"),
   treatment_var = "treatment_group",
-  time_var = "period", 
+  time_var = "period",
   id_var = "cf"
 )
 }

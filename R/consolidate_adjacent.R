@@ -164,6 +164,11 @@ consolidate_adjacent <- function(
   variable_handling = "weight",
   engine = "v2"
 ) {
+  .assert_vecshift_input(
+    data,
+    required_cols = c("cf", "inizio", "fine", "durata")
+  )
+
   # Input validation
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
@@ -187,7 +192,7 @@ consolidate_adjacent <- function(
   if (nrow(data) == 0) {
     result <- data.table::copy(data)
     result[, n_periods_consolidated := integer()]
-    return(result)
+    return(.preserve_vecshift_class(result, data))
   }
 
   # In-place split to avoid full copy of input -----
@@ -303,9 +308,11 @@ consolidate_adjacent <- function(
     consolidated <- data.table::data.table()
   }
 
-  # Prepare skip records (add n_periods_consolidated column)
+  # Prepare skip records (add n_periods_consolidated column if not present)
   if (nrow(skip_records) > 0) {
-    skip_records[, n_periods_consolidated := 1L]
+    if (!"n_periods_consolidated" %in% names(skip_records)) {
+      skip_records[, n_periods_consolidated := 1L]
+    }
   }
 
   # Combine results
@@ -318,5 +325,5 @@ consolidate_adjacent <- function(
   # Restore temporal order
   data.table::setkey(result, cf, inizio, fine)
 
-  return(result)
+  return(.preserve_vecshift_class(result, data))
 }

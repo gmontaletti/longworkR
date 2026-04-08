@@ -22,7 +22,7 @@ NULL
 #' @keywords internal
 translate_trajectory_status <- function(status, language = "it") {
   if (language == "en") {
-    return(status)  # Already in English
+    return(status) # Already in English
   }
 
   # Italian translations
@@ -58,8 +58,17 @@ translate_trajectory_status <- function(status, language = "it") {
 #' @param reference_dates Optional data.table with reference dates and person_vars to merge
 #' @return data.table with employment trajectories
 #' @keywords internal
-calculate_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_col, person_col, arco_col, employment_thresholds, quarter_days, reference_dates = NULL) {
-
+calculate_trajectories_vectorized <- function(
+  dt,
+  quarters_dt,
+  start_col,
+  end_col,
+  person_col,
+  arco_col,
+  employment_thresholds,
+  quarter_days,
+  reference_dates = NULL
+) {
   # Create cartesian join between quarters and employment data
   overlaps <- merge(quarters_dt, dt, by = person_col, allow.cartesian = TRUE)
 
@@ -85,56 +94,70 @@ calculate_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_co
   setkeyv(overlaps, c(person_col, "quarter_num", "emp_start", "emp_end"))
 
   # Merge overlapping periods within each person-quarter combination
-  group_cols <- c(person_col, "quarter", "quarter_num", "quarter_start", "quarter_end", "quarter_days")
+  group_cols <- c(
+    person_col,
+    "quarter",
+    "quarter_num",
+    "quarter_start",
+    "quarter_end",
+    "quarter_days"
+  )
 
-  merged_employment <- overlaps[, {
-    if (.N == 0) {
-      data.table(days_employed = 0)
-    } else {
-      # Separate employment periods (arco > 0) from non-employment periods (arco = 0)
-      employment_periods <- .SD[get(arco_col) > 0, .(start = emp_start, end = emp_end)]
-
-      if (nrow(employment_periods) == 0) {
-        # No employment periods, only arco = 0 periods
-        .(days_employed = 0)
-      } else if (nrow(employment_periods) == 1) {
-        # Single employment period
-        .(days_employed = as.numeric(employment_periods$end - employment_periods$start) + 1)
+  merged_employment <- overlaps[,
+    {
+      if (.N == 0) {
+        data.table(days_employed = 0)
       } else {
-        # Multiple employment periods - merge overlapping ones
-        setkey(employment_periods, start, end)
+        # Separate employment periods (arco > 0) from non-employment periods (arco = 0)
+        employment_periods <- .SD[
+          get(arco_col) > 0,
+          .(start = emp_start, end = emp_end)
+        ]
 
-        # Use non-overlapping interval union algorithm for employment periods only
-        merged <- employment_periods[1]
+        if (nrow(employment_periods) == 0) {
+          # No employment periods, only arco = 0 periods
+          .(days_employed = 0)
+        } else if (nrow(employment_periods) == 1) {
+          # Single employment period
+          .(
+            days_employed = as.numeric(
+              employment_periods$end - employment_periods$start
+            ) +
+              1
+          )
+        } else {
+          # Multiple employment periods - merge overlapping ones
+          setkey(employment_periods, start, end)
 
-        if (nrow(employment_periods) > 1) {
-          for (i in 2:nrow(employment_periods)) {
-            curr_start <- employment_periods$start[i]
-            curr_end <- employment_periods$end[i]
-            last_end <- merged$end[nrow(merged)]
+          # Use non-overlapping interval union algorithm for employment periods only
+          merged <- employment_periods[1]
 
-            if (curr_start <= last_end + 1) {
-              # Overlapping or adjacent - extend last period
-              merged$end[nrow(merged)] <- pmax(last_end, curr_end)
-            } else {
-              # Non-overlapping - add new period
-              merged <- rbind(merged, employment_periods[i])
+          if (nrow(employment_periods) > 1) {
+            for (i in 2:nrow(employment_periods)) {
+              curr_start <- employment_periods$start[i]
+              curr_end <- employment_periods$end[i]
+              last_end <- merged$end[nrow(merged)]
+
+              if (curr_start <= last_end + 1) {
+                # Overlapping or adjacent - extend last period
+                merged$end[nrow(merged)] <- pmax(last_end, curr_end)
+              } else {
+                # Non-overlapping - add new period
+                merged <- rbind(merged, employment_periods[i])
+              }
             }
           }
+
+          .(days_employed = sum(as.numeric(merged$end - merged$start) + 1))
         }
-
-        .(days_employed = sum(as.numeric(merged$end - merged$start) + 1))
       }
-    }
-  }, by = group_cols]
+    },
+    by = group_cols
+  ]
 
-  # Get all person-quarter combinations (including those with no employment)
-  all_combinations <- copy(quarters_dt)
-
-  # Left join to include quarters with no employment
-  result <- merge(all_combinations, merged_employment,
-                 by = group_cols,
-                 all.x = TRUE)
+  # Get all person-quarter combinations (including those with no employment).
+  # W3.3: copy() removed — quarters_dt is only merged below, never mutated.
+  result <- merge(quarters_dt, merged_employment, by = group_cols, all.x = TRUE)
 
   # Keep days_employed as NA for quarters with no contract data
   # (this will be classified as "No Information")
@@ -143,13 +166,15 @@ calculate_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_co
   result[, employment_percentage := (days_employed / quarter_days) * 100]
 
   # Vectorized employment status classification using configurable thresholds
-  result[, employment_status := fcase(
-    is.na(days_employed), "No Information",
-    employment_percentage < employment_thresholds[1], "Not Working",
-    employment_percentage <= employment_thresholds[2], "Partially Working",
-    employment_percentage <= employment_thresholds[3], "Mostly Working",
-    employment_percentage > employment_thresholds[3], "Fully Working"
-  )]
+  result[,
+    employment_status := fcase(
+      is.na(days_employed)                              , "No Information"    ,
+      employment_percentage < employment_thresholds[1]  , "Not Working"       ,
+      employment_percentage <= employment_thresholds[2] , "Partially Working" ,
+      employment_percentage <= employment_thresholds[3] , "Mostly Working"    ,
+      employment_percentage > employment_thresholds[3]  , "Fully Working"
+    )
+  ]
 
   # Merge with reference_dates to include person_vars if provided
   if (!is.null(reference_dates)) {
@@ -272,30 +297,37 @@ calculate_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_co
 #' }
 #'
 #' @seealso \code{\link{theme_vecshift}}, \code{\link{vecshift_colors}}
-track_contract_trajectories <- function(data,
-                                      contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
-                                      contract_type_value,
-                                      n_quarters = 4,
-                                      person_id = "cf",
-                                      start_date_col = "inizio",
-                                      end_date_col = "fine",
-                                      arco_col = "arco",
-                                      employment_thresholds = c(1, 40, 99),
-                                      return_plot = TRUE,
-                                      palette = "employment",
-                                      use_bw = FALSE,
-                                      plot_title = NULL,
-                                      plot_subtitle = NULL,
-                                      person_vars = NULL,
-                                      chunk_size = 10000,
-                                      language = "it") {
-
+track_contract_trajectories <- function(
+  data,
+  contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
+  contract_type_value,
+  n_quarters = 4,
+  person_id = "cf",
+  start_date_col = "inizio",
+  end_date_col = "fine",
+  arco_col = "arco",
+  employment_thresholds = c(1, 40, 99),
+  return_plot = TRUE,
+  palette = "employment",
+  use_bw = FALSE,
+  plot_title = NULL,
+  plot_subtitle = NULL,
+  person_vars = NULL,
+  chunk_size = 10000,
+  language = "it"
+) {
   # Input validation
   if (!is.data.table(data)) {
     stop("Input data must be a data.table object")
   }
 
-  required_cols <- c(person_id, contract_type_var, start_date_col, end_date_col, arco_col)
+  required_cols <- c(
+    person_id,
+    contract_type_var,
+    start_date_col,
+    end_date_col,
+    arco_col
+  )
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -349,14 +381,20 @@ track_contract_trajectories <- function(data,
     # Validate person_vars exist in data
     missing_vars <- setdiff(person_vars, names(dt))
     if (length(missing_vars) > 0) {
-      warning("Variables not found in data: ", paste(missing_vars, collapse = ", "))
+      warning(
+        "Variables not found in data: ",
+        paste(missing_vars, collapse = ", ")
+      )
       person_vars <- intersect(person_vars, names(dt))
     }
 
     if (length(person_vars) > 0) {
       reference_dates <- target_contracts[
         order(get(person_id), get(start_date_col), get(end_date_col))
-      ][, .SD[1], by = person_id][, c(person_id, end_date_col, person_vars), with = FALSE]
+      ][, .SD[1], by = person_id][,
+        c(person_id, end_date_col, person_vars),
+        with = FALSE
+      ]
     } else {
       reference_dates <- target_contracts[
         order(get(person_id), get(start_date_col), get(end_date_col))
@@ -368,7 +406,11 @@ track_contract_trajectories <- function(data,
     ][, .SD[1], by = person_id][, c(person_id, end_date_col), with = FALSE]
   }
 
-  setnames(reference_dates, c(person_id, end_date_col), c("person_id", "reference_date"))
+  setnames(
+    reference_dates,
+    c(person_id, end_date_col),
+    c("person_id", "reference_date")
+  )
 
   # Rename person_id column in dt to standardize on "person_id"
   setnames(dt, person_id, "person_id")
@@ -378,18 +420,21 @@ track_contract_trajectories <- function(data,
   }
 
   # Step 3: Vectorized quarter generation for all persons at once
-  quarter_days <- 91  # Updated to 91 days per quarter (4 quarters = 364 days ≈ 12 months)
+  quarter_days <- 91 # Updated to 91 days per quarter (4 quarters = 364 days ≈ 12 months)
 
-  all_quarters <- reference_dates[, {
-    q_nums <- 1:n_quarters
-    .(
-      quarter = paste0("Q", q_nums),
-      quarter_num = q_nums,
-      quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
-      quarter_end = reference_date + q_nums * quarter_days,
-      quarter_days = quarter_days
-    )
-  }, by = person_id]
+  all_quarters <- reference_dates[,
+    {
+      q_nums <- 1:n_quarters
+      .(
+        quarter = paste0("Q", q_nums),
+        quarter_num = q_nums,
+        quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
+        quarter_end = reference_date + q_nums * quarter_days,
+        quarter_days = quarter_days
+      )
+    },
+    by = person_id
+  ]
 
   setkeyv(all_quarters, c("person_id", "quarter_num"))
 
@@ -402,11 +447,17 @@ track_contract_trajectories <- function(data,
 
   if (n_persons <= chunk_size) {
     # Process all at once
-    all_trajectories <- calculate_trajectories_vectorized(dt, all_quarters,
-                                                         start_date_col, end_date_col,
-                                                         "person_id", arco_col,
-                                                         employment_thresholds, quarter_days,
-                                                         reference_dates)
+    all_trajectories <- calculate_trajectories_vectorized(
+      dt,
+      all_quarters,
+      start_date_col,
+      end_date_col,
+      "person_id",
+      arco_col,
+      employment_thresholds,
+      quarter_days,
+      reference_dates
+    )
   } else {
     # Process in chunks
     person_list <- reference_dates[["person_id"]]
@@ -420,34 +471,48 @@ track_contract_trajectories <- function(data,
       chunk_data <- dt[person_id %in% chunk_persons]
       chunk_reference <- reference_dates[person_id %in% chunk_persons]
 
-      trajectory_list[[i]] <- calculate_trajectories_vectorized(chunk_data, chunk_quarters,
-                                                               start_date_col, end_date_col,
-                                                               "person_id", arco_col,
-                                                               employment_thresholds, quarter_days,
-                                                               chunk_reference)
+      trajectory_list[[i]] <- calculate_trajectories_vectorized(
+        chunk_data,
+        chunk_quarters,
+        start_date_col,
+        end_date_col,
+        "person_id",
+        arco_col,
+        employment_thresholds,
+        quarter_days,
+        chunk_reference
+      )
     }
 
     all_trajectories <- rbindlist(trajectory_list)
   }
 
   # Apply translation to employment status
-  all_trajectories[, employment_status := translate_trajectory_status(employment_status, language)]
+  all_trajectories[,
+    employment_status := translate_trajectory_status(
+      employment_status,
+      language
+    )
+  ]
 
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
     order(person_id, quarter_num)
-  ][, .(trajectory = paste(employment_status, collapse = " -> ")),
-    by = person_id]
+  ][,
+    .(trajectory = paste(employment_status, collapse = " -> ")),
+    by = person_id
+  ]
 
   # Count trajectory patterns
   trajectory_summary <- trajectory_sequences[,
-    .(count = .N,
-      percentage = round(.N / nrow(reference_dates) * 100, 1)),
-    by = trajectory][order(-count)]
+    .(count = .N, percentage = round(.N / nrow(reference_dates) * 100, 1)),
+    by = trajectory
+  ][order(-count)]
 
   # Prepare data for alluvial plot
-  plot_data <- copy(all_trajectories)
+  # W3.3: copy() removed — plot_data is only passed read-only to ggplot2.
+  plot_data <- all_trajectories
 
   # Create the plot if requested
   plot_obj <- NULL
@@ -466,46 +531,79 @@ track_contract_trajectories <- function(data,
     }
 
     # Get colors using theme_vecshift function
-    employment_statuses <- c("Not Working", "Partially Working", "Mostly Working",
-                           "Fully Working", "No Information")
+    employment_statuses <- c(
+      "Not Working",
+      "Partially Working",
+      "Mostly Working",
+      "Fully Working",
+      "No Information"
+    )
 
     # Translate status labels for colors
-    employment_statuses_translated <- translate_trajectory_status(employment_statuses, language)
+    employment_statuses_translated <- translate_trajectory_status(
+      employment_statuses,
+      language
+    )
 
     if (palette == "employment" && !use_bw) {
       colors <- c(
-        "#E74C3C",        # Red - Not Working
-        "#F39C12",        # Orange - Partially Working
-        "#3498DB",        # Blue - Mostly Working
-        "#27AE60",        # Green - Fully Working
-        "#95A5A6"         # Grey - No Information
+        "#E74C3C", # Red - Not Working
+        "#F39C12", # Orange - Partially Working
+        "#3498DB", # Blue - Mostly Working
+        "#27AE60", # Green - Fully Working
+        "#95A5A6" # Grey - No Information
       )
       names(colors) <- employment_statuses_translated
     } else {
       # Use vecshift_colors function (assuming it exists)
-      base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
-                                   n = length(employment_statuses))
-      colors <- setNames(base_colors[1:length(employment_statuses)], employment_statuses_translated)
+      base_colors <- vecshift_colors(
+        palette = if (use_bw) "bw" else "main",
+        n = length(employment_statuses)
+      )
+      colors <- setNames(
+        base_colors[1:length(employment_statuses)],
+        employment_statuses_translated
+      )
     }
 
     # Create alluvial plot
-    plot_obj <- ggplot2::ggplot(plot_data,
-                               ggplot2::aes(x = quarter, stratum = employment_status,
-                                          alluvium = person_id, fill = employment_status)) +
+    plot_obj <- ggplot2::ggplot(
+      plot_data,
+      ggplot2::aes(
+        x = quarter,
+        stratum = employment_status,
+        alluvium = person_id,
+        fill = employment_status
+      )
+    ) +
       ggalluvial::geom_flow(alpha = 0.6, curve_type = "cubic", width = 0.3) +
       ggalluvial::geom_stratum(alpha = 0.8, width = 0.3) +
-      ggplot2::geom_text(stat = ggalluvial::StatStratum,
-                        ggplot2::aes(label = ggplot2::after_stat(stratum)),
-                        size = 3, color = "white", fontface = "bold") +
+      ggplot2::geom_text(
+        stat = ggalluvial::StatStratum,
+        ggplot2::aes(label = ggplot2::after_stat(stratum)),
+        size = 3,
+        color = "white",
+        fontface = "bold"
+      ) +
       ggplot2::scale_fill_manual(values = colors, name = "Employment\nStatus") +
       ggplot2::labs(
         title = if (is.null(plot_title)) {
-          paste("Employment Trajectories After", contract_type_value, "Contract")
+          paste(
+            "Employment Trajectories After",
+            contract_type_value,
+            "Contract"
+          )
         } else {
           plot_title
         },
         subtitle = if (is.null(plot_subtitle)) {
-          paste("Tracking", nrow(reference_dates), "individuals over", n_quarters, "quarters")
+          paste(
+            "Tracking",
+            nrow(reference_dates),
+            "individuals over",
+            n_quarters,
+            "quarters"
+          )
         } else {
           plot_subtitle
         },
@@ -525,27 +623,39 @@ track_contract_trajectories <- function(data,
   all_trajectories_sorted <- all_trajectories[order(person_id, quarter_num)]
 
   # Create transitions by comparing consecutive quarters for each person
-  transitions_raw <- all_trajectories_sorted[, {
-    if (.N > 1) {
-      data.table(
-        from_quarter = quarter_num[-.N],
-        to_quarter = quarter_num[-1],
-        from_status = employment_status[-.N],
-        to_status = employment_status[-1]
-      )
-    } else {
-      # If only one quarter, no transitions
-      data.table()
-    }
-  }, by = person_id]
+  transitions_raw <- all_trajectories_sorted[,
+    {
+      if (.N > 1) {
+        data.table(
+          from_quarter = quarter_num[-.N],
+          to_quarter = quarter_num[-1],
+          from_status = employment_status[-.N],
+          to_status = employment_status[-1]
+        )
+      } else {
+        # If only one quarter, no transitions
+        data.table()
+      }
+    },
+    by = person_id
+  ]
 
   # Aggregate transitions based on whether person_vars exist
   # Handle empty transitions_raw case
   if (nrow(transitions_raw) == 0) {
     # Create empty transition_counts with correct structure
     if (!is.null(person_vars) && length(person_vars) > 0) {
-      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
-      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      group_cols <- c(
+        "from_quarter",
+        "to_quarter",
+        "from_status",
+        "to_status",
+        person_vars
+      )
+      transition_counts <- data.table::data.table(matrix(
+        ncol = length(group_cols) + 1,
+        nrow = 0
+      ))
       setnames(transition_counts, c(group_cols, "count"))
     } else {
       transition_counts <- data.table::data.table(
@@ -558,23 +668,38 @@ track_contract_trajectories <- function(data,
     }
   } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_dates into transitions
-    transitions_with_vars <- merge(transitions_raw,
-                                   reference_dates[, c("person_id", person_vars), with = FALSE],
-                                   by = "person_id", all.x = TRUE)
+    transitions_with_vars <- merge(
+      transitions_raw,
+      reference_dates[, c("person_id", person_vars), with = FALSE],
+      by = "person_id",
+      all.x = TRUE
+    )
 
     # Group by transition characteristics and person_vars, then count
-    group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+    group_cols <- c(
+      "from_quarter",
+      "to_quarter",
+      "from_status",
+      "to_status",
+      person_vars
+    )
     transition_counts <- transitions_with_vars[, .(count = .N), by = group_cols]
   } else {
     # Group by transition characteristics only
-    transition_counts <- transitions_raw[, .(count = .N),
-                                        by = .(from_quarter, to_quarter, from_status, to_status)]
+    transition_counts <- transitions_raw[,
+      .(count = .N),
+      by = .(from_quarter, to_quarter, from_status, to_status)
+    ]
   }
 
   # Order by from_quarter, to_quarter, and count (only if not empty)
   if (nrow(transition_counts) > 0) {
     setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+    setorderv(
+      transition_counts,
+      c("from_quarter", "to_quarter", "count"),
+      order = c(1, 1, -1)
+    )
   }
 
   # Prepare return object
@@ -626,8 +751,17 @@ track_contract_trajectories <- function(data,
 #' @param quarter_days Number of days per quarter
 #' @return data.table with professional trajectories
 #' @keywords internal
-calculate_professional_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_col, person_col, arco_col, qualifica_col, reference_codes, quarter_days) {
-
+calculate_professional_trajectories_vectorized <- function(
+  dt,
+  quarters_dt,
+  start_col,
+  end_col,
+  person_col,
+  arco_col,
+  qualifica_col,
+  reference_codes,
+  quarter_days
+) {
   # Create cartesian join between quarters and employment data
   overlaps <- merge(quarters_dt, dt, by = person_col, allow.cartesian = TRUE)
 
@@ -650,37 +784,55 @@ calculate_professional_trajectories_vectorized <- function(dt, quarters_dt, star
   setkeyv(overlaps, c(person_col, "quarter_num", "emp_end"))
 
   # Group by person-quarter and select professional code
-  group_cols <- c(person_col, "quarter", "quarter_num", "quarter_start", "quarter_end", "quarter_days")
+  group_cols <- c(
+    person_col,
+    "quarter",
+    "quarter_num",
+    "quarter_start",
+    "quarter_end",
+    "quarter_days"
+  )
 
-  professional_codes <- overlaps[, {
-    if (.N == 0) {
-      data.table(quarter_code = NA_character_, all_arco_zero = TRUE)
-    } else {
-      # Check if there are any employment contracts (arco > 0)
-      employment_contracts <- .SD[get(arco_col) > 0]
-
-      if (nrow(employment_contracts) > 0) {
-        # Prioritize employment contracts - get code from latest end date
-        latest_employment <- employment_contracts[.N]  # Already sorted by emp_end
-        .(quarter_code = latest_employment[[qualifica_col]],
-          all_arco_zero = FALSE)
+  professional_codes <- overlaps[,
+    {
+      if (.N == 0) {
+        data.table(quarter_code = NA_character_, all_arco_zero = TRUE)
       } else {
-        # All contracts have arco = 0
-        # Still get code from latest contract for potential future use
-        latest_contract <- .SD[.N]  # Already sorted by emp_end
-        .(quarter_code = latest_contract[[qualifica_col]],
-          all_arco_zero = TRUE)
+        # Check if there are any employment contracts (arco > 0)
+        employment_contracts <- .SD[get(arco_col) > 0]
+
+        if (nrow(employment_contracts) > 0) {
+          # Prioritize employment contracts - get code from latest end date
+          latest_employment <- employment_contracts[.N] # Already sorted by emp_end
+          .(
+            quarter_code = latest_employment[[qualifica_col]],
+            all_arco_zero = FALSE
+          )
+        } else {
+          # All contracts have arco = 0
+          # Still get code from latest contract for potential future use
+          latest_contract <- .SD[.N] # Already sorted by emp_end
+          .(
+            quarter_code = latest_contract[[qualifica_col]],
+            all_arco_zero = TRUE
+          )
+        }
       }
-    }
-  }, by = group_cols]
+    },
+    by = group_cols
+  ]
 
   # Get all person-quarter combinations (including those with no contracts)
-  all_combinations <- copy(quarters_dt)
+  # W3.3: copy() removed — quarters_dt is only merged below, never mutated.
+  all_combinations <- quarters_dt
 
   # Left join to include quarters with no contracts
-  result <- merge(all_combinations, professional_codes,
-                 by = group_cols,
-                 all.x = TRUE)
+  result <- merge(
+    all_combinations,
+    professional_codes,
+    by = group_cols,
+    all.x = TRUE
+  )
 
   # Keep quarter_code as NA for quarters with no contract data
   # all_arco_zero defaults to FALSE for NA cases
@@ -689,12 +841,14 @@ calculate_professional_trajectories_vectorized <- function(dt, quarters_dt, star
   result <- merge(result, reference_codes, by = person_col, all.x = TRUE)
 
   # Vectorized professional status classification
-  result[, professional_status := fcase(
-    all_arco_zero == TRUE, "Not Working",
-    is.na(quarter_code), "No Information",
-    quarter_code == reference_code, "Same Code",
-    quarter_code != reference_code, "Different Code"
-  )]
+  result[,
+    professional_status := fcase(
+      all_arco_zero == TRUE          , "Not Working"    ,
+      is.na(quarter_code)            , "No Information" ,
+      quarter_code == reference_code , "Same Code"      ,
+      quarter_code != reference_code , "Different Code"
+    )
+  ]
 
   # Order by person and quarter
   setkeyv(result, c(person_col, "quarter_num"))
@@ -715,8 +869,17 @@ calculate_professional_trajectories_vectorized <- function(dt, quarters_dt, star
 #' @param quarter_days Number of days per quarter
 #' @return data.table with employer trajectories
 #' @keywords internal
-calculate_employer_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_col, person_col, arco_col, employer_col, reference_employers, quarter_days) {
-
+calculate_employer_trajectories_vectorized <- function(
+  dt,
+  quarters_dt,
+  start_col,
+  end_col,
+  person_col,
+  arco_col,
+  employer_col,
+  reference_employers,
+  quarter_days
+) {
   # Create cartesian join between quarters and employment data
   overlaps <- merge(quarters_dt, dt, by = person_col, allow.cartesian = TRUE)
 
@@ -739,37 +902,55 @@ calculate_employer_trajectories_vectorized <- function(dt, quarters_dt, start_co
   setkeyv(overlaps, c(person_col, "quarter_num", "emp_end"))
 
   # Group by person-quarter and select employer
-  group_cols <- c(person_col, "quarter", "quarter_num", "quarter_start", "quarter_end", "quarter_days")
+  group_cols <- c(
+    person_col,
+    "quarter",
+    "quarter_num",
+    "quarter_start",
+    "quarter_end",
+    "quarter_days"
+  )
 
-  employer_codes <- overlaps[, {
-    if (.N == 0) {
-      data.table(quarter_employer = NA_character_, all_arco_zero = TRUE)
-    } else {
-      # Check if there are any employment contracts (arco > 0)
-      employment_contracts <- .SD[get(arco_col) > 0]
-
-      if (nrow(employment_contracts) > 0) {
-        # Prioritize employment contracts - get employer from latest end date
-        latest_employment <- employment_contracts[.N]  # Already sorted by emp_end
-        .(quarter_employer = latest_employment[[employer_col]],
-          all_arco_zero = FALSE)
+  employer_codes <- overlaps[,
+    {
+      if (.N == 0) {
+        data.table(quarter_employer = NA_character_, all_arco_zero = TRUE)
       } else {
-        # All contracts have arco = 0
-        # Still get employer from latest contract for potential future use
-        latest_contract <- .SD[.N]  # Already sorted by emp_end
-        .(quarter_employer = latest_contract[[employer_col]],
-          all_arco_zero = TRUE)
+        # Check if there are any employment contracts (arco > 0)
+        employment_contracts <- .SD[get(arco_col) > 0]
+
+        if (nrow(employment_contracts) > 0) {
+          # Prioritize employment contracts - get employer from latest end date
+          latest_employment <- employment_contracts[.N] # Already sorted by emp_end
+          .(
+            quarter_employer = latest_employment[[employer_col]],
+            all_arco_zero = FALSE
+          )
+        } else {
+          # All contracts have arco = 0
+          # Still get employer from latest contract for potential future use
+          latest_contract <- .SD[.N] # Already sorted by emp_end
+          .(
+            quarter_employer = latest_contract[[employer_col]],
+            all_arco_zero = TRUE
+          )
+        }
       }
-    }
-  }, by = group_cols]
+    },
+    by = group_cols
+  ]
 
   # Get all person-quarter combinations (including those with no contracts)
-  all_combinations <- copy(quarters_dt)
+  # W3.3: copy() removed — quarters_dt is only merged below, never mutated.
+  all_combinations <- quarters_dt
 
   # Left join to include quarters with no contracts
-  result <- merge(all_combinations, employer_codes,
-                 by = group_cols,
-                 all.x = TRUE)
+  result <- merge(
+    all_combinations,
+    employer_codes,
+    by = group_cols,
+    all.x = TRUE
+  )
 
   # Keep quarter_employer as NA for quarters with no contract data
   # all_arco_zero defaults to FALSE for NA cases
@@ -778,12 +959,14 @@ calculate_employer_trajectories_vectorized <- function(dt, quarters_dt, start_co
   result <- merge(result, reference_employers, by = person_col, all.x = TRUE)
 
   # Vectorized employer status classification
-  result[, employer_status := fcase(
-    all_arco_zero == TRUE, "Not Working",
-    is.na(quarter_employer), "No Information",
-    quarter_employer == reference_employer, "Same Employer",
-    quarter_employer != reference_employer, "Different Employer"
-  )]
+  result[,
+    employer_status := fcase(
+      all_arco_zero == TRUE                  , "Not Working"        ,
+      is.na(quarter_employer)                , "No Information"     ,
+      quarter_employer == reference_employer , "Same Employer"      ,
+      quarter_employer != reference_employer , "Different Employer"
+    )
+  ]
 
   # Order by person and quarter
   setkeyv(result, c(person_col, "quarter_num"))
@@ -888,30 +1071,38 @@ calculate_employer_trajectories_vectorized <- function(dt, quarters_dt, start_co
 #' }
 #'
 #' @seealso \code{\link{track_contract_trajectories}}, \code{\link{theme_vecshift}}
-track_professional_trajectories <- function(data,
-                                           contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
-                                           contract_type_value,
-                                           n_quarters = 4,
-                                           person_id = "cf",
-                                           start_date_col = "inizio",
-                                           end_date_col = "fine",
-                                           arco_col = "arco",
-                                           qualifica_col = "qualifica",
-                                           return_plot = TRUE,
-                                           palette = "professional",
-                                           use_bw = FALSE,
-                                           plot_title = NULL,
-                                           plot_subtitle = NULL,
-                                           person_vars = NULL,
-                                           chunk_size = 10000,
-                                           language = "it") {
-
+track_professional_trajectories <- function(
+  data,
+  contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
+  contract_type_value,
+  n_quarters = 4,
+  person_id = "cf",
+  start_date_col = "inizio",
+  end_date_col = "fine",
+  arco_col = "arco",
+  qualifica_col = "qualifica",
+  return_plot = TRUE,
+  palette = "professional",
+  use_bw = FALSE,
+  plot_title = NULL,
+  plot_subtitle = NULL,
+  person_vars = NULL,
+  chunk_size = 10000,
+  language = "it"
+) {
   # Input validation
   if (!is.data.table(data)) {
     stop("Input data must be a data.table object")
   }
 
-  required_cols <- c(person_id, contract_type_var, start_date_col, end_date_col, arco_col, qualifica_col)
+  required_cols <- c(
+    person_id,
+    contract_type_var,
+    start_date_col,
+    end_date_col,
+    arco_col,
+    qualifica_col
+  )
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -955,7 +1146,10 @@ track_professional_trajectories <- function(data,
     # Validate person_vars exist in data
     missing_vars <- setdiff(person_vars, names(reference_data))
     if (length(missing_vars) > 0) {
-      stop("person_vars not found in data: ", paste(missing_vars, collapse = ", "))
+      stop(
+        "person_vars not found in data: ",
+        paste(missing_vars, collapse = ", ")
+      )
     }
   }
 
@@ -968,9 +1162,11 @@ track_professional_trajectories <- function(data,
     )]
   } else {
     # Build the list expression with person_vars
-    j_expr <- paste0(".(person_id = get(person_id), reference_date = get(end_date_col), reference_code = get(qualifica_col)",
-                    paste0(", ", person_vars, " = ", person_vars, collapse = ""),
-                    ")")
+    j_expr <- paste0(
+      ".(person_id = get(person_id), reference_date = get(end_date_col), reference_code = get(qualifica_col)",
+      paste0(", ", person_vars, " = ", person_vars, collapse = ""),
+      ")"
+    )
     reference_codes <- reference_data[, eval(parse(text = j_expr))]
   }
 
@@ -981,18 +1177,21 @@ track_professional_trajectories <- function(data,
   }
 
   # Step 3: Vectorized quarter generation for all persons at once
-  quarter_days <- 91  # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
+  quarter_days <- 91 # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
 
-  all_quarters <- reference_codes[, {
-    q_nums <- 1:n_quarters
-    .(
-      quarter = paste0("Q", q_nums),
-      quarter_num = q_nums,
-      quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
-      quarter_end = reference_date + q_nums * quarter_days,
-      quarter_days = quarter_days
-    )
-  }, by = person_id]
+  all_quarters <- reference_codes[,
+    {
+      q_nums <- 1:n_quarters
+      .(
+        quarter = paste0("Q", q_nums),
+        quarter_num = q_nums,
+        quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
+        quarter_end = reference_date + q_nums * quarter_days,
+        quarter_days = quarter_days
+      )
+    },
+    by = person_id
+  ]
 
   setkeyv(all_quarters, c(person_id, "quarter_num"))
 
@@ -1004,10 +1203,17 @@ track_professional_trajectories <- function(data,
 
   if (n_persons <= chunk_size) {
     # Process all at once
-    all_trajectories <- calculate_professional_trajectories_vectorized(dt, all_quarters,
-                                                                      start_date_col, end_date_col,
-                                                                      person_id, arco_col, qualifica_col,
-                                                                      reference_codes, quarter_days)
+    all_trajectories <- calculate_professional_trajectories_vectorized(
+      dt,
+      all_quarters,
+      start_date_col,
+      end_date_col,
+      person_id,
+      arco_col,
+      qualifica_col,
+      reference_codes,
+      quarter_days
+    )
   } else {
     # Process in chunks
     person_list <- reference_codes[[person_id]]
@@ -1021,33 +1227,48 @@ track_professional_trajectories <- function(data,
       chunk_data <- dt[get(person_id) %in% chunk_persons]
       chunk_reference <- reference_codes[get(person_id) %in% chunk_persons]
 
-      trajectory_list[[i]] <- calculate_professional_trajectories_vectorized(chunk_data, chunk_quarters,
-                                                                            start_date_col, end_date_col,
-                                                                            person_id, arco_col, qualifica_col,
-                                                                            chunk_reference, quarter_days)
+      trajectory_list[[i]] <- calculate_professional_trajectories_vectorized(
+        chunk_data,
+        chunk_quarters,
+        start_date_col,
+        end_date_col,
+        person_id,
+        arco_col,
+        qualifica_col,
+        chunk_reference,
+        quarter_days
+      )
     }
 
     all_trajectories <- rbindlist(trajectory_list)
   }
 
   # Apply translation to professional status
-  all_trajectories[, professional_status := translate_trajectory_status(professional_status, language)]
+  all_trajectories[,
+    professional_status := translate_trajectory_status(
+      professional_status,
+      language
+    )
+  ]
 
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
     order(get(person_id), quarter_num)
-  ][, .(trajectory = paste(professional_status, collapse = " -> ")),
-    by = person_id]
+  ][,
+    .(trajectory = paste(professional_status, collapse = " -> ")),
+    by = person_id
+  ]
 
   # Count trajectory patterns
   trajectory_summary <- trajectory_sequences[,
-    .(count = .N,
-      percentage = round(.N / nrow(reference_codes) * 100, 1)),
-    by = trajectory][order(-count)]
+    .(count = .N, percentage = round(.N / nrow(reference_codes) * 100, 1)),
+    by = trajectory
+  ][order(-count)]
 
   # Prepare data for alluvial plot
-  plot_data <- copy(all_trajectories)
+  # W3.3: copy() removed — plot_data is only passed read-only to ggplot2.
+  plot_data <- all_trajectories
 
   # Create the plot if requested
   plot_obj <- NULL
@@ -1066,44 +1287,80 @@ track_professional_trajectories <- function(data,
     }
 
     # Get colors for professional status
-    professional_statuses <- c("Same Code", "Different Code", "Not Working", "No Information")
+    professional_statuses <- c(
+      "Same Code",
+      "Different Code",
+      "Not Working",
+      "No Information"
+    )
 
     # Translate status labels for colors
-    professional_statuses_translated <- translate_trajectory_status(professional_statuses, language)
+    professional_statuses_translated <- translate_trajectory_status(
+      professional_statuses,
+      language
+    )
 
     if (palette == "professional" && !use_bw) {
       colors <- c(
-        "#27AE60",        # Green - Same Code
-        "#3498DB",        # Blue - Different Code
-        "#E74C3C",        # Red - Not Working
-        "#95A5A6"         # Grey - No Information
+        "#27AE60", # Green - Same Code
+        "#3498DB", # Blue - Different Code
+        "#E74C3C", # Red - Not Working
+        "#95A5A6" # Grey - No Information
       )
       names(colors) <- professional_statuses_translated
     } else {
       # Use vecshift_colors function
-      base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
-                                   n = length(professional_statuses))
-      colors <- setNames(base_colors[1:length(professional_statuses)], professional_statuses_translated)
+      base_colors <- vecshift_colors(
+        palette = if (use_bw) "bw" else "main",
+        n = length(professional_statuses)
+      )
+      colors <- setNames(
+        base_colors[1:length(professional_statuses)],
+        professional_statuses_translated
+      )
     }
 
     # Create alluvial plot
-    plot_obj <- ggplot2::ggplot(plot_data,
-                               ggplot2::aes(x = quarter, stratum = professional_status,
-                                          alluvium = !!sym(person_id), fill = professional_status)) +
+    plot_obj <- ggplot2::ggplot(
+      plot_data,
+      ggplot2::aes(
+        x = quarter,
+        stratum = professional_status,
+        alluvium = !!sym(person_id),
+        fill = professional_status
+      )
+    ) +
       ggalluvial::geom_flow(alpha = 0.6, curve_type = "cubic", width = 0.3) +
       ggalluvial::geom_stratum(alpha = 0.8, width = 0.3) +
-      ggplot2::geom_text(stat = ggalluvial::StatStratum,
-                        ggplot2::aes(label = ggplot2::after_stat(stratum)),
-                        size = 3, color = "white", fontface = "bold") +
-      ggplot2::scale_fill_manual(values = colors, name = "Professional\nStatus") +
+      ggplot2::geom_text(
+        stat = ggalluvial::StatStratum,
+        ggplot2::aes(label = ggplot2::after_stat(stratum)),
+        size = 3,
+        color = "white",
+        fontface = "bold"
+      ) +
+      ggplot2::scale_fill_manual(
+        values = colors,
+        name = "Professional\nStatus"
+      ) +
       ggplot2::labs(
         title = if (is.null(plot_title)) {
-          paste("Professional Trajectories After", contract_type_value, "Contract")
+          paste(
+            "Professional Trajectories After",
+            contract_type_value,
+            "Contract"
+          )
         } else {
           plot_title
         },
         subtitle = if (is.null(plot_subtitle)) {
-          paste("Tracking", nrow(reference_codes), "individuals over", n_quarters, "quarters")
+          paste(
+            "Tracking",
+            nrow(reference_codes),
+            "individuals over",
+            n_quarters,
+            "quarters"
+          )
         } else {
           plot_subtitle
         },
@@ -1120,30 +1377,45 @@ track_professional_trajectories <- function(data,
 
   # Create transitions aggregation
   # Sort data by person and quarter to get consecutive quarters
-  all_trajectories_sorted <- all_trajectories[order(get(person_id), quarter_num)]
+  all_trajectories_sorted <- all_trajectories[order(
+    get(person_id),
+    quarter_num
+  )]
 
   # Create transitions by comparing consecutive quarters for each person
-  transitions_raw <- all_trajectories_sorted[, {
-    if (.N > 1) {
-      data.table(
-        from_quarter = quarter_num[-.N],
-        to_quarter = quarter_num[-1],
-        from_status = professional_status[-.N],
-        to_status = professional_status[-1]
-      )
-    } else {
-      # If only one quarter, no transitions
-      data.table()
-    }
-  }, by = person_id]
+  transitions_raw <- all_trajectories_sorted[,
+    {
+      if (.N > 1) {
+        data.table(
+          from_quarter = quarter_num[-.N],
+          to_quarter = quarter_num[-1],
+          from_status = professional_status[-.N],
+          to_status = professional_status[-1]
+        )
+      } else {
+        # If only one quarter, no transitions
+        data.table()
+      }
+    },
+    by = person_id
+  ]
 
   # Aggregate transitions based on whether person_vars exist
   # Handle empty transitions_raw case
   if (nrow(transitions_raw) == 0) {
     # Create empty transition_counts with correct structure
     if (!is.null(person_vars) && length(person_vars) > 0) {
-      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
-      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      group_cols <- c(
+        "from_quarter",
+        "to_quarter",
+        "from_status",
+        "to_status",
+        person_vars
+      )
+      transition_counts <- data.table::data.table(matrix(
+        ncol = length(group_cols) + 1,
+        nrow = 0
+      ))
       setnames(transition_counts, c(group_cols, "count"))
     } else {
       transition_counts <- data.table::data.table(
@@ -1156,23 +1428,38 @@ track_professional_trajectories <- function(data,
     }
   } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_codes into transitions
-    transitions_with_vars <- merge(transitions_raw,
-                                   reference_codes[, c(person_id, person_vars), with = FALSE],
-                                   by = person_id, all.x = TRUE)
+    transitions_with_vars <- merge(
+      transitions_raw,
+      reference_codes[, c(person_id, person_vars), with = FALSE],
+      by = person_id,
+      all.x = TRUE
+    )
 
     # Group by transition characteristics and person_vars, then count
-    group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+    group_cols <- c(
+      "from_quarter",
+      "to_quarter",
+      "from_status",
+      "to_status",
+      person_vars
+    )
     transition_counts <- transitions_with_vars[, .(count = .N), by = group_cols]
   } else {
     # Group by transition characteristics only
-    transition_counts <- transitions_raw[, .(count = .N),
-                                        by = .(from_quarter, to_quarter, from_status, to_status)]
+    transition_counts <- transitions_raw[,
+      .(count = .N),
+      by = .(from_quarter, to_quarter, from_status, to_status)
+    ]
   }
 
   # Order by from_quarter, to_quarter, and count (only if not empty)
   if (nrow(transition_counts) > 0) {
     setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+    setorderv(
+      transition_counts,
+      c("from_quarter", "to_quarter", "count"),
+      order = c(1, 1, -1)
+    )
   }
 
   # Prepare return object
@@ -1309,24 +1596,25 @@ track_professional_trajectories <- function(data,
 #' }
 #'
 #' @seealso \code{\link{track_contract_trajectories}}, \code{\link{track_professional_trajectories}}, \code{\link{theme_vecshift}}
-track_employer_trajectories <- function(data,
-                                       contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
-                                       contract_type_value,
-                                       employer_col,
-                                       n_quarters = 4,
-                                       person_id = "cf",
-                                       start_date_col = "inizio",
-                                       end_date_col = "fine",
-                                       arco_col = "arco",
-                                       return_plot = TRUE,
-                                       palette = "employer",
-                                       use_bw = FALSE,
-                                       plot_title = NULL,
-                                       plot_subtitle = NULL,
-                                       person_vars = NULL,
-                                       chunk_size = 10000,
-                                       language = "it") {
-
+track_employer_trajectories <- function(
+  data,
+  contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
+  contract_type_value,
+  employer_col,
+  n_quarters = 4,
+  person_id = "cf",
+  start_date_col = "inizio",
+  end_date_col = "fine",
+  arco_col = "arco",
+  return_plot = TRUE,
+  palette = "employer",
+  use_bw = FALSE,
+  plot_title = NULL,
+  plot_subtitle = NULL,
+  person_vars = NULL,
+  chunk_size = 10000,
+  language = "it"
+) {
   # Input validation
   if (!is.data.table(data)) {
     stop("Input data must be a data.table object")
@@ -1336,7 +1624,14 @@ track_employer_trajectories <- function(data,
     stop("employer_col parameter must be specified")
   }
 
-  required_cols <- c(person_id, contract_type_var, start_date_col, end_date_col, arco_col, employer_col)
+  required_cols <- c(
+    person_id,
+    contract_type_var,
+    start_date_col,
+    end_date_col,
+    arco_col,
+    employer_col
+  )
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -1379,7 +1674,10 @@ track_employer_trajectories <- function(data,
     # Validate person_vars exist in data
     missing_vars <- setdiff(person_vars, names(reference_data))
     if (length(missing_vars) > 0) {
-      stop("person_vars not found in data: ", paste(missing_vars, collapse = ", "))
+      stop(
+        "person_vars not found in data: ",
+        paste(missing_vars, collapse = ", ")
+      )
     }
   }
 
@@ -1392,9 +1690,11 @@ track_employer_trajectories <- function(data,
     )]
   } else {
     # Build the list expression with person_vars
-    j_expr <- paste0(".(person_id = get(person_id), reference_date = get(end_date_col), reference_employer = get(employer_col)",
-                    paste0(", ", person_vars, " = ", person_vars, collapse = ""),
-                    ")")
+    j_expr <- paste0(
+      ".(person_id = get(person_id), reference_date = get(end_date_col), reference_employer = get(employer_col)",
+      paste0(", ", person_vars, " = ", person_vars, collapse = ""),
+      ")"
+    )
     reference_employers <- reference_data[, eval(parse(text = j_expr))]
   }
 
@@ -1405,18 +1705,21 @@ track_employer_trajectories <- function(data,
   }
 
   # Step 3: Vectorized quarter generation for all persons at once
-  quarter_days <- 91  # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
+  quarter_days <- 91 # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
 
-  all_quarters <- reference_employers[, {
-    q_nums <- 1:n_quarters
-    .(
-      quarter = paste0("Q", q_nums),
-      quarter_num = q_nums,
-      quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
-      quarter_end = reference_date + q_nums * quarter_days,
-      quarter_days = quarter_days
-    )
-  }, by = person_id]
+  all_quarters <- reference_employers[,
+    {
+      q_nums <- 1:n_quarters
+      .(
+        quarter = paste0("Q", q_nums),
+        quarter_num = q_nums,
+        quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
+        quarter_end = reference_date + q_nums * quarter_days,
+        quarter_days = quarter_days
+      )
+    },
+    by = person_id
+  ]
 
   setkeyv(all_quarters, c(person_id, "quarter_num"))
 
@@ -1428,10 +1731,17 @@ track_employer_trajectories <- function(data,
 
   if (n_persons <= chunk_size) {
     # Process all at once
-    all_trajectories <- calculate_employer_trajectories_vectorized(dt, all_quarters,
-                                                                  start_date_col, end_date_col,
-                                                                  person_id, arco_col, employer_col,
-                                                                  reference_employers, quarter_days)
+    all_trajectories <- calculate_employer_trajectories_vectorized(
+      dt,
+      all_quarters,
+      start_date_col,
+      end_date_col,
+      person_id,
+      arco_col,
+      employer_col,
+      reference_employers,
+      quarter_days
+    )
   } else {
     # Process in chunks
     person_list <- reference_employers[[person_id]]
@@ -1445,33 +1755,42 @@ track_employer_trajectories <- function(data,
       chunk_data <- dt[get(person_id) %in% chunk_persons]
       chunk_reference <- reference_employers[get(person_id) %in% chunk_persons]
 
-      trajectory_list[[i]] <- calculate_employer_trajectories_vectorized(chunk_data, chunk_quarters,
-                                                                        start_date_col, end_date_col,
-                                                                        person_id, arco_col, employer_col,
-                                                                        chunk_reference, quarter_days)
+      trajectory_list[[i]] <- calculate_employer_trajectories_vectorized(
+        chunk_data,
+        chunk_quarters,
+        start_date_col,
+        end_date_col,
+        person_id,
+        arco_col,
+        employer_col,
+        chunk_reference,
+        quarter_days
+      )
     }
 
     all_trajectories <- rbindlist(trajectory_list)
   }
 
   # Apply translation to employer status
-  all_trajectories[, employer_status := translate_trajectory_status(employer_status, language)]
+  all_trajectories[,
+    employer_status := translate_trajectory_status(employer_status, language)
+  ]
 
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
     order(get(person_id), quarter_num)
-  ][, .(trajectory = paste(employer_status, collapse = " -> ")),
-    by = person_id]
+  ][, .(trajectory = paste(employer_status, collapse = " -> ")), by = person_id]
 
   # Count trajectory patterns
   trajectory_summary <- trajectory_sequences[,
-    .(count = .N,
-      percentage = round(.N / nrow(reference_employers) * 100, 1)),
-    by = trajectory][order(-count)]
+    .(count = .N, percentage = round(.N / nrow(reference_employers) * 100, 1)),
+    by = trajectory
+  ][order(-count)]
 
   # Prepare data for alluvial plot
-  plot_data <- copy(all_trajectories)
+  # W3.3: copy() removed — plot_data is only passed read-only to ggplot2.
+  plot_data <- all_trajectories
 
   # Create the plot if requested
   plot_obj <- NULL
@@ -1490,35 +1809,58 @@ track_employer_trajectories <- function(data,
     }
 
     # Get colors for employer status
-    employer_statuses <- c("Same Employer", "Different Employer", "Not Working", "No Information")
+    employer_statuses <- c(
+      "Same Employer",
+      "Different Employer",
+      "Not Working",
+      "No Information"
+    )
 
     # Translate status labels for colors
-    employer_statuses_translated <- translate_trajectory_status(employer_statuses, language)
+    employer_statuses_translated <- translate_trajectory_status(
+      employer_statuses,
+      language
+    )
 
     if (palette == "employer" && !use_bw) {
       colors <- c(
-        "#2ECC71",         # Bright green - Same Employer
-        "#E67E22",         # Orange - Different Employer
-        "#E74C3C",         # Red - Not Working
-        "#95A5A6"          # Grey - No Information
+        "#2ECC71", # Bright green - Same Employer
+        "#E67E22", # Orange - Different Employer
+        "#E74C3C", # Red - Not Working
+        "#95A5A6" # Grey - No Information
       )
       names(colors) <- employer_statuses_translated
     } else {
       # Use vecshift_colors function
-      base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
-                                   n = length(employer_statuses))
-      colors <- setNames(base_colors[1:length(employer_statuses)], employer_statuses_translated)
+      base_colors <- vecshift_colors(
+        palette = if (use_bw) "bw" else "main",
+        n = length(employer_statuses)
+      )
+      colors <- setNames(
+        base_colors[1:length(employer_statuses)],
+        employer_statuses_translated
+      )
     }
 
     # Create alluvial plot
-    plot_obj <- ggplot2::ggplot(plot_data,
-                               ggplot2::aes(x = quarter, stratum = employer_status,
-                                          alluvium = !!sym(person_id), fill = employer_status)) +
+    plot_obj <- ggplot2::ggplot(
+      plot_data,
+      ggplot2::aes(
+        x = quarter,
+        stratum = employer_status,
+        alluvium = !!sym(person_id),
+        fill = employer_status
+      )
+    ) +
       ggalluvial::geom_flow(alpha = 0.6, curve_type = "cubic", width = 0.3) +
       ggalluvial::geom_stratum(alpha = 0.8, width = 0.3) +
-      ggplot2::geom_text(stat = ggalluvial::StatStratum,
-                        ggplot2::aes(label = ggplot2::after_stat(stratum)),
-                        size = 3, color = "white", fontface = "bold") +
+      ggplot2::geom_text(
+        stat = ggalluvial::StatStratum,
+        ggplot2::aes(label = ggplot2::after_stat(stratum)),
+        size = 3,
+        color = "white",
+        fontface = "bold"
+      ) +
       ggplot2::scale_fill_manual(values = colors, name = "Employer\nStatus") +
       ggplot2::labs(
         title = if (is.null(plot_title)) {
@@ -1527,7 +1869,13 @@ track_employer_trajectories <- function(data,
           plot_title
         },
         subtitle = if (is.null(plot_subtitle)) {
-          paste("Tracking", nrow(reference_employers), "individuals over", n_quarters, "quarters")
+          paste(
+            "Tracking",
+            nrow(reference_employers),
+            "individuals over",
+            n_quarters,
+            "quarters"
+          )
         } else {
           plot_subtitle
         },
@@ -1544,30 +1892,45 @@ track_employer_trajectories <- function(data,
 
   # Create transitions aggregation
   # Sort data by person and quarter to get consecutive quarters
-  all_trajectories_sorted <- all_trajectories[order(get(person_id), quarter_num)]
+  all_trajectories_sorted <- all_trajectories[order(
+    get(person_id),
+    quarter_num
+  )]
 
   # Create transitions by comparing consecutive quarters for each person
-  transitions_raw <- all_trajectories_sorted[, {
-    if (.N > 1) {
-      data.table(
-        from_quarter = quarter_num[-.N],
-        to_quarter = quarter_num[-1],
-        from_status = employer_status[-.N],
-        to_status = employer_status[-1]
-      )
-    } else {
-      # If only one quarter, no transitions
-      data.table()
-    }
-  }, by = person_id]
+  transitions_raw <- all_trajectories_sorted[,
+    {
+      if (.N > 1) {
+        data.table(
+          from_quarter = quarter_num[-.N],
+          to_quarter = quarter_num[-1],
+          from_status = employer_status[-.N],
+          to_status = employer_status[-1]
+        )
+      } else {
+        # If only one quarter, no transitions
+        data.table()
+      }
+    },
+    by = person_id
+  ]
 
   # Aggregate transitions based on whether person_vars exist
   # Handle empty transitions_raw case
   if (nrow(transitions_raw) == 0) {
     # Create empty transition_counts with correct structure
     if (!is.null(person_vars) && length(person_vars) > 0) {
-      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
-      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      group_cols <- c(
+        "from_quarter",
+        "to_quarter",
+        "from_status",
+        "to_status",
+        person_vars
+      )
+      transition_counts <- data.table::data.table(matrix(
+        ncol = length(group_cols) + 1,
+        nrow = 0
+      ))
       setnames(transition_counts, c(group_cols, "count"))
     } else {
       transition_counts <- data.table::data.table(
@@ -1580,23 +1943,38 @@ track_employer_trajectories <- function(data,
     }
   } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_employers into transitions
-    transitions_with_vars <- merge(transitions_raw,
-                                   reference_employers[, c(person_id, person_vars), with = FALSE],
-                                   by = person_id, all.x = TRUE)
+    transitions_with_vars <- merge(
+      transitions_raw,
+      reference_employers[, c(person_id, person_vars), with = FALSE],
+      by = person_id,
+      all.x = TRUE
+    )
 
     # Group by transition characteristics and person_vars, then count
-    group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+    group_cols <- c(
+      "from_quarter",
+      "to_quarter",
+      "from_status",
+      "to_status",
+      person_vars
+    )
     transition_counts <- transitions_with_vars[, .(count = .N), by = group_cols]
   } else {
     # Group by transition characteristics only
-    transition_counts <- transitions_raw[, .(count = .N),
-                                        by = .(from_quarter, to_quarter, from_status, to_status)]
+    transition_counts <- transitions_raw[,
+      .(count = .N),
+      by = .(from_quarter, to_quarter, from_status, to_status)
+    ]
   }
 
   # Order by from_quarter, to_quarter, and count (only if not empty)
   if (nrow(transition_counts) > 0) {
     setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+    setorderv(
+      transition_counts,
+      c("from_quarter", "to_quarter", "count"),
+      order = c(1, 1, -1)
+    )
   }
 
   # Prepare return object
@@ -1640,8 +2018,17 @@ track_employer_trajectories <- function(data,
 #' @param quarter_days Number of days per quarter
 #' @return data.table with sector trajectories
 #' @keywords internal
-calculate_sector_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_col, person_col, arco_col, sector_col, reference_sectors, quarter_days) {
-
+calculate_sector_trajectories_vectorized <- function(
+  dt,
+  quarters_dt,
+  start_col,
+  end_col,
+  person_col,
+  arco_col,
+  sector_col,
+  reference_sectors,
+  quarter_days
+) {
   # Create cartesian join between quarters and employment data
   overlaps <- merge(quarters_dt, dt, by = person_col, allow.cartesian = TRUE)
 
@@ -1664,37 +2051,50 @@ calculate_sector_trajectories_vectorized <- function(dt, quarters_dt, start_col,
   setkeyv(overlaps, c(person_col, "quarter_num", "emp_end"))
 
   # Group by person-quarter and select sector
-  group_cols <- c(person_col, "quarter", "quarter_num", "quarter_start", "quarter_end", "quarter_days")
+  group_cols <- c(
+    person_col,
+    "quarter",
+    "quarter_num",
+    "quarter_start",
+    "quarter_end",
+    "quarter_days"
+  )
 
-  sector_codes <- overlaps[, {
-    if (.N == 0) {
-      data.table(quarter_sector = NA_character_, all_arco_zero = TRUE)
-    } else {
-      # Check if there are any employment contracts (arco > 0)
-      employment_contracts <- .SD[get(arco_col) > 0]
-
-      if (nrow(employment_contracts) > 0) {
-        # Prioritize employment contracts - get sector from latest end date
-        latest_employment <- employment_contracts[.N]  # Already sorted by emp_end
-        .(quarter_sector = latest_employment[[sector_col]],
-          all_arco_zero = FALSE)
+  sector_codes <- overlaps[,
+    {
+      if (.N == 0) {
+        data.table(quarter_sector = NA_character_, all_arco_zero = TRUE)
       } else {
-        # All contracts have arco = 0
-        # Still get sector from latest contract for potential future use
-        latest_contract <- .SD[.N]  # Already sorted by emp_end
-        .(quarter_sector = latest_contract[[sector_col]],
-          all_arco_zero = TRUE)
+        # Check if there are any employment contracts (arco > 0)
+        employment_contracts <- .SD[get(arco_col) > 0]
+
+        if (nrow(employment_contracts) > 0) {
+          # Prioritize employment contracts - get sector from latest end date
+          latest_employment <- employment_contracts[.N] # Already sorted by emp_end
+          .(
+            quarter_sector = latest_employment[[sector_col]],
+            all_arco_zero = FALSE
+          )
+        } else {
+          # All contracts have arco = 0
+          # Still get sector from latest contract for potential future use
+          latest_contract <- .SD[.N] # Already sorted by emp_end
+          .(
+            quarter_sector = latest_contract[[sector_col]],
+            all_arco_zero = TRUE
+          )
+        }
       }
-    }
-  }, by = group_cols]
+    },
+    by = group_cols
+  ]
 
   # Get all person-quarter combinations (including those with no contracts)
-  all_combinations <- copy(quarters_dt)
+  # W3.3: copy() removed — quarters_dt is only merged below, never mutated.
+  all_combinations <- quarters_dt
 
   # Left join to include quarters with no contracts
-  result <- merge(all_combinations, sector_codes,
-                 by = group_cols,
-                 all.x = TRUE)
+  result <- merge(all_combinations, sector_codes, by = group_cols, all.x = TRUE)
 
   # Keep quarter_sector as NA for quarters with no contract data
   # all_arco_zero defaults to FALSE for NA cases
@@ -1703,12 +2103,14 @@ calculate_sector_trajectories_vectorized <- function(dt, quarters_dt, start_col,
   result <- merge(result, reference_sectors, by = person_col, all.x = TRUE)
 
   # Vectorized sector status classification
-  result[, sector_status := fcase(
-    all_arco_zero == TRUE, "Not Working",
-    is.na(quarter_sector), "No Information",
-    quarter_sector == reference_sector, "Same Sector",
-    quarter_sector != reference_sector, "Different Sector"
-  )]
+  result[,
+    sector_status := fcase(
+      all_arco_zero == TRUE              , "Not Working"      ,
+      is.na(quarter_sector)              , "No Information"   ,
+      quarter_sector == reference_sector , "Same Sector"      ,
+      quarter_sector != reference_sector , "Different Sector"
+    )
+  ]
 
   # Order by person and quarter
   setkeyv(result, c(person_col, "quarter_num"))
@@ -1830,24 +2232,25 @@ calculate_sector_trajectories_vectorized <- function(dt, quarters_dt, start_col,
 #'
 #' @seealso \code{\link{track_contract_trajectories}}, \code{\link{track_professional_trajectories}},
 #' \code{\link{track_employer_trajectories}}, \code{\link{theme_vecshift}}
-track_sector_trajectories <- function(data,
-                                     contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
-                                     contract_type_value,
-                                     sector_col,
-                                     n_quarters = 4,
-                                     person_id = "cf",
-                                     start_date_col = "inizio",
-                                     end_date_col = "fine",
-                                     arco_col = "arco",
-                                     return_plot = TRUE,
-                                     palette = "sector",
-                                     use_bw = FALSE,
-                                     plot_title = NULL,
-                                     plot_subtitle = NULL,
-                                     chunk_size = 10000,
-                                     person_vars = NULL,
-                                     language = "it") {
-
+track_sector_trajectories <- function(
+  data,
+  contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
+  contract_type_value,
+  sector_col,
+  n_quarters = 4,
+  person_id = "cf",
+  start_date_col = "inizio",
+  end_date_col = "fine",
+  arco_col = "arco",
+  return_plot = TRUE,
+  palette = "sector",
+  use_bw = FALSE,
+  plot_title = NULL,
+  plot_subtitle = NULL,
+  chunk_size = 10000,
+  person_vars = NULL,
+  language = "it"
+) {
   # Input validation
   if (!is.data.table(data)) {
     stop("Input data must be a data.table object")
@@ -1857,7 +2260,14 @@ track_sector_trajectories <- function(data,
     stop("sector_col parameter must be specified")
   }
 
-  required_cols <- c(person_id, contract_type_var, start_date_col, end_date_col, arco_col, sector_col)
+  required_cols <- c(
+    person_id,
+    contract_type_var,
+    start_date_col,
+    end_date_col,
+    arco_col,
+    sector_col
+  )
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -1900,7 +2310,10 @@ track_sector_trajectories <- function(data,
     # Validate person_vars exist in data
     missing_vars <- setdiff(person_vars, names(reference_data))
     if (length(missing_vars) > 0) {
-      stop("person_vars not found in data: ", paste(missing_vars, collapse = ", "))
+      stop(
+        "person_vars not found in data: ",
+        paste(missing_vars, collapse = ", ")
+      )
     }
   }
 
@@ -1913,9 +2326,11 @@ track_sector_trajectories <- function(data,
     )]
   } else {
     # Build the list expression with person_vars
-    j_expr <- paste0(".(person_id = get(person_id), reference_date = get(end_date_col), reference_sector = get(sector_col)",
-                    paste0(", ", person_vars, " = ", person_vars, collapse = ""),
-                    ")")
+    j_expr <- paste0(
+      ".(person_id = get(person_id), reference_date = get(end_date_col), reference_sector = get(sector_col)",
+      paste0(", ", person_vars, " = ", person_vars, collapse = ""),
+      ")"
+    )
     reference_sectors <- reference_data[, eval(parse(text = j_expr))]
   }
 
@@ -1926,18 +2341,21 @@ track_sector_trajectories <- function(data,
   }
 
   # Step 3: Vectorized quarter generation for all persons at once
-  quarter_days <- 91  # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
+  quarter_days <- 91 # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
 
-  all_quarters <- reference_sectors[, {
-    q_nums <- 1:n_quarters
-    .(
-      quarter = paste0("Q", q_nums),
-      quarter_num = q_nums,
-      quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
-      quarter_end = reference_date + q_nums * quarter_days,
-      quarter_days = quarter_days
-    )
-  }, by = person_id]
+  all_quarters <- reference_sectors[,
+    {
+      q_nums <- 1:n_quarters
+      .(
+        quarter = paste0("Q", q_nums),
+        quarter_num = q_nums,
+        quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
+        quarter_end = reference_date + q_nums * quarter_days,
+        quarter_days = quarter_days
+      )
+    },
+    by = person_id
+  ]
 
   setkeyv(all_quarters, c(person_id, "quarter_num"))
 
@@ -1949,10 +2367,17 @@ track_sector_trajectories <- function(data,
 
   if (n_persons <= chunk_size) {
     # Process all at once
-    all_trajectories <- calculate_sector_trajectories_vectorized(dt, all_quarters,
-                                                                start_date_col, end_date_col,
-                                                                person_id, arco_col, sector_col,
-                                                                reference_sectors, quarter_days)
+    all_trajectories <- calculate_sector_trajectories_vectorized(
+      dt,
+      all_quarters,
+      start_date_col,
+      end_date_col,
+      person_id,
+      arco_col,
+      sector_col,
+      reference_sectors,
+      quarter_days
+    )
   } else {
     # Process in chunks
     person_list <- reference_sectors[[person_id]]
@@ -1966,33 +2391,42 @@ track_sector_trajectories <- function(data,
       chunk_data <- dt[get(person_id) %in% chunk_persons]
       chunk_reference <- reference_sectors[get(person_id) %in% chunk_persons]
 
-      trajectory_list[[i]] <- calculate_sector_trajectories_vectorized(chunk_data, chunk_quarters,
-                                                                      start_date_col, end_date_col,
-                                                                      person_id, arco_col, sector_col,
-                                                                      chunk_reference, quarter_days)
+      trajectory_list[[i]] <- calculate_sector_trajectories_vectorized(
+        chunk_data,
+        chunk_quarters,
+        start_date_col,
+        end_date_col,
+        person_id,
+        arco_col,
+        sector_col,
+        chunk_reference,
+        quarter_days
+      )
     }
 
     all_trajectories <- rbindlist(trajectory_list)
   }
 
   # Apply translation to sector status
-  all_trajectories[, sector_status := translate_trajectory_status(sector_status, language)]
+  all_trajectories[,
+    sector_status := translate_trajectory_status(sector_status, language)
+  ]
 
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
     order(get(person_id), quarter_num)
-  ][, .(trajectory = paste(sector_status, collapse = " -> ")),
-    by = person_id]
+  ][, .(trajectory = paste(sector_status, collapse = " -> ")), by = person_id]
 
   # Count trajectory patterns
   trajectory_summary <- trajectory_sequences[,
-    .(count = .N,
-      percentage = round(.N / nrow(reference_sectors) * 100, 1)),
-    by = trajectory][order(-count)]
+    .(count = .N, percentage = round(.N / nrow(reference_sectors) * 100, 1)),
+    by = trajectory
+  ][order(-count)]
 
   # Prepare data for alluvial plot
-  plot_data <- copy(all_trajectories)
+  # W3.3: copy() removed — plot_data is only passed read-only to ggplot2.
+  plot_data <- all_trajectories
 
   # Create the plot if requested
   plot_obj <- NULL
@@ -2011,35 +2445,58 @@ track_sector_trajectories <- function(data,
     }
 
     # Get colors for sector status
-    sector_statuses <- c("Same Sector", "Different Sector", "Not Working", "No Information")
+    sector_statuses <- c(
+      "Same Sector",
+      "Different Sector",
+      "Not Working",
+      "No Information"
+    )
 
     # Translate status labels for colors
-    sector_statuses_translated <- translate_trajectory_status(sector_statuses, language)
+    sector_statuses_translated <- translate_trajectory_status(
+      sector_statuses,
+      language
+    )
 
     if (palette == "sector" && !use_bw) {
       colors <- c(
-        "#3498DB",        # Blue - Same Sector
-        "#9B59B6",        # Purple - Different Sector
-        "#E74C3C",        # Red - Not Working
-        "#95A5A6"         # Grey - No Information
+        "#3498DB", # Blue - Same Sector
+        "#9B59B6", # Purple - Different Sector
+        "#E74C3C", # Red - Not Working
+        "#95A5A6" # Grey - No Information
       )
       names(colors) <- sector_statuses_translated
     } else {
       # Use vecshift_colors function
-      base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
-                                   n = length(sector_statuses))
-      colors <- setNames(base_colors[1:length(sector_statuses)], sector_statuses_translated)
+      base_colors <- vecshift_colors(
+        palette = if (use_bw) "bw" else "main",
+        n = length(sector_statuses)
+      )
+      colors <- setNames(
+        base_colors[1:length(sector_statuses)],
+        sector_statuses_translated
+      )
     }
 
     # Create alluvial plot
-    plot_obj <- ggplot2::ggplot(plot_data,
-                               ggplot2::aes(x = quarter, stratum = sector_status,
-                                          alluvium = !!sym(person_id), fill = sector_status)) +
+    plot_obj <- ggplot2::ggplot(
+      plot_data,
+      ggplot2::aes(
+        x = quarter,
+        stratum = sector_status,
+        alluvium = !!sym(person_id),
+        fill = sector_status
+      )
+    ) +
       ggalluvial::geom_flow(alpha = 0.6, curve_type = "cubic", width = 0.3) +
       ggalluvial::geom_stratum(alpha = 0.8, width = 0.3) +
-      ggplot2::geom_text(stat = ggalluvial::StatStratum,
-                        ggplot2::aes(label = ggplot2::after_stat(stratum)),
-                        size = 3, color = "white", fontface = "bold") +
+      ggplot2::geom_text(
+        stat = ggalluvial::StatStratum,
+        ggplot2::aes(label = ggplot2::after_stat(stratum)),
+        size = 3,
+        color = "white",
+        fontface = "bold"
+      ) +
       ggplot2::scale_fill_manual(values = colors, name = "Sector\nStatus") +
       ggplot2::labs(
         title = if (is.null(plot_title)) {
@@ -2048,7 +2505,13 @@ track_sector_trajectories <- function(data,
           plot_title
         },
         subtitle = if (is.null(plot_subtitle)) {
-          paste("Tracking", nrow(reference_sectors), "individuals over", n_quarters, "quarters")
+          paste(
+            "Tracking",
+            nrow(reference_sectors),
+            "individuals over",
+            n_quarters,
+            "quarters"
+          )
         } else {
           plot_subtitle
         },
@@ -2065,30 +2528,45 @@ track_sector_trajectories <- function(data,
 
   # Create transitions aggregation
   # Sort data by person and quarter to get consecutive quarters
-  all_trajectories_sorted <- all_trajectories[order(get(person_id), quarter_num)]
+  all_trajectories_sorted <- all_trajectories[order(
+    get(person_id),
+    quarter_num
+  )]
 
   # Create transitions by comparing consecutive quarters for each person
-  transitions_raw <- all_trajectories_sorted[, {
-    if (.N > 1) {
-      data.table(
-        from_quarter = quarter_num[-.N],
-        to_quarter = quarter_num[-1],
-        from_status = sector_status[-.N],
-        to_status = sector_status[-1]
-      )
-    } else {
-      # If only one quarter, no transitions
-      data.table()
-    }
-  }, by = person_id]
+  transitions_raw <- all_trajectories_sorted[,
+    {
+      if (.N > 1) {
+        data.table(
+          from_quarter = quarter_num[-.N],
+          to_quarter = quarter_num[-1],
+          from_status = sector_status[-.N],
+          to_status = sector_status[-1]
+        )
+      } else {
+        # If only one quarter, no transitions
+        data.table()
+      }
+    },
+    by = person_id
+  ]
 
   # Aggregate transitions based on whether person_vars exist
   # Handle empty transitions_raw case
   if (nrow(transitions_raw) == 0) {
     # Create empty transition_counts with correct structure
     if (!is.null(person_vars) && length(person_vars) > 0) {
-      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
-      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      group_cols <- c(
+        "from_quarter",
+        "to_quarter",
+        "from_status",
+        "to_status",
+        person_vars
+      )
+      transition_counts <- data.table::data.table(matrix(
+        ncol = length(group_cols) + 1,
+        nrow = 0
+      ))
       setnames(transition_counts, c(group_cols, "count"))
     } else {
       transition_counts <- data.table::data.table(
@@ -2101,23 +2579,38 @@ track_sector_trajectories <- function(data,
     }
   } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_sectors into transitions
-    transitions_with_vars <- merge(transitions_raw,
-                                   reference_sectors[, c(person_id, person_vars), with = FALSE],
-                                   by = person_id, all.x = TRUE)
+    transitions_with_vars <- merge(
+      transitions_raw,
+      reference_sectors[, c(person_id, person_vars), with = FALSE],
+      by = person_id,
+      all.x = TRUE
+    )
 
     # Group by transition characteristics and person_vars, then count
-    group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+    group_cols <- c(
+      "from_quarter",
+      "to_quarter",
+      "from_status",
+      "to_status",
+      person_vars
+    )
     transition_counts <- transitions_with_vars[, .(count = .N), by = group_cols]
   } else {
     # Group by transition characteristics only
-    transition_counts <- transitions_raw[, .(count = .N),
-                                        by = .(from_quarter, to_quarter, from_status, to_status)]
+    transition_counts <- transitions_raw[,
+      .(count = .N),
+      by = .(from_quarter, to_quarter, from_status, to_status)
+    ]
   }
 
   # Order by from_quarter, to_quarter, and count (only if not empty)
   if (nrow(transition_counts) > 0) {
     setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+    setorderv(
+      transition_counts,
+      c("from_quarter", "to_quarter", "count"),
+      order = c(1, 1, -1)
+    )
   }
 
   # Prepare return object
@@ -2163,7 +2656,18 @@ track_sector_trajectories <- function(data,
 #' @param group_mapping Named vector mapping groups (keeps original group names)
 #' @return data.table with professional group trajectories
 #' @keywords internal
-calculate_professional_group_trajectories_vectorized <- function(dt, quarters_dt, start_col, end_col, person_col, arco_col, group_col, reference_groups, quarter_days, group_mapping) {
+calculate_professional_group_trajectories_vectorized <- function(
+  dt,
+  quarters_dt,
+  start_col,
+  end_col,
+  person_col,
+  arco_col,
+  group_col,
+  reference_groups,
+  quarter_days,
+  group_mapping
+) {
   # Create cartesian join between quarters and employment data
   overlaps <- merge(quarters_dt, dt, by = person_col, allow.cartesian = TRUE)
 
@@ -2186,57 +2690,87 @@ calculate_professional_group_trajectories_vectorized <- function(dt, quarters_dt
   setkeyv(overlaps, c(person_col, "quarter_num", "emp_end"))
 
   # Group by person-quarter and select group
-  group_cols <- c(person_col, "quarter", "quarter_num", "quarter_start", "quarter_end", "quarter_days")
-  group_codes <- overlaps[, {
-    if (.N == 0) {
-      data.table(quarter_group = NA_character_, all_arco_zero = TRUE)
-    } else {
-      # Check if there are any employment contracts (arco > 0)
-      employment_contracts <- .SD[get(arco_col) > 0]
-
-      if (nrow(employment_contracts) > 0) {
-        # Prioritize employment contracts - get group from latest end date
-        latest_employment <- employment_contracts[.N]  # Already sorted by emp_end
-        .(quarter_group = latest_employment[[group_col]],
-          all_arco_zero = FALSE)
+  group_cols <- c(
+    person_col,
+    "quarter",
+    "quarter_num",
+    "quarter_start",
+    "quarter_end",
+    "quarter_days"
+  )
+  group_codes <- overlaps[,
+    {
+      if (.N == 0) {
+        data.table(quarter_group = NA_character_, all_arco_zero = TRUE)
       } else {
-        # All contracts have arco = 0
-        # Still get group from latest contract for potential future use
-        latest_contract <- .SD[.N]  # Already sorted by emp_end
-        .(quarter_group = latest_contract[[group_col]],
-          all_arco_zero = TRUE)
+        # Check if there are any employment contracts (arco > 0)
+        employment_contracts <- .SD[get(arco_col) > 0]
+
+        if (nrow(employment_contracts) > 0) {
+          # Prioritize employment contracts - get group from latest end date
+          latest_employment <- employment_contracts[.N] # Already sorted by emp_end
+          .(
+            quarter_group = latest_employment[[group_col]],
+            all_arco_zero = FALSE
+          )
+        } else {
+          # All contracts have arco = 0
+          # Still get group from latest contract for potential future use
+          latest_contract <- .SD[.N] # Already sorted by emp_end
+          .(quarter_group = latest_contract[[group_col]], all_arco_zero = TRUE)
+        }
       }
-    }
-  }, by = group_cols]
+    },
+    by = group_cols
+  ]
 
   # Get all person-quarter combinations (including those with no contracts)
-  all_combinations <- copy(quarters_dt)
+  # W3.3: copy() removed — quarters_dt is only merged below, never mutated.
+  all_combinations <- quarters_dt
 
   # Merge with group codes
-  result <- merge(all_combinations, group_codes,
-                 by = c(person_col, "quarter", "quarter_num", "quarter_start", "quarter_end", "quarter_days"),
-                 all.x = TRUE)
+  result <- merge(
+    all_combinations,
+    group_codes,
+    by = c(
+      person_col,
+      "quarter",
+      "quarter_num",
+      "quarter_start",
+      "quarter_end",
+      "quarter_days"
+    ),
+    all.x = TRUE
+  )
 
   # Add reference group data
   result <- merge(result, reference_groups, by = person_col)
 
   # Apply group mapping to quarter_group
   result[!is.na(quarter_group), quarter_group := group_mapping[quarter_group]]
-  result[!is.na(reference_group), reference_group := group_mapping[reference_group]]
+  result[
+    !is.na(reference_group),
+    reference_group := group_mapping[reference_group]
+  ]
 
   # Determine professional group status - use actual group names
   # Handle three cases: unemployment (arco=0), no data, or actual group
-  result[, group_status := fcase(
-    all_arco_zero == TRUE, "Not Working",  # Has contracts but all with arco = 0
-    is.na(quarter_group), "No Information",  # No contracts at all in quarter
-    default = quarter_group  # Has employment - use actual group name
-  )]
+  result[,
+    group_status := fcase(
+      all_arco_zero == TRUE , "Not Working"    , # Has contracts but all with arco = 0
+      is.na(quarter_group)  , "No Information" , # No contracts at all in quarter
+      default = quarter_group # Has employment - use actual group name
+    )
+  ]
 
   # For plotting, use the same logic - just actual group names
   result[, group_status_simple := group_status]
 
   # Clean up temporary columns (only remove if they exist)
-  cols_to_remove <- intersect(c("emp_start", "emp_end", "all_arco_zero"), names(result))
+  cols_to_remove <- intersect(
+    c("emp_start", "emp_end", "all_arco_zero"),
+    names(result)
+  )
   if (length(cols_to_remove) > 0) {
     result[, (cols_to_remove) := NULL]
   }
@@ -2343,24 +2877,25 @@ calculate_professional_group_trajectories_vectorized <- function(dt, quarters_dt
 #'
 #' @seealso \code{\link{track_contract_trajectories}}, \code{\link{track_sector_trajectories}},
 #' \code{\link{track_employer_trajectories}}, \code{\link{theme_vecshift}}
-track_professional_group_trajectories <- function(data,
-                                                  contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
-                                                  contract_type_value,
-                                                  group_col,
-                                                  n_quarters = 4,
-                                                  person_id = "cf",
-                                                  start_date_col = "inizio",
-                                                  end_date_col = "fine",
-                                                  arco_col = "arco",
-                                                  return_plot = TRUE,
-                                                  palette = "professional_group",
-                                                  use_bw = FALSE,
-                                                  plot_title = NULL,
-                                                  plot_subtitle = NULL,
-                                                  person_vars = NULL,
-                                                  chunk_size = 10000,
-                                                  language = "it") {
-
+track_professional_group_trajectories <- function(
+  data,
+  contract_type_var = "COD_TIPOLOGIA_CONTRATTUALE",
+  contract_type_value,
+  group_col,
+  n_quarters = 4,
+  person_id = "cf",
+  start_date_col = "inizio",
+  end_date_col = "fine",
+  arco_col = "arco",
+  return_plot = TRUE,
+  palette = "professional_group",
+  use_bw = FALSE,
+  plot_title = NULL,
+  plot_subtitle = NULL,
+  person_vars = NULL,
+  chunk_size = 10000,
+  language = "it"
+) {
   # Input validation
   if (!is.data.table(data)) {
     stop("Input data must be a data.table object")
@@ -2370,7 +2905,14 @@ track_professional_group_trajectories <- function(data,
     stop("group_col parameter must be specified")
   }
 
-  required_cols <- c(person_id, contract_type_var, start_date_col, end_date_col, arco_col, group_col)
+  required_cols <- c(
+    person_id,
+    contract_type_var,
+    start_date_col,
+    end_date_col,
+    arco_col,
+    group_col
+  )
   missing_cols <- setdiff(required_cols, names(data))
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -2405,11 +2947,18 @@ track_professional_group_trajectories <- function(data,
 
   # Step 2: Validate professional groups and create mapping
   # Get unique groups from target contracts (excluding NAs)
-  unique_groups <- sort(unique(target_contracts[!is.na(get(group_col)), get(group_col)]))
+  unique_groups <- sort(unique(target_contracts[
+    !is.na(get(group_col)),
+    get(group_col)
+  ]))
 
   if (length(unique_groups) != 4) {
-    stop("Professional group column must contain exactly 4 unique groups. Found ",
-         length(unique_groups), " groups: ", paste(unique_groups, collapse = ", "))
+    stop(
+      "Professional group column must contain exactly 4 unique groups. Found ",
+      length(unique_groups),
+      " groups: ",
+      paste(unique_groups, collapse = ", ")
+    )
   }
 
   # Create group mapping - use actual group names, no relabeling
@@ -2426,7 +2975,10 @@ track_professional_group_trajectories <- function(data,
     # Validate person_vars exist in data
     missing_vars <- setdiff(person_vars, names(reference_data))
     if (length(missing_vars) > 0) {
-      stop("person_vars not found in data: ", paste(missing_vars, collapse = ", "))
+      stop(
+        "person_vars not found in data: ",
+        paste(missing_vars, collapse = ", ")
+      )
     }
   }
 
@@ -2439,9 +2991,11 @@ track_professional_group_trajectories <- function(data,
     )]
   } else {
     # Build the list expression with person_vars
-    j_expr <- paste0(".(person_id = get(person_id), reference_date = get(end_date_col), reference_group = get(group_col)",
-                    paste0(", ", person_vars, " = ", person_vars, collapse = ""),
-                    ")")
+    j_expr <- paste0(
+      ".(person_id = get(person_id), reference_date = get(end_date_col), reference_group = get(group_col)",
+      paste0(", ", person_vars, " = ", person_vars, collapse = ""),
+      ")"
+    )
     reference_groups <- reference_data[, eval(parse(text = j_expr))]
   }
 
@@ -2452,18 +3006,21 @@ track_professional_group_trajectories <- function(data,
   }
 
   # Step 4: Vectorized quarter generation for all persons at once
-  quarter_days <- 91  # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
+  quarter_days <- 91 # 91 days per quarter (4 quarters = 364 days ≈ 12 months)
 
-  all_quarters <- reference_groups[, {
-    q_nums <- 1:n_quarters
-    .(
-      quarter = paste0("Q", q_nums),
-      quarter_num = q_nums,
-      quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
-      quarter_end = reference_date + q_nums * quarter_days,
-      quarter_days = quarter_days
-    )
-  }, by = person_id]
+  all_quarters <- reference_groups[,
+    {
+      q_nums <- 1:n_quarters
+      .(
+        quarter = paste0("Q", q_nums),
+        quarter_num = q_nums,
+        quarter_start = reference_date + (q_nums - 1) * quarter_days + 1,
+        quarter_end = reference_date + q_nums * quarter_days,
+        quarter_days = quarter_days
+      )
+    },
+    by = person_id
+  ]
 
   setkeyv(all_quarters, c(person_id, "quarter_num"))
 
@@ -2474,10 +3031,18 @@ track_professional_group_trajectories <- function(data,
   n_persons <- nrow(reference_groups)
   if (n_persons <= chunk_size) {
     # Process all at once
-    all_trajectories <- calculate_professional_group_trajectories_vectorized(dt, all_quarters,
-                                                                             start_date_col, end_date_col,
-                                                                             person_id, arco_col, group_col,
-                                                                             reference_groups, quarter_days, group_mapping)
+    all_trajectories <- calculate_professional_group_trajectories_vectorized(
+      dt,
+      all_quarters,
+      start_date_col,
+      end_date_col,
+      person_id,
+      arco_col,
+      group_col,
+      reference_groups,
+      quarter_days,
+      group_mapping
+    )
   } else {
     # Process in chunks
     person_list <- reference_groups[[person_id]]
@@ -2490,34 +3055,54 @@ track_professional_group_trajectories <- function(data,
       chunk_data <- dt[get(person_id) %in% chunk_persons]
       chunk_reference <- reference_groups[get(person_id) %in% chunk_persons]
 
-      trajectory_list[[i]] <- calculate_professional_group_trajectories_vectorized(chunk_data, chunk_quarters,
-                                                                                   start_date_col, end_date_col,
-                                                                                   person_id, arco_col, group_col,
-                                                                                   chunk_reference, quarter_days, group_mapping)
+      trajectory_list[[
+        i
+      ]] <- calculate_professional_group_trajectories_vectorized(
+        chunk_data,
+        chunk_quarters,
+        start_date_col,
+        end_date_col,
+        person_id,
+        arco_col,
+        group_col,
+        chunk_reference,
+        quarter_days,
+        group_mapping
+      )
     }
 
     all_trajectories <- rbindlist(trajectory_list)
   }
 
   # Apply translation to group status (only "Not Working" and "No Information", preserve group names)
-  all_trajectories[, group_status := translate_trajectory_status(group_status, language)]
-  all_trajectories[, group_status_simple := translate_trajectory_status(group_status_simple, language)]
+  all_trajectories[,
+    group_status := translate_trajectory_status(group_status, language)
+  ]
+  all_trajectories[,
+    group_status_simple := translate_trajectory_status(
+      group_status_simple,
+      language
+    )
+  ]
 
   # Create summary of trajectory patterns
   # Create trajectory sequence for each person using vectorized operations
   trajectory_sequences <- all_trajectories[
     order(get(person_id), quarter_num)
-  ][, .(trajectory = paste(group_status_simple, collapse = " -> ")),
-    by = person_id]
+  ][,
+    .(trajectory = paste(group_status_simple, collapse = " -> ")),
+    by = person_id
+  ]
 
   # Count trajectory patterns
   trajectory_summary <- trajectory_sequences[,
-    .(count = .N,
-      percentage = round(.N / nrow(reference_groups) * 100, 1)),
-    by = trajectory][order(-count)]
+    .(count = .N, percentage = round(.N / nrow(reference_groups) * 100, 1)),
+    by = trajectory
+  ][order(-count)]
 
   # Prepare data for alluvial plot
-  plot_data <- copy(all_trajectories)
+  # W3.3: copy() removed — plot_data is only passed read-only to ggplot2.
+  plot_data <- all_trajectories
 
   # Create the plot if requested
   plot_obj <- NULL
@@ -2541,7 +3126,7 @@ track_professional_group_trajectories <- function(data,
     if (palette == "professional_group" && !use_bw) {
       # Define colors for professional groups
       # Assign colors to actual group names found in data
-      group_colors <- c("#E74C3C", "#3498DB", "#2ECC71", "#F39C12")  # Red, Blue, Green, Orange
+      group_colors <- c("#E74C3C", "#3498DB", "#2ECC71", "#F39C12") # Red, Blue, Green, Orange
 
       # Create color mapping for actual group names
       actual_groups <- unique_groups
@@ -2552,42 +3137,72 @@ track_professional_group_trajectories <- function(data,
 
       colors <- c(
         setNames(group_colors[1:length(actual_groups)], actual_groups),
-        setNames("#95A5A6", not_working_label),       # Grey - Not Working
-        setNames("#34495E", no_info_label)            # Dark Grey - No Information
+        setNames("#95A5A6", not_working_label), # Grey - Not Working
+        setNames("#34495E", no_info_label) # Dark Grey - No Information
       )
 
       # Filter to only the statuses present in data
       colors <- colors[names(colors) %in% group_statuses]
     } else {
       # Use vecshift_colors function
-      base_colors <- vecshift_colors(palette = if (use_bw) "bw" else "main",
-                                   n = length(group_statuses))
+      base_colors <- vecshift_colors(
+        palette = if (use_bw) "bw" else "main",
+        n = length(group_statuses)
+      )
       colors <- setNames(base_colors[1:length(group_statuses)], group_statuses)
     }
 
     # Create alluvial plot
-    plot_obj <- ggplot2::ggplot(plot_data,
-                               ggplot2::aes(x = quarter, stratum = group_status_simple,
-                                          alluvium = !!sym(person_id), fill = group_status_simple)) +
+    plot_obj <- ggplot2::ggplot(
+      plot_data,
+      ggplot2::aes(
+        x = quarter,
+        stratum = group_status_simple,
+        alluvium = !!sym(person_id),
+        fill = group_status_simple
+      )
+    ) +
       ggalluvial::geom_flow(alpha = 0.6, curve_type = "cubic", width = 0.3) +
       ggalluvial::geom_stratum(alpha = 0.8, width = 0.3) +
-      ggplot2::geom_text(stat = ggalluvial::StatStratum,
-                        ggplot2::aes(label = ggplot2::after_stat(stratum)),
-                        size = 3, color = "white", fontface = "bold") +
-      ggplot2::scale_fill_manual(values = colors, name = "Professional\nGroup Status") +
+      ggplot2::geom_text(
+        stat = ggalluvial::StatStratum,
+        ggplot2::aes(label = ggplot2::after_stat(stratum)),
+        size = 3,
+        color = "white",
+        fontface = "bold"
+      ) +
+      ggplot2::scale_fill_manual(
+        values = colors,
+        name = "Professional\nGroup Status"
+      ) +
       ggplot2::labs(
         title = if (is.null(plot_title)) {
-          paste("Professional Group Trajectories After", contract_type_value, "Contract")
+          paste(
+            "Professional Group Trajectories After",
+            contract_type_value,
+            "Contract"
+          )
         } else {
           plot_title
         },
         subtitle = if (is.null(plot_subtitle)) {
-          paste("Tracking", nrow(reference_groups), "individuals over", n_quarters, "quarters")
+          paste(
+            "Tracking",
+            nrow(reference_groups),
+            "individuals over",
+            n_quarters,
+            "quarters"
+          )
         } else {
           plot_subtitle
         },
         x = "Quarter After Contract End",
-        caption = paste("Reference contract type:", contract_type_value, "| Professional groups:", paste(unique_groups, collapse = ", "))
+        caption = paste(
+          "Reference contract type:",
+          contract_type_value,
+          "| Professional groups:",
+          paste(unique_groups, collapse = ", ")
+        )
       ) +
       theme_vecshift() +
       ggplot2::theme(
@@ -2599,30 +3214,45 @@ track_professional_group_trajectories <- function(data,
 
   # Create transitions aggregation
   # Sort data by person and quarter to get consecutive quarters
-  all_trajectories_sorted <- all_trajectories[order(get(person_id), quarter_num)]
+  all_trajectories_sorted <- all_trajectories[order(
+    get(person_id),
+    quarter_num
+  )]
 
   # Create transitions by comparing consecutive quarters for each person
-  transitions_raw <- all_trajectories_sorted[, {
-    if (.N > 1) {
-      data.table(
-        from_quarter = quarter_num[-.N],
-        to_quarter = quarter_num[-1],
-        from_status = group_status[-.N],
-        to_status = group_status[-1]
-      )
-    } else {
-      # If only one quarter, no transitions
-      data.table()
-    }
-  }, by = person_id]
+  transitions_raw <- all_trajectories_sorted[,
+    {
+      if (.N > 1) {
+        data.table(
+          from_quarter = quarter_num[-.N],
+          to_quarter = quarter_num[-1],
+          from_status = group_status[-.N],
+          to_status = group_status[-1]
+        )
+      } else {
+        # If only one quarter, no transitions
+        data.table()
+      }
+    },
+    by = person_id
+  ]
 
   # Aggregate transitions based on whether person_vars exist
   # Handle empty transitions_raw case
   if (nrow(transitions_raw) == 0) {
     # Create empty transition_counts with correct structure
     if (!is.null(person_vars) && length(person_vars) > 0) {
-      group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
-      transition_counts <- data.table::data.table(matrix(ncol = length(group_cols) + 1, nrow = 0))
+      group_cols <- c(
+        "from_quarter",
+        "to_quarter",
+        "from_status",
+        "to_status",
+        person_vars
+      )
+      transition_counts <- data.table::data.table(matrix(
+        ncol = length(group_cols) + 1,
+        nrow = 0
+      ))
       setnames(transition_counts, c(group_cols, "count"))
     } else {
       transition_counts <- data.table::data.table(
@@ -2635,23 +3265,38 @@ track_professional_group_trajectories <- function(data,
     }
   } else if (!is.null(person_vars) && length(person_vars) > 0) {
     # Merge person_vars from reference_groups into transitions
-    transitions_with_vars <- merge(transitions_raw,
-                                   reference_groups[, c(person_id, person_vars), with = FALSE],
-                                   by = person_id, all.x = TRUE)
+    transitions_with_vars <- merge(
+      transitions_raw,
+      reference_groups[, c(person_id, person_vars), with = FALSE],
+      by = person_id,
+      all.x = TRUE
+    )
 
     # Group by transition characteristics and person_vars, then count
-    group_cols <- c("from_quarter", "to_quarter", "from_status", "to_status", person_vars)
+    group_cols <- c(
+      "from_quarter",
+      "to_quarter",
+      "from_status",
+      "to_status",
+      person_vars
+    )
     transition_counts <- transitions_with_vars[, .(count = .N), by = group_cols]
   } else {
     # Group by transition characteristics only
-    transition_counts <- transitions_raw[, .(count = .N),
-                                        by = .(from_quarter, to_quarter, from_status, to_status)]
+    transition_counts <- transitions_raw[,
+      .(count = .N),
+      by = .(from_quarter, to_quarter, from_status, to_status)
+    ]
   }
 
   # Order by from_quarter, to_quarter, and count (only if not empty)
   if (nrow(transition_counts) > 0) {
     setkeyv(transition_counts, c("from_quarter", "to_quarter", "count"))
-    setorderv(transition_counts, c("from_quarter", "to_quarter", "count"), order = c(1, 1, -1))
+    setorderv(
+      transition_counts,
+      c("from_quarter", "to_quarter", "count"),
+      order = c(1, 1, -1)
+    )
   }
 
   # Prepare return object

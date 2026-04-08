@@ -144,6 +144,11 @@ consolidate_by_employer <- function(
   variable_handling = "weight",
   engine = "v2"
 ) {
+  .assert_vecshift_input(
+    data,
+    required_cols = c("cf", "inizio", "fine", "durata")
+  )
+
   # 1. Input validation -----
   if (!inherits(data, "data.table")) {
     stop("data must be a data.table")
@@ -186,7 +191,7 @@ consolidate_by_employer <- function(
   if (nrow(data) == 0) {
     result <- data.table::copy(data)
     result[, n_periods_consolidated := integer()]
-    return(result)
+    return(.preserve_vecshift_class(result, data))
   }
 
   # 3. In-place split to avoid full copy of input -----
@@ -328,5 +333,5 @@ consolidate_by_employer <- function(
   # Restore temporal order
   data.table::setkey(result, cf, inizio, fine)
 
-  return(result)
+  return(.preserve_vecshift_class(result, data))
 }

@@ -18,3 +18,8 @@
 ^Meta$
 ^tests/benchmark_optimizations\.R$
 ^tests/benchmark_consolidation\.R$
+^\.claude$
+^tests/benchmark_v2\.R$
+^tests/testthat/fixtures$
+^CLAUDE\.md$
+^examples$
