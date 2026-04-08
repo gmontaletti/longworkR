@@ -4,10 +4,16 @@
 test_that("Regression test: consolidation helper functions work correctly", {
   skip_if_not_installed("data.table")
 
-  # Use real sample data if available
-  sample_file <- file.path("../../data/sample.rds")
-  if (file.exists(sample_file)) {
-    sample_data <- readRDS(sample_file)
+  # Use real sample data if available (lazy-loaded via LazyData)
+  sample_data <- tryCatch(
+    {
+      e <- new.env()
+      utils::data("sample", package = "longworkR", envir = e)
+      get("sample", envir = e)
+    },
+    error = function(e) NULL
+  )
+  if (data.table::is.data.table(sample_data) && nrow(sample_data) > 0L) {
     # Take a subset for faster testing
     test_data <- sample_data[cf %in% unique(sample_data$cf)[1:100]]
   } else {

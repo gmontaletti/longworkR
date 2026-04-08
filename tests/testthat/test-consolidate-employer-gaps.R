@@ -2,9 +2,9 @@
 # Verifies equivalence with sequential pipeline and edge cases
 
 test_that("equivalence with sequential pipeline on sample data (first)", {
-  skip_if_not(file.exists("../../data/sample.rds"), "sample.rds not available")
+  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
 
-  data <- readRDS("../../data/sample.rds")
+  data <- sample
 
   ref <- data |>
     consolidate_by_employer(
@@ -28,9 +28,9 @@ test_that("equivalence with sequential pipeline on sample data (first)", {
 })
 
 test_that("equivalence with sequential pipeline on sample data (weight)", {
-  skip_if_not(file.exists("../../data/sample.rds"), "sample.rds not available")
+  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
 
-  data <- readRDS("../../data/sample.rds")
+  data <- sample
 
   ref <- data |>
     consolidate_by_employer(
@@ -53,9 +53,9 @@ test_that("equivalence with sequential pipeline on sample data (weight)", {
 })
 
 test_that("equivalence with different gap thresholds (8/90)", {
-  skip_if_not(file.exists("../../data/sample.rds"), "sample.rds not available")
+  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
 
-  data <- readRDS("../../data/sample.rds")
+  data <- sample
 
   ref <- data |>
     consolidate_by_employer(
@@ -77,9 +77,9 @@ test_that("equivalence with different gap thresholds (8/90)", {
 })
 
 test_that("equivalence with different gap thresholds (0/8)", {
-  skip_if_not(file.exists("../../data/sample.rds"), "sample.rds not available")
+  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
 
-  data <- readRDS("../../data/sample.rds")
+  data <- sample
 
   ref <- data |>
     consolidate_by_employer(
@@ -101,9 +101,9 @@ test_that("equivalence with different gap thresholds (0/8)", {
 })
 
 test_that("engine regression: v2 and v1 produce identical output", {
-  skip_if_not(file.exists("../../data/sample.rds"), "sample.rds not available")
+  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
 
-  data <- readRDS("../../data/sample.rds")
+  data <- sample
 
   result_v2 <- consolidate_employer_gaps(
     data,

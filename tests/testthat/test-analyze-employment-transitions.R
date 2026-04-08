@@ -899,9 +899,9 @@ test_that("all consolidation modes execute successfully", {
   library(data.table)
 
   # Load sample data and prepare a subset
-  sample_data <- readRDS(
-    "/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"
-  )
+  e <- new.env()
+  utils::data("sample", package = "longworkR", envir = e)
+  sample_data <- get("sample", envir = e)
 
   # Take a small subset for faster testing
   test_subset <- sample_data[cf %in% unique(sample_data$cf)[1:3]]
@@ -978,9 +978,9 @@ test_that("output_transition_matrix disables statistics_variables with message",
   library(data.table)
 
   # Load sample data subset
-  sample_data <- readRDS(
-    "/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"
-  )
+  e <- new.env()
+  utils::data("sample", package = "longworkR", envir = e)
+  sample_data <- get("sample", envir = e)
   test_subset <- sample_data[cf %in% unique(sample_data$cf)[1:2]]
 
   # Test that when output_transition_matrix = TRUE, statistics_variables are disabled
@@ -1119,9 +1119,9 @@ test_that("consolidation modes preserve data integrity with sample data", {
   library(data.table)
 
   # Use actual sample data for comprehensive testing
-  sample_data <- readRDS(
-    "/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"
-  )
+  e <- new.env()
+  utils::data("sample", package = "longworkR", envir = e)
+  sample_data <- get("sample", envir = e)
 
   # Take a meaningful subset (3 people with sufficient data)
   cf_subset <- unique(sample_data$cf)[1:3]

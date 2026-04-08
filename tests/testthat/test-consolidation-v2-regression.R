@@ -90,11 +90,15 @@ compare_engines <- function(v1, v2, label, chained = FALSE) {
 
 # 2. Load real sample data -----
 
-sample_file <- test_path("../../data/sample.rds")
-has_sample <- file.exists(sample_file)
-if (has_sample) {
-  sample_data <- readRDS(sample_file)
-}
+sample_data <- tryCatch(
+  {
+    e <- new.env()
+    utils::data("sample", package = "longworkR", envir = e)
+    get("sample", envir = e)
+  },
+  error = function(e) NULL
+)
+has_sample <- data.table::is.data.table(sample_data) && nrow(sample_data) > 0L
 
 # 3. consolidate_adjacent: v2 vs v1 on real data -----
 

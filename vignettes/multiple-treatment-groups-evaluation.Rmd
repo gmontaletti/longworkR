@@ -29,7 +29,6 @@ library(longworkR)
 library(data.table)
 library(ggplot2)
 library(dplyr)
-library(tidyr)
 library(viridis)
 library(RColorBrewer)
 ```

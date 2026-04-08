@@ -737,18 +737,18 @@ test_that("analyze_employment_transitions uses %chin% for character filtering", 
 # 12. Test with real sample.rds data (if available) -----
 
 test_that("optimizations work with real sample.rds data", {
-  skip_if_not(
-    file.exists(
-      "/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"
-    ),
-    "sample.rds not found"
+  # Load real sample data via lazy-loaded `sample` dataset
+  sample_data <- tryCatch(
+    {
+      e <- new.env()
+      utils::data("sample", package = "longworkR", envir = e)
+      get("sample", envir = e)
+    },
+    error = function(e) NULL
   )
-
-  library(data.table)
-
-  # Load real sample data
-  sample_data <- readRDS(
-    "/Users/giampaolomontaletti/Documents/funzioni/longworkR/data/sample.rds"
+  skip_if(
+    !data.table::is.data.table(sample_data) || nrow(sample_data) == 0L,
+    "sample dataset not available"
   )
 
   # Take subset for faster testing

@@ -5,11 +5,18 @@
 # rewrite from changing semantics.
 
 skip_if_missing_sample <- function() {
-  path <- testthat::test_path("../..", "data", "sample.rds")
-  if (!file.exists(path)) {
-    testthat::skip("sample.rds not available")
+  d <- tryCatch(
+    {
+      e <- new.env()
+      utils::data("sample", package = "longworkR", envir = e)
+      get("sample", envir = e)
+    },
+    error = function(e) NULL
+  )
+  if (!data.table::is.data.table(d) || nrow(d) == 0L) {
+    testthat::skip("sample dataset not available")
   }
-  readRDS(path)
+  d
 }
 
 # 2. Core baseline output per eval_chain -----
