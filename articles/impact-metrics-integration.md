@@ -54,7 +54,7 @@ for (file_path in data_files) {
     })
   }
 }
-#> Successfully loaded data from: /tmp/Rtmpr8Yddl/temp_libpath1dac209da8fa/longworkR/extdata/sample.rds
+#> Successfully loaded data from: /tmp/RtmpN2nU3C/temp_libpath1ff673d78f36/longworkR/extdata/sample.rds
 
 # If no data file found, create synthetic example data
 if (is.null(sample_data)) {

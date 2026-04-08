@@ -2808,8 +2808,8 @@ print(sessionInfo())
 #> 
 #> other attached packages:
 #> [1] RColorBrewer_1.1-3  viridis_0.6.5       viridisLite_0.4.3  
-#> [4] tidyr_1.3.2         dplyr_1.2.1         ggplot2_4.0.2      
-#> [7] data.table_1.18.2.1 longworkR_0.9.0     vecshift_2.0.0     
+#> [4] dplyr_1.2.1         ggplot2_4.0.2       data.table_1.18.2.1
+#> [7] longworkR_0.9.0     vecshift_2.0.0     
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] sandwich_3.1-1      sass_0.4.10         generics_0.1.4     
@@ -2818,21 +2818,20 @@ print(sessionInfo())
 #> [10] grid_4.5.3          fastmap_1.2.0       jsonlite_2.0.0     
 #> [13] Matrix_1.7-4        progress_1.2.3      Formula_1.2-5      
 #> [16] survival_3.8-6      gridExtra_2.3       mgcv_1.9-4         
-#> [19] purrr_1.2.1         scales_1.4.0        stringmagic_1.2.0  
-#> [22] numDeriv_2016.8-1.1 textshaping_1.0.5   jquerylib_0.1.4    
-#> [25] cli_3.6.5           rlang_1.2.0         crayon_1.5.3       
-#> [28] splines_4.5.3       withr_3.0.2         cachem_1.1.0       
-#> [31] yaml_2.3.12         otel_0.2.0          fixest_0.14.0      
-#> [34] tools_4.5.3         parallel_4.5.3      vctrs_0.7.2        
-#> [37] R6_2.6.1            zoo_1.8-15          matrixStats_1.5.0  
-#> [40] lifecycle_1.0.5     fs_2.0.1            htmlwidgets_1.6.4  
-#> [43] ragg_1.5.2          cluster_2.1.8.2     pkgconfig_2.0.3    
-#> [46] desc_1.4.3          pkgdown_2.2.0       bslib_0.10.0       
-#> [49] pillar_1.11.1       gtable_0.3.6        glue_1.8.0         
-#> [52] Rcpp_1.1.1          systemfonts_1.3.2   collapse_2.1.6     
-#> [55] xfun_0.57           tibble_3.3.1        tidyselect_1.2.1   
-#> [58] knitr_1.51          farver_2.1.2        nlme_3.1-168       
-#> [61] htmltools_0.5.9     labeling_0.4.3      rmarkdown_2.31     
-#> [64] ggalluvial_0.12.6   compiler_4.5.3      prettyunits_1.2.0  
-#> [67] S7_0.2.1
+#> [19] scales_1.4.0        stringmagic_1.2.0   numDeriv_2016.8-1.1
+#> [22] textshaping_1.0.5   jquerylib_0.1.4     cli_3.6.5          
+#> [25] rlang_1.2.0         crayon_1.5.3        splines_4.5.3      
+#> [28] withr_3.0.2         cachem_1.1.0        yaml_2.3.12        
+#> [31] otel_0.2.0          fixest_0.14.0       tools_4.5.3        
+#> [34] parallel_4.5.3      vctrs_0.7.2         R6_2.6.1           
+#> [37] zoo_1.8-15          matrixStats_1.5.0   lifecycle_1.0.5    
+#> [40] fs_2.0.1            htmlwidgets_1.6.4   ragg_1.5.2         
+#> [43] cluster_2.1.8.2     pkgconfig_2.0.3     desc_1.4.3         
+#> [46] pkgdown_2.2.0       bslib_0.10.0        pillar_1.11.1      
+#> [49] gtable_0.3.6        glue_1.8.0          Rcpp_1.1.1         
+#> [52] systemfonts_1.3.2   collapse_2.1.6      xfun_0.57          
+#> [55] tibble_3.3.1        tidyselect_1.2.1    knitr_1.51         
+#> [58] farver_2.1.2        nlme_3.1-168        htmltools_0.5.9    
+#> [61] labeling_0.4.3      rmarkdown_2.31      ggalluvial_0.12.6  
+#> [64] compiler_4.5.3      prettyunits_1.2.0   S7_0.2.1
 ```
