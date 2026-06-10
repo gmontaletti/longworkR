@@ -1,10 +1,14 @@
 # Tests for consolidate_employer_gaps()
 # Verifies equivalence with sequential pipeline and edge cases
+#
+# By default the regression runs on a deterministic 2000-person subset of the
+# packaged sample dataset (see helper-sample-subset.R). Set
+# LONGWORKR_FULL_REGRESSION=true to run on the full dataset (e.g. before
+# releases).
 
 test_that("equivalence with sequential pipeline on sample data (first)", {
-  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
-
-  data <- sample
+  data <- load_sample_for_regression()
+  skip_if(is.null(data), "Sample data not available")
 
   ref <- data |>
     consolidate_by_employer(
@@ -28,9 +32,8 @@ test_that("equivalence with sequential pipeline on sample data (first)", {
 })
 
 test_that("equivalence with sequential pipeline on sample data (weight)", {
-  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
-
-  data <- sample
+  data <- load_sample_for_regression()
+  skip_if(is.null(data), "Sample data not available")
 
   ref <- data |>
     consolidate_by_employer(
@@ -53,9 +56,8 @@ test_that("equivalence with sequential pipeline on sample data (weight)", {
 })
 
 test_that("equivalence with different gap thresholds (8/90)", {
-  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
-
-  data <- sample
+  data <- load_sample_for_regression()
+  skip_if(is.null(data), "Sample data not available")
 
   ref <- data |>
     consolidate_by_employer(
@@ -77,9 +79,8 @@ test_that("equivalence with different gap thresholds (8/90)", {
 })
 
 test_that("equivalence with different gap thresholds (0/8)", {
-  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
-
-  data <- sample
+  data <- load_sample_for_regression()
+  skip_if(is.null(data), "Sample data not available")
 
   ref <- data |>
     consolidate_by_employer(
@@ -101,9 +102,8 @@ test_that("equivalence with different gap thresholds (0/8)", {
 })
 
 test_that("engine regression: v2 and v1 produce identical output", {
-  e <- new.env(); utils::data("sample", package = "longworkR", envir = e); sample <- get("sample", envir = e)
-
-  data <- sample
+  data <- load_sample_for_regression()
+  skip_if(is.null(data), "Sample data not available")
 
   result_v2 <- consolidate_employer_gaps(
     data,

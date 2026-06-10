@@ -1,6 +1,11 @@
 # Regression Tests: v2 (collapse-native) vs v1 (data.table J-expression) Engine
 # Ensures that the v2 consolidation engine produces identical results to v1
 # on both real sample data and synthetic edge cases.
+#
+# By default the regression runs on a deterministic 2000-person subset of the
+# packaged sample dataset (see helper-sample-subset.R). Set
+# LONGWORKR_FULL_REGRESSION=true to run on the full dataset (e.g. before
+# releases).
 
 # 1. Helper: compare v1 vs v2 output -----
 
@@ -90,14 +95,7 @@ compare_engines <- function(v1, v2, label, chained = FALSE) {
 
 # 2. Load real sample data -----
 
-sample_data <- tryCatch(
-  {
-    e <- new.env()
-    utils::data("sample", package = "longworkR", envir = e)
-    get("sample", envir = e)
-  },
-  error = function(e) NULL
-)
+sample_data <- load_sample_for_regression()
 has_sample <- data.table::is.data.table(sample_data) && nrow(sample_data) > 0L
 
 # 3. consolidate_adjacent: v2 vs v1 on real data -----
@@ -363,8 +361,8 @@ test_that("v2 engine handles empty data for consolidate_adjacent", {
 
   empty_dt <- data.table::data.table(
     cf = integer(),
-    inizio = as.IDate(character()),
-    fine = as.IDate(character()),
+    inizio = data.table::as.IDate(character()),
+    fine = data.table::as.IDate(character()),
     durata = numeric(),
     arco = numeric()
   )
@@ -379,8 +377,8 @@ test_that("v2 engine handles empty data for consolidate_overlapping", {
 
   empty_dt <- data.table::data.table(
     cf = integer(),
-    inizio = as.IDate(character()),
-    fine = as.IDate(character()),
+    inizio = data.table::as.IDate(character()),
+    fine = data.table::as.IDate(character()),
     durata = numeric(),
     over_id = integer()
   )
@@ -395,8 +393,8 @@ test_that("v2 engine handles empty data for consolidate_short_gaps", {
 
   empty_dt <- data.table::data.table(
     cf = integer(),
-    inizio = as.IDate(character()),
-    fine = as.IDate(character()),
+    inizio = data.table::as.IDate(character()),
+    fine = data.table::as.IDate(character()),
     durata = numeric(),
     arco = numeric()
   )
@@ -414,8 +412,8 @@ test_that("v2 engine handles single record for consolidate_adjacent", {
 
   single <- data.table::data.table(
     cf = 1L,
-    inizio = as.IDate("2023-01-01"),
-    fine = as.IDate("2023-01-31"),
+    inizio = data.table::as.IDate("2023-01-01"),
+    fine = data.table::as.IDate("2023-01-31"),
     durata = 31,
     arco = 1
   )
@@ -430,8 +428,8 @@ test_that("v2 engine handles single record for consolidate_overlapping", {
 
   single <- data.table::data.table(
     cf = 1L,
-    inizio = as.IDate("2023-01-01"),
-    fine = as.IDate("2023-01-31"),
+    inizio = data.table::as.IDate("2023-01-01"),
+    fine = data.table::as.IDate("2023-01-31"),
     durata = 31,
     over_id = 1L
   )
@@ -446,8 +444,8 @@ test_that("v2 engine handles single record for consolidate_short_gaps", {
 
   single <- data.table::data.table(
     cf = 1L,
-    inizio = as.IDate("2023-01-01"),
-    fine = as.IDate("2023-01-31"),
+    inizio = data.table::as.IDate("2023-01-01"),
+    fine = data.table::as.IDate("2023-01-31"),
     durata = 31,
     arco = 1
   )
@@ -466,14 +464,14 @@ test_that("v2 fast path works when no adjacent consolidation is needed", {
   # Records with large gaps -- no adjacency possible
   dt <- data.table::data.table(
     cf = 1:5,
-    inizio = as.IDate(c(
+    inizio = data.table::as.IDate(c(
       "2023-01-01",
       "2023-03-01",
       "2023-05-01",
       "2023-07-01",
       "2023-09-01"
     )),
-    fine = as.IDate(c(
+    fine = data.table::as.IDate(c(
       "2023-01-15",
       "2023-03-15",
       "2023-05-15",
@@ -495,14 +493,14 @@ test_that("v2 fast path works when no overlapping consolidation is needed", {
   # All over_id == 0 means no overlapping groups
   dt <- data.table::data.table(
     cf = 1:5,
-    inizio = as.IDate(c(
+    inizio = data.table::as.IDate(c(
       "2023-01-01",
       "2023-03-01",
       "2023-05-01",
       "2023-07-01",
       "2023-09-01"
     )),
-    fine = as.IDate(c(
+    fine = data.table::as.IDate(c(
       "2023-01-15",
       "2023-03-15",
       "2023-05-15",
@@ -525,14 +523,14 @@ test_that("v2 fast path works when no short gap consolidation is needed", {
   # Each person has one record, so no gaps to bridge
   dt <- data.table::data.table(
     cf = 1:5,
-    inizio = as.IDate(c(
+    inizio = data.table::as.IDate(c(
       "2023-01-01",
       "2023-03-01",
       "2023-05-01",
       "2023-07-01",
       "2023-09-01"
     )),
-    fine = as.IDate(c(
+    fine = data.table::as.IDate(c(
       "2023-01-15",
       "2023-03-15",
       "2023-05-15",
@@ -556,8 +554,8 @@ test_that("invalid engine parameter raises an error", {
 
   dt <- data.table::data.table(
     cf = 1L,
-    inizio = as.IDate("2023-01-01"),
-    fine = as.IDate("2023-01-31"),
+    inizio = data.table::as.IDate("2023-01-01"),
+    fine = data.table::as.IDate("2023-01-31"),
     durata = 31,
     arco = 1
   )
@@ -578,7 +576,8 @@ test_that("v2 matches v1 on synthetic multi-person data with mixed scenarios", {
   n <- 200L
   dt <- data.table::data.table(
     cf = rep(seq_len(20L), each = 10L),
-    inizio = as.IDate("2020-01-01") + sample(0:500, n, replace = TRUE),
+    inizio = data.table::as.IDate("2020-01-01") +
+      sample(0:500, n, replace = TRUE),
     durata = sample(15:180, n, replace = TRUE),
     arco = sample(c(0L, 1L, 1L, 1L), n, replace = TRUE),
     over_id = sample(c(0L, 0L, 0L, 1L, 1L, 2L), n, replace = TRUE),
