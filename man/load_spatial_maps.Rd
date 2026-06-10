@@ -7,10 +7,27 @@
 load_spatial_maps()
 }
 \value{
-A list with two sf objects: comuni and cpi
+A named list with two \code{sf} objects:
+\itemize{
+\item \code{comuni}: polygons of Lombardy municipalities, including the
+\code{PRO_COM_T}, \code{COMUNE}, \code{cpi}, and \code{denominazione} fields
+\item \code{cpi}: polygons of CPI areas, including the \code{cpi} and
+\code{denominazione} fields
+}
 }
 \description{
-Loads the comuni and CPI shapefiles from the data/maps directory.
-These files contain polygons for Lombardy municipalities and CPI areas.
+Loads the comuni and CPI spatial objects from the \verb{maps/} subdirectory of
+the shared data directory. The directory is resolved from the
+\code{SHARED_DATA_DIR} environment variable, falling back to
+\verb{~/Documents/funzioni/shared_data} when unset. The files contain polygons
+for Lombardy municipalities and CPI (Centro Per l'Impiego) areas.
 }
-\keyword{internal}
+\examples{
+\dontrun{
+# Requires comuni_lom_map.rds and cpi_lom_map.rds under SHARED_DATA_DIR/maps
+maps <- load_spatial_maps()
+names(maps)
+nrow(maps$comuni)
+}
+
+}

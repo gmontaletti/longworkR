@@ -215,6 +215,13 @@ reference:
       - load_belfiore_mapping
       - create_comune_cpi_lookup
       - generate_comune_cpi_lookup
+      - load_spatial_maps
+
+  - title: Employment Summaries
+    desc: Summary statistics and stage comparison for consolidated employment data.
+    contents:
+      - compare_consolidation_stages
+      - employment_statistics
 
   - title: Data & Utilities
     desc: Sample data generation, synthetic data, and accessibility reports.
