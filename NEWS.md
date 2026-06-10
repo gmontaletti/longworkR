@@ -1,3 +1,14 @@
+# longworkR 0.10.0
+
+## Nuove funzionalità
+
+- `load_spatial_maps()` è ora esportata: carica gli oggetti spaziali `sf` di comuni e CPI dalla directory dati condivisa (`SHARED_DATA_DIR`). Con questa modifica longworkR diventa la fonte unica delle utilities geografiche dell'ecosistema, in precedenza duplicate nelle pipeline.
+- Nuove funzioni `compare_consolidation_stages()` ed `employment_statistics()`, migrate dalle pipeline COB: la prima confronta numero di record e persone uniche tra gli stadi di consolidamento, la seconda calcola statistiche riassuntive (giornate totali e durate medie di occupazione e disoccupazione) sui dati consolidati.
+
+## Correzioni
+
+- `load_spatial_maps()`: corretto l'argomento di `Sys.getenv()` (`unset` al posto del non valido `default`) nella risoluzione di `SHARED_DATA_DIR`.
+
 # longworkR 0.9.0
 
 ## Breaking changes
