@@ -117,6 +117,7 @@ Designed to be the first step in a consolidation chain. After merging
 concurrent employment, you typically want to merge adjacent periods and
 optionally bridge short gaps:
 
+
     data |>
       consolidate_overlapping() |>  # Step 1: Merge concurrent jobs
       consolidate_adjacent() |>     # Step 2: Merge touching periods

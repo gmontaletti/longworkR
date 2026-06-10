@@ -14,6 +14,7 @@ comprehensive visualization capabilities.
 ## Installation
 
 ``` r
+
 # Install vecshift first (required dependency)
 install.packages("vecshift")  # or devtools::install_local("../vecshift")
 
@@ -68,6 +69,7 @@ devtools::install_local(".")  # from longworkR directory
 ## Quick Start
 
 ``` r
+
 library(vecshift)
 library(longworkR)
 
@@ -162,7 +164,7 @@ Reference materials: `../reference/longworkR/`
 To cite longworkR in publications, please use:
 
 Montaletti, G. (2026). *longworkR: Longitudinal Employment Analytics for
-vecshift Data* (Version 0.9.0) \[R package\].
+vecshift Data* (Version 0.10.0) \[R package\].
 <https://github.com/gmontaletti/longworkR>
 
 BibTeX entry:
@@ -171,7 +173,7 @@ BibTeX entry:
 @software{montaletti2026longworkr,
   author = {Montaletti, Giampaolo},
   title = {longworkR: Longitudinal Employment Analytics for vecshift Data},
-  version = {0.9.0},
+  version = {0.10.0},
   year = {2026},
   url = {https://github.com/gmontaletti/longworkR}
 }
@@ -513,6 +515,18 @@ Compute temporal employment indicators, CPI mapping, and summaries.
   : Create comune to CPI lookup table
 - [`generate_comune_cpi_lookup()`](https://gmontaletti.github.io/longworkR/reference/generate_comune_cpi_lookup.md)
   : Generate and save comune-CPI lookup table
+- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md)
+  : Load comuni and CPI spatial data
+
+## Employment Summaries
+
+Summary statistics and stage comparison for consolidated employment
+data.
+
+- [`compare_consolidation_stages()`](https://gmontaletti.github.io/longworkR/reference/compare_consolidation_stages.md)
+  : Compare consolidation stages
+- [`employment_statistics()`](https://gmontaletti.github.io/longworkR/reference/employment_statistics.md)
+  : Extract employment statistics
 
 ## Data & Utilities
 
@@ -800,8 +814,6 @@ Internal helper functions and documentation pages.
   : Null-coalescing Operator
 - [`impact_rdd`](https://gmontaletti.github.io/longworkR/reference/impact_rdd.md)
   : Regression Discontinuity Design Functions
-- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md)
-  : Load comuni and CPI spatial data
 - [`translate_trajectory_status()`](https://gmontaletti.github.io/longworkR/reference/translate_trajectory_status.md)
   : Translate trajectory status labels
 - [`validate_animation_setup()`](https://gmontaletti.github.io/longworkR/reference/validate_animation_setup.md)
@@ -858,6 +870,8 @@ Internal helper functions and documentation pages.
   : Print method for treatment event assessment
 - [`aggregate_to_person_level()`](https://gmontaletti.github.io/longworkR/reference/aggregate_to_person_level.md)
   : Aggregate Event-Level Data to Person-Level for Matching
+- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md)
+  : Load comuni and CPI spatial data
 
 # Articles
 

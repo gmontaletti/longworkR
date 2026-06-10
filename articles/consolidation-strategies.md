@@ -51,6 +51,7 @@ These functions are **composable** (chainable with pipes) and
 parameters
 
 ``` r
+
 # OLD API (removed in v0.6.0)
 consolidated <- consolidate_employment(
   data,
@@ -69,6 +70,7 @@ datasets - Hard to compose different consolidation strategies
 **New approach (longworkR 0.6.0+):** Four focused functions
 
 ``` r
+
 # NEW API (v0.6.0+)
 consolidated <- data |>
   consolidate_overlapping() |>           # Clear: merge concurrent jobs
@@ -111,6 +113,7 @@ columns using weighted mode/mean by duration 5. Adds
 ### Example: Basic Usage
 
 ``` r
+
 # Load sample data
 data <- readRDS("data/sample.rds")
 
@@ -129,6 +132,7 @@ cat("Reduction:", round((1 - nrow(consolidated)/nrow(data)) * 100, 1), "%\n")
 ### Example: Understanding the Consolidation
 
 ``` r
+
 # View person with overlapping employment
 person_165 <- data[cf == 165 & over_id > 0]
 print(person_165[, .(cf, inizio, fine, durata, over_id, COD_TIPOLOGIA_CONTRATTUALE)])
@@ -145,16 +149,16 @@ print(person_165_consolidated[, .(cf, inizio, fine, durata, n_periods_consolidat
 
 When consolidating overlapping periods, columns are aggregated as:
 
-| Column Type      | Aggregation Method | Example                                           |
-|------------------|--------------------|---------------------------------------------------|
-| `inizio`         | Minimum (earliest) | min(c(“2023-01-01”, “2023-01-15”)) = “2023-01-01” |
-| `fine`           | Maximum (latest)   | max(c(“2023-02-15”, “2023-02-28”)) = “2023-02-28” |
-| `durata`         | Recalculated       | fine - inizio + 1                                 |
-| Numeric/Integer  | Weighted mean      | sum(value \* durata) / sum(durata)                |
-| Character/Factor | Weighted mode      | Most frequent value by total duration             |
-| Logical          | Majority rule      | mean(values) \>= 0.5                              |
-| `arco`           | Maximum            | Indicates if any period was employment            |
-| `stato`          | Employment state   | Preferentially selects employment states          |
+| Column Type | Aggregation Method | Example |
+|----|----|----|
+| `inizio` | Minimum (earliest) | min(c(“2023-01-01”, “2023-01-15”)) = “2023-01-01” |
+| `fine` | Maximum (latest) | max(c(“2023-02-15”, “2023-02-28”)) = “2023-02-28” |
+| `durata` | Recalculated | fine - inizio + 1 |
+| Numeric/Integer | Weighted mean | sum(value \* durata) / sum(durata) |
+| Character/Factor | Weighted mode | Most frequent value by total duration |
+| Logical | Majority rule | mean(values) \>= 0.5 |
+| `arco` | Maximum | Indicates if any period was employment |
+| `stato` | Employment state | Preferentially selects employment states |
 
 ------------------------------------------------------------------------
 
@@ -189,6 +193,7 @@ that prevent consolidation, even between same-employer records.
 ### Example: Basic Usage
 
 ``` r
+
 # Data with same-employer renewals
 employer_data <- data.table(
   cf = rep(1, 4),
@@ -207,6 +212,7 @@ nrow(result)  # 2 (Employer_A merged, Employer_B separate)
 ### Example: Adjusting Gap Threshold
 
 ``` r
+
 # Strict: only merge if gap <= 3 days
 strict <- consolidate_by_employer(employer_data, "datore", max_gap_days = 3)
 nrow(strict)  # 3 (5-day gap too large for strict threshold)
@@ -218,13 +224,13 @@ nrow(lenient)  # 2 (all Employer_A periods merged)
 
 ### Difference from Other Functions
 
-| Aspect               | [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) | [`consolidate_by_employer()`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md) | [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) | [`consolidate_short_gaps()`](https://gmontaletti.github.io/longworkR/reference/consolidate_short_gaps.md) |
-|----------------------|-------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| **What it merges**   | Concurrent employment                                                                                       | Same-employer sequential                                                                                    | All sequential (no gap)                                                                               | Sequential across gaps                                                                                    |
-| **Uses `over_id`**   | Yes                                                                                                         | No                                                                                                          | No                                                                                                    | No                                                                                                        |
-| **Employer-aware**   | No                                                                                                          | Yes (required)                                                                                              | No                                                                                                    | No                                                                                                        |
-| **Gap tolerance**    | N/A                                                                                                         | Configurable (`max_gap_days`)                                                                               | Exactly 0 days                                                                                        | Configurable                                                                                              |
-| **Typical use case** | Multiple simultaneous jobs                                                                                  | Contract renewals                                                                                           | Administrative boundaries                                                                             | Short unemployment                                                                                        |
+| Aspect | [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) | [`consolidate_by_employer()`](https://gmontaletti.github.io/longworkR/reference/consolidate_by_employer.md) | [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) | [`consolidate_short_gaps()`](https://gmontaletti.github.io/longworkR/reference/consolidate_short_gaps.md) |
+|----|----|----|----|----|
+| **What it merges** | Concurrent employment | Same-employer sequential | All sequential (no gap) | Sequential across gaps |
+| **Uses `over_id`** | Yes | No | No | No |
+| **Employer-aware** | No | Yes (required) | No | No |
+| **Gap tolerance** | N/A | Configurable (`max_gap_days`) | Exactly 0 days | Configurable |
+| **Typical use case** | Multiple simultaneous jobs | Contract renewals | Administrative boundaries | Short unemployment |
 
 ------------------------------------------------------------------------
 
@@ -257,6 +263,7 @@ that prevent consolidation.
 ### Example: Basic Usage
 
 ``` r
+
 # Create test data with adjacent periods
 test_data <- data.table(
   cf = rep(1, 3),
@@ -279,6 +286,7 @@ print(result)
 ### Example: Unemployment as Barrier
 
 ``` r
+
 # Data with unemployment between employment
 barrier_data <- data.table(
   cf = rep(1, 3),
@@ -298,13 +306,13 @@ print(result)
 
 ### Difference from consolidate_overlapping()
 
-| Aspect               | [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) | [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) |
-|----------------------|-------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
-| **What it merges**   | Concurrent employment (same time)                                                                           | Sequential employment (no gap)                                                                        |
-| **Uses `over_id`**   | Yes (required)                                                                                              | No                                                                                                    |
-| **Gap tolerance**    | N/A (overlapping by definition)                                                                             | Exactly 0 days                                                                                        |
-| **Unemployment**     | Kept separate                                                                                               | Acts as barrier                                                                                       |
-| **Typical use case** | Multiple simultaneous jobs                                                                                  | Contract renewals                                                                                     |
+| Aspect | [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) | [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) |
+|----|----|----|
+| **What it merges** | Concurrent employment (same time) | Sequential employment (no gap) |
+| **Uses `over_id`** | Yes (required) | No |
+| **Gap tolerance** | N/A (overlapping by definition) | Exactly 0 days |
+| **Unemployment** | Kept separate | Acts as barrier |
+| **Typical use case** | Multiple simultaneous jobs | Contract renewals |
 
 ------------------------------------------------------------------------
 
@@ -350,6 +358,7 @@ Different `max_gap_days` values suit different analyses:
 ### Example: Basic Gap Bridging
 
 ``` r
+
 # Employment with 15-day gap
 gap_data <- data.table(
   cf = rep(1, 5),
@@ -374,6 +383,7 @@ cat("Records with 10-day threshold:", nrow(result_10), "\n")
 ### Example: Analyzing Employment Quality
 
 ``` r
+
 # After full consolidation chain
 data <- readRDS("data/sample.rds")
 final <- data |>
@@ -415,6 +425,7 @@ The four consolidation functions are designed to be used **in
 sequence**, creating a progressive consolidation chain:
 
 ``` r
+
 # RECOMMENDED: Full consolidation chain
 consolidated_data <- raw_data |>
   consolidate_overlapping() |>           # Step 1: Merge concurrent employment
@@ -438,6 +449,7 @@ consolidated_data <- raw_data |>
 **Wrong order can produce suboptimal results:**
 
 ``` r
+
 # WRONG: Bridging gaps before merging adjacent periods
 wrong_order <- data |>
   consolidate_short_gaps(30) |>  # Gap calculation includes noise
@@ -455,6 +467,7 @@ You don’t have to use all three functions. Choose based on your analysis
 needs:
 
 ``` r
+
 # Minimal: Only merge concurrent employment
 minimal <- data |> consolidate_overlapping()
 
@@ -473,6 +486,7 @@ aggressive <- data |>
 ### Example: Progressive Analysis
 
 ``` r
+
 # Load data
 data <- readRDS("data/sample.rds")
 
@@ -505,6 +519,7 @@ cat("Total reduction:", round((1 - nrow(step3)/nrow(data)) * 100, 1), "%\n")
 analysis. You consolidate data first, then analyze transitions:
 
 ``` r
+
 # NEW WORKFLOW (v0.6.0+)
 
 # Step 1: Consolidate employment data
@@ -534,6 +549,7 @@ The decoupled approach provides:
 ### Example: Multiple Analyses on Same Consolidation
 
 ``` r
+
 # Consolidate once
 consolidated <- data |>
   consolidate_overlapping() |>
@@ -553,6 +569,7 @@ transitions_last <- analyze_employment_transitions(consolidated, eval_chain = "l
 ### Comparing Consolidation Strategies
 
 ``` r
+
 # Compare impact of different consolidation strategies
 
 # No consolidation
@@ -593,6 +610,7 @@ The new consolidation functions deliver exceptional performance:
 ### Benchmark: Real-World Dataset
 
 ``` r
+
 # Load large dataset (434,103 employment records)
 large_data <- readRDS("data/large_sample.rds")
 
@@ -628,6 +646,7 @@ cat("Reduction:", round((1 - nrow(final)/nrow(large_data)) * 100, 1), "%\n")
 1.  **Use data.table format**:
 
     ``` r
+
     # Good: data.table (fast)
     dt <- data.table::as.data.table(data)
     result <- consolidate_overlapping(dt)
@@ -640,6 +659,7 @@ cat("Reduction:", round((1 - nrow(final)/nrow(large_data)) * 100, 1), "%\n")
 2.  **Set key for better performance** (optional, done automatically):
 
     ``` r
+
     data.table::setkey(data, cf, inizio, fine)
     result <- consolidate_adjacent(data)  # Slightly faster
     ```
@@ -647,6 +667,7 @@ cat("Reduction:", round((1 - nrow(final)/nrow(large_data)) * 100, 1), "%\n")
 3.  **Use pipe chains for clarity**:
 
     ``` r
+
     # Good: Clear pipeline
     result <- data |>
       consolidate_overlapping() |>
@@ -659,6 +680,7 @@ cat("Reduction:", round((1 - nrow(final)/nrow(large_data)) * 100, 1), "%\n")
 4.  **Consolidate before analysis, not during**:
 
     ``` r
+
     # Good: Consolidate once, use many times
     consolidated <- data |> consolidate_overlapping()
     trans1 <- analyze_employment_transitions(consolidated, eval_chain = "first")
@@ -685,6 +707,7 @@ For extremely large datasets (100M+ records), consider processing in
 chunks:
 
 ``` r
+
 # Process by person ID ranges
 chunk_size <- 1000000  # 1M records per chunk
 person_ids <- unique(data$cf)
@@ -726,6 +749,7 @@ The following functions are **no longer available**:
 #### Example 1: Basic Temporal Consolidation
 
 ``` r
+
 # OLD CODE (< 0.6.0) - NO LONGER WORKS
 consolidated <- consolidate_employment(
   data,
@@ -742,6 +766,7 @@ consolidated <- data |>
 #### Example 2: With Gap Bridging
 
 ``` r
+
 # OLD CODE (< 0.6.0) - NO LONGER WORKS
 consolidated <- consolidate_employment(
   data,
@@ -760,6 +785,7 @@ consolidated <- data |>
 #### Example 3: Within analyze_employment_transitions()
 
 ``` r
+
 # OLD CODE (< 0.6.0) - NO LONGER WORKS
 result <- analyze_employment_transitions(
   data,
@@ -779,6 +805,7 @@ result <- analyze_employment_transitions(consolidated)
 #### Example 4: Only Overlapping Consolidation
 
 ``` r
+
 # OLD CODE (< 0.6.0)
 consolidated <- consolidate_employment(
   data,
@@ -793,6 +820,7 @@ consolidated <- consolidate_overlapping(data)
 #### Example 5: Only Adjacent Consolidation
 
 ``` r
+
 # OLD CODE (< 0.6.0)
 consolidated <- consolidate_employment(
   data,
@@ -806,14 +834,14 @@ consolidated <- consolidate_adjacent(data)
 
 ### Parameter Mapping
 
-| Old Parameter          | New Approach                                                                                                                                                                                                                 |
-|------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `mode = "temporal"`    | Use [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) and/or [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) |
-| `type = "both"`        | Chain `consolidate_overlapping() |> consolidate_adjacent()`                                                                                                                                                                  |
-| `type = "overlapping"` | Use [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) only                                                                                                         |
-| `type = "adjacent"`    | Use [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) only                                                                                                               |
-| `min_lag = N`          | Use `consolidate_short_gaps(max_gap_days = N)`                                                                                                                                                                               |
-| `employer_var = "..."` | Use `consolidate_by_employer(employer_var = "...")`                                                                                                                                                                          |
+| Old Parameter | New Approach |
+|----|----|
+| `mode = "temporal"` | Use [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) and/or [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) |
+| `type = "both"` | Chain `consolidate_overlapping() |> consolidate_adjacent()` |
+| `type = "overlapping"` | Use [`consolidate_overlapping()`](https://gmontaletti.github.io/longworkR/reference/consolidate_overlapping.md) only |
+| `type = "adjacent"` | Use [`consolidate_adjacent()`](https://gmontaletti.github.io/longworkR/reference/consolidate_adjacent.md) only |
+| `min_lag = N` | Use `consolidate_short_gaps(max_gap_days = N)` |
+| `employer_var = "..."` | Use `consolidate_by_employer(employer_var = "...")` |
 
 ### Employer-Based Consolidation
 
@@ -822,6 +850,7 @@ The old `mode = "employer"` parameter maps directly to the new
 function:
 
 ``` r
+
 # OLD CODE (< 0.6.0) - NO LONGER WORKS
 consolidated <- consolidate_employment(
   data,
@@ -849,6 +878,7 @@ consolidated <- data |>
 The new API separates consolidation from analysis:
 
 ``` r
+
 # OLD PATTERN (< 0.6.0)
 result <- analyze_employment_transitions(
   data,
@@ -926,6 +956,7 @@ Replace employer-based consolidation with
 ### Recommended Workflow
 
 ``` r
+
 # 1. Load data
 data <- readRDS("data/sample.rds")
 
@@ -961,8 +992,9 @@ plot_transitions_network(transitions)
 ## Session Info
 
 ``` r
+
 sessionInfo()
-#> R version 4.5.3 (2026-03-11)
+#> R version 4.6.0 (2026-04-24)
 #> Platform: x86_64-pc-linux-gnu
 #> Running under: Ubuntu 24.04.4 LTS
 #> 
@@ -983,22 +1015,22 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] data.table_1.18.2.1 longworkR_0.9.0     vecshift_2.0.0     
+#> [1] data.table_1.18.4 longworkR_0.10.0  vecshift_2.0.0   
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] sass_0.4.10        generics_0.1.4     lattice_0.22-9     hms_1.1.4         
-#>  [5] digest_0.6.39      magrittr_2.0.5     evaluate_1.0.5     grid_4.5.3        
-#>  [9] RColorBrewer_1.1-3 fastmap_1.2.0      jsonlite_2.0.0     Matrix_1.7-4      
+#>  [5] digest_0.6.39      magrittr_2.0.5     evaluate_1.0.5     grid_4.6.0        
+#>  [9] RColorBrewer_1.1-3 fastmap_1.2.0      jsonlite_2.0.0     Matrix_1.7-5      
 #> [13] progress_1.2.3     survival_3.8-6     scales_1.4.0       textshaping_1.0.5 
-#> [17] jquerylib_0.1.4    cli_3.6.5          rlang_1.2.0        crayon_1.5.3      
-#> [21] splines_4.5.3      cachem_1.1.0       yaml_2.3.12        otel_0.2.0        
-#> [25] tools_4.5.3        parallel_4.5.3     dplyr_1.2.1        ggplot2_4.0.2     
-#> [29] vctrs_0.7.2        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
-#> [33] fs_2.0.1           htmlwidgets_1.6.4  ragg_1.5.2         cluster_2.1.8.2   
-#> [37] pkgconfig_2.0.3    desc_1.4.3         pkgdown_2.2.0      bslib_0.10.0      
-#> [41] pillar_1.11.1      gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1        
-#> [45] systemfonts_1.3.2  collapse_2.1.6     xfun_0.57          tibble_3.3.1      
+#> [17] jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0        crayon_1.5.3      
+#> [21] splines_4.6.0      cachem_1.1.0       yaml_2.3.12        otel_0.2.0        
+#> [25] tools_4.6.0        parallel_4.6.0     dplyr_1.2.1        ggplot2_4.0.3     
+#> [29] vctrs_0.7.3        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
+#> [33] fs_2.1.0           htmlwidgets_1.6.4  ragg_1.5.2         cluster_2.1.8.2   
+#> [37] pkgconfig_2.0.3    desc_1.4.3         pkgdown_2.2.0      bslib_0.11.0      
+#> [41] pillar_1.11.1      gtable_0.3.6       glue_1.8.1         Rcpp_1.1.1-1.1    
+#> [45] systemfonts_1.3.2  collapse_2.1.7     xfun_0.58          tibble_3.3.1      
 #> [49] tidyselect_1.2.1   knitr_1.51         farver_2.1.2       htmltools_0.5.9   
-#> [53] rmarkdown_2.31     ggalluvial_0.12.6  compiler_4.5.3     prettyunits_1.2.0 
-#> [57] S7_0.2.1
+#> [53] rmarkdown_2.31     ggalluvial_0.12.6  compiler_4.6.0     prettyunits_1.2.0 
+#> [57] S7_0.2.2
 ```

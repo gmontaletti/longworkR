@@ -214,12 +214,14 @@ A named list containing:
 **Technical Note:** The bottleneck in the original function occurs at
 lines 4277-4279 and 4307-4309:
 
+
       for (k in seq_along(from_indices)) {
         period_matrix[from_indices[k], to_indices[k]] <-
           period_matrix[from_indices[k], to_indices[k]] + weights[k]
       }
 
 This is replaced with vectorized aggregation:
+
 
       linear_idx <- (to_indices - 1) * nrow(period_matrix) + from_indices
       aggregated <- tapply(weights, linear_idx, sum)

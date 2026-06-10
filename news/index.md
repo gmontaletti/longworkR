@@ -1,5 +1,31 @@
 # Changelog
 
+## longworkR 0.10.0
+
+### Nuove funzionalità
+
+- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md)
+  è ora esportata: carica gli oggetti spaziali `sf` di comuni e CPI
+  dalla directory dati condivisa (`SHARED_DATA_DIR`). Con questa
+  modifica longworkR diventa la fonte unica delle utilities geografiche
+  dell’ecosistema, in precedenza duplicate nelle pipeline.
+- Nuove funzioni
+  [`compare_consolidation_stages()`](https://gmontaletti.github.io/longworkR/reference/compare_consolidation_stages.md)
+  ed
+  [`employment_statistics()`](https://gmontaletti.github.io/longworkR/reference/employment_statistics.md),
+  migrate dalle pipeline COB: la prima confronta numero di record e
+  persone uniche tra gli stadi di consolidamento, la seconda calcola
+  statistiche riassuntive (giornate totali e durate medie di occupazione
+  e disoccupazione) sui dati consolidati.
+
+### Correzioni
+
+- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md):
+  corretto l’argomento di
+  [`Sys.getenv()`](https://rdrr.io/r/base/Sys.getenv.html) (`unset` al
+  posto del non valido `default`) nella risoluzione di
+  `SHARED_DATA_DIR`.
+
 ## longworkR 0.9.0
 
 ### Breaking changes
@@ -169,6 +195,7 @@ short-term employment analysis.
 **Before (0.6.x):**
 
 ``` r
+
 # Default bridged gaps up to 30 days
 consolidated <- data |>
   consolidate_short_gaps()  # max_gap_days = 30 (old default)
@@ -177,6 +204,7 @@ consolidated <- data |>
 **After (0.7.0+):**
 
 ``` r
+
 # New default: only bridges very short gaps (8 days)
 consolidated <- data |>
   consolidate_short_gaps()  # max_gap_days = 8 (new default)
@@ -240,6 +268,7 @@ The following functions are **no longer available**: -
 **Before (\< 0.6.0):**
 
 ``` r
+
 # Old API - NO LONGER WORKS
 consolidated <- consolidate_employment(
   data,
@@ -251,6 +280,7 @@ consolidated <- consolidate_employment(
 **After (0.6.0+):**
 
 ``` r
+
 # New API - Composable functions
 consolidated <- data |>
   consolidate_overlapping() |>
@@ -260,6 +290,7 @@ consolidated <- data |>
 **With gap bridging:**
 
 ``` r
+
 # Old API
 consolidated <- consolidate_employment(
   data,
@@ -278,6 +309,7 @@ consolidated <- data |>
 **Within analyze_employment_transitions():**
 
 ``` r
+
 # Old API - Parameters removed
 result <- analyze_employment_transitions(
   data,

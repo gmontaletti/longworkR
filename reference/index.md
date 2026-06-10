@@ -326,6 +326,18 @@ Compute temporal employment indicators, CPI mapping, and summaries.
   : Create comune to CPI lookup table
 - [`generate_comune_cpi_lookup()`](https://gmontaletti.github.io/longworkR/reference/generate_comune_cpi_lookup.md)
   : Generate and save comune-CPI lookup table
+- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md)
+  : Load comuni and CPI spatial data
+
+## Employment Summaries
+
+Summary statistics and stage comparison for consolidated employment
+data.
+
+- [`compare_consolidation_stages()`](https://gmontaletti.github.io/longworkR/reference/compare_consolidation_stages.md)
+  : Compare consolidation stages
+- [`employment_statistics()`](https://gmontaletti.github.io/longworkR/reference/employment_statistics.md)
+  : Extract employment statistics
 
 ## Data & Utilities
 
@@ -613,8 +625,6 @@ Internal helper functions and documentation pages.
   : Null-coalescing Operator
 - [`impact_rdd`](https://gmontaletti.github.io/longworkR/reference/impact_rdd.md)
   : Regression Discontinuity Design Functions
-- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md)
-  : Load comuni and CPI spatial data
 - [`translate_trajectory_status()`](https://gmontaletti.github.io/longworkR/reference/translate_trajectory_status.md)
   : Translate trajectory status labels
 - [`validate_animation_setup()`](https://gmontaletti.github.io/longworkR/reference/validate_animation_setup.md)
@@ -671,3 +681,5 @@ Internal helper functions and documentation pages.
   : Print method for treatment event assessment
 - [`aggregate_to_person_level()`](https://gmontaletti.github.io/longworkR/reference/aggregate_to_person_level.md)
   : Aggregate Event-Level Data to Person-Level for Matching
+- [`load_spatial_maps()`](https://gmontaletti.github.io/longworkR/reference/load_spatial_maps.md)
+  : Load comuni and CPI spatial data

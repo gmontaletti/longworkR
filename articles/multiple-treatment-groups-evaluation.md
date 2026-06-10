@@ -64,6 +64,7 @@ Let’s begin by creating a comprehensive synthetic dataset that mirrors
 real-world employment policy scenarios:
 
 ``` r
+
 # Set seed for reproducibility
 set.seed(42)
 
@@ -354,6 +355,7 @@ Before diving into causal inference, let’s explore the patterns in our
 multi-treatment data:
 
 ``` r
+
 # Treatment assignment balance
 cat("=== TREATMENT ASSIGNMENT ANALYSIS ===\n\n")
 #> === TREATMENT ASSIGNMENT ANALYSIS ===
@@ -455,6 +457,7 @@ print(trend_plot)
 
 ``` r
 
+
 # Treatment intensity distribution
 intensity_plot <- employment_data[period == 1 & treatment_type != "control", ] %>%
   ggplot(aes(x = treatment_intensity, fill = treatment_type)) +
@@ -483,6 +486,7 @@ standard DiD framework to accommodate multiple treatment groups and
 potentially multiple time periods.
 
 ``` r
+
 cat("=== MULTIPLE TREATMENT GROUPS DIFFERENCE-IN-DIFFERENCES ===\n\n")
 #> === MULTIPLE TREATMENT GROUPS DIFFERENCE-IN-DIFFERENCES ===
 
@@ -552,6 +556,7 @@ print(head(did_data[, .(cf, period, treatment_type, is_treated, post_treatment,
 #### Basic Multiple Treatment DiD
 
 ``` r
+
 # Run basic multiple treatment DiD
 tryCatch({
   # Basic DiD with longworkR
@@ -681,6 +686,7 @@ if (!is.null(employment_plot)) print(employment_plot)
 
 ``` r
 
+
 quality_plot <- create_multi_treatment_plot(did_data, "contract_quality")
 if (!is.null(quality_plot)) print(quality_plot)
 ```
@@ -693,6 +699,7 @@ Now let’s conduct pairwise comparisons between each treatment and the
 control group:
 
 ``` r
+
 cat("=== TREATMENT-SPECIFIC PAIRWISE ANALYSIS ===\n\n")
 #> === TREATMENT-SPECIFIC PAIRWISE ANALYSIS ===
 
@@ -884,6 +891,7 @@ Many employment programs have staggered rollouts. Let’s analyze this
 scenario:
 
 ``` r
+
 cat("=== STAGGERED TREATMENT ADOPTION ANALYSIS ===\n\n")
 #> === STAGGERED TREATMENT ADOPTION ANALYSIS ===
 
@@ -999,6 +1007,7 @@ When dealing with multiple treatments, we need to extend propensity
 score methods to handle the multinomial treatment assignment.
 
 ``` r
+
 cat("=== GENERALIZED PROPENSITY SCORE MATCHING ===\n\n")
 #> === GENERALIZED PROPENSITY SCORE MATCHING ===
 
@@ -1242,6 +1251,7 @@ if (nrow(pre_match_balance) > 0) {
 #### Matching Implementation
 
 ``` r
+
 cat("=== IMPLEMENTING PROPENSITY SCORE MATCHING ===\n\n")
 #> === IMPLEMENTING PROPENSITY SCORE MATCHING ===
 
@@ -1396,6 +1406,7 @@ Employment programs often have varying intensities. Let’s analyze the
 dose-response relationship:
 
 ``` r
+
 cat("=== DOSE-RESPONSE ANALYSIS ===\n\n")
 #> === DOSE-RESPONSE ANALYSIS ===
 
@@ -1595,6 +1606,7 @@ if (length(dose_analyses) > 0) {
 
 ``` r
 
+
 # Statistical tests for dose-response
 cat("\n=== STATISTICAL TESTS FOR DOSE-RESPONSE ===\n\n")
 #> 
@@ -1654,6 +1666,7 @@ for (treatment in treatment_types[1:2]) {  # Limit for demonstration
 Let’s explore how treatment effects vary across different subgroups:
 
 ``` r
+
 cat("=== TREATMENT EFFECT HETEROGENEITY ANALYSIS ===\n\n")
 #> === TREATMENT EFFECT HETEROGENEITY ANALYSIS ===
 
@@ -1930,6 +1943,7 @@ Let’s explore machine learning methods for heterogeneous treatment
 effects:
 
 ``` r
+
 cat("=== MACHINE LEARNING FOR HETEROGENEOUS EFFECTS ===\n\n")
 #> === MACHINE LEARNING FOR HETEROGENEOUS EFFECTS ===
 
@@ -2089,6 +2103,7 @@ if (length(available_features) >= 3) {
 ### Sensitivity Analysis and Robustness Checks
 
 ``` r
+
 cat("=== SENSITIVITY ANALYSIS AND ROBUSTNESS CHECKS ===\n\n")
 #> === SENSITIVITY ANALYSIS AND ROBUSTNESS CHECKS ===
 
@@ -2312,6 +2327,7 @@ Let’s put it all together with a comprehensive policy evaluation
 example:
 
 ``` r
+
 cat("=== CASE STUDY: COMPREHENSIVE EMPLOYMENT POLICY EVALUATION ===\n\n")
 #> === CASE STUDY: COMPREHENSIVE EMPLOYMENT POLICY EVALUATION ===
 
@@ -2569,6 +2585,7 @@ cat("treatment group analysis for understanding complex employment policies.\n")
 ### Key Takeaways
 
 ``` r
+
 cat("=== KEY TAKEAWAYS FOR MULTIPLE TREATMENT EVALUATION ===\n\n")
 #> === KEY TAKEAWAYS FOR MULTIPLE TREATMENT EVALUATION ===
 
@@ -2631,6 +2648,7 @@ cat("   - Cost-benefit analysis integration\n")
 ### Best Practices Checklist
 
 ``` r
+
 cat("=== BEST PRACTICES CHECKLIST ===\n\n")
 #> === BEST PRACTICES CHECKLIST ===
 
@@ -2719,6 +2737,7 @@ for (item in checklist) {
 ### Resources and Extensions
 
 ``` r
+
 cat("\n=== ADDITIONAL RESOURCES ===\n\n")
 #> 
 #> === ADDITIONAL RESOURCES ===
@@ -2781,12 +2800,13 @@ cat("methods, consult the individual function documentation and additional vigne
 ```
 
 ``` r
+
 # Session information for reproducibility
 cat("\n=== SESSION INFORMATION ===\n")
 #> 
 #> === SESSION INFORMATION ===
 print(sessionInfo())
-#> R version 4.5.3 (2026-03-11)
+#> R version 4.6.0 (2026-04-24)
 #> Platform: x86_64-pc-linux-gnu
 #> Running under: Ubuntu 24.04.4 LTS
 #> 
@@ -2807,31 +2827,30 @@ print(sessionInfo())
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] RColorBrewer_1.1-3  viridis_0.6.5       viridisLite_0.4.3  
-#> [4] dplyr_1.2.1         ggplot2_4.0.2       data.table_1.18.2.1
-#> [7] longworkR_0.9.0     vecshift_2.0.0     
+#> [1] RColorBrewer_1.1-3 viridis_0.6.5      viridisLite_0.4.3  dplyr_1.2.1       
+#> [5] ggplot2_4.0.3      data.table_1.18.4  longworkR_0.10.0   vecshift_2.0.0    
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] sandwich_3.1-1      sass_0.4.10         generics_0.1.4     
 #>  [4] dreamerr_1.5.0      lattice_0.22-9      hms_1.1.4          
 #>  [7] digest_0.6.39       magrittr_2.0.5      evaluate_1.0.5     
-#> [10] grid_4.5.3          fastmap_1.2.0       jsonlite_2.0.0     
-#> [13] Matrix_1.7-4        progress_1.2.3      Formula_1.2-5      
+#> [10] grid_4.6.0          fastmap_1.2.0       jsonlite_2.0.0     
+#> [13] Matrix_1.7-5        progress_1.2.3      Formula_1.2-5      
 #> [16] survival_3.8-6      gridExtra_2.3       mgcv_1.9-4         
 #> [19] scales_1.4.0        stringmagic_1.2.0   numDeriv_2016.8-1.1
-#> [22] textshaping_1.0.5   jquerylib_0.1.4     cli_3.6.5          
-#> [25] rlang_1.2.0         crayon_1.5.3        splines_4.5.3      
+#> [22] textshaping_1.0.5   jquerylib_0.1.4     cli_3.6.6          
+#> [25] rlang_1.2.0         crayon_1.5.3        splines_4.6.0      
 #> [28] withr_3.0.2         cachem_1.1.0        yaml_2.3.12        
-#> [31] otel_0.2.0          fixest_0.14.0       tools_4.5.3        
-#> [34] parallel_4.5.3      vctrs_0.7.2         R6_2.6.1           
+#> [31] otel_0.2.0          fixest_0.14.1       tools_4.6.0        
+#> [34] parallel_4.6.0      vctrs_0.7.3         R6_2.6.1           
 #> [37] zoo_1.8-15          matrixStats_1.5.0   lifecycle_1.0.5    
-#> [40] fs_2.0.1            htmlwidgets_1.6.4   ragg_1.5.2         
+#> [40] fs_2.1.0            htmlwidgets_1.6.4   ragg_1.5.2         
 #> [43] cluster_2.1.8.2     pkgconfig_2.0.3     desc_1.4.3         
-#> [46] pkgdown_2.2.0       bslib_0.10.0        pillar_1.11.1      
-#> [49] gtable_0.3.6        glue_1.8.0          Rcpp_1.1.1         
-#> [52] systemfonts_1.3.2   collapse_2.1.6      xfun_0.57          
+#> [46] pkgdown_2.2.0       bslib_0.11.0        pillar_1.11.1      
+#> [49] gtable_0.3.6        glue_1.8.1          Rcpp_1.1.1-1.1     
+#> [52] systemfonts_1.3.2   collapse_2.1.7      xfun_0.58          
 #> [55] tibble_3.3.1        tidyselect_1.2.1    knitr_1.51         
-#> [58] farver_2.1.2        nlme_3.1-168        htmltools_0.5.9    
+#> [58] farver_2.1.2        nlme_3.1-169        htmltools_0.5.9    
 #> [61] labeling_0.4.3      rmarkdown_2.31      ggalluvial_0.12.6  
-#> [64] compiler_4.5.3      prettyunits_1.2.0   S7_0.2.1
+#> [64] compiler_4.6.0      prettyunits_1.2.0   S7_0.2.2
 ```

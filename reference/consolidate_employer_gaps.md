@@ -90,6 +90,7 @@ single data copy:
 
 The output is identical to the sequential pipeline:
 
+
     data |>
       consolidate_by_employer(employer_var,
         max_gap_days = employer_max_gap_days,

@@ -168,6 +168,7 @@ large-scale employment data.
 
 This function is designed to be the final step in a consolidation chain:
 
+
     data |>
       consolidate_overlapping() |>  # First merge concurrent
       consolidate_adjacent() |>     # Then merge adjacent

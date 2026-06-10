@@ -14,6 +14,7 @@ comprehensive visualization capabilities.
 ## Installation
 
 ``` r
+
 # Install vecshift first (required dependency)
 install.packages("vecshift")  # or devtools::install_local("../vecshift")
 
@@ -68,6 +69,7 @@ devtools::install_local(".")  # from longworkR directory
 ## Quick Start
 
 ``` r
+
 library(vecshift)
 library(longworkR)
 
@@ -162,7 +164,7 @@ Reference materials: `../reference/longworkR/`
 To cite longworkR in publications, please use:
 
 Montaletti, G. (2026). *longworkR: Longitudinal Employment Analytics for
-vecshift Data* (Version 0.9.0) \[R package\].
+vecshift Data* (Version 0.10.0) \[R package\].
 <https://github.com/gmontaletti/longworkR>
 
 BibTeX entry:
@@ -171,7 +173,7 @@ BibTeX entry:
 @software{montaletti2026longworkr,
   author = {Montaletti, Giampaolo},
   title = {longworkR: Longitudinal Employment Analytics for vecshift Data},
-  version = {0.9.0},
+  version = {0.10.0},
   year = {2026},
   url = {https://github.com/gmontaletti/longworkR}
 }

@@ -42,15 +42,15 @@ different components:
 
 ### Optimization Summary Table
 
-| Optimization                     | Component              | Speedup | Impact                            |
-|----------------------------------|------------------------|---------|-----------------------------------|
-| **Chain Value Processing**       | Transition analysis    | 24-49x  | Critical for eval_chain parameter |
-| **Weighted Median Calculation**  | Statistics aggregation | 31-59x  | Prevents memory overflow          |
-| **Vectorized Matrix Operations** | Monthly matrices       | 10-100x | Critical for temporal analysis    |
-| **Mode Calculation**             | Statistics aggregation | 1.5-3x  | Modest but consistent             |
-| **Type Conversion**              | Data preparation       | 2-4x    | Reduces memory overhead           |
-| **Matrix Normalization**         | Transition matrices    | 1.2-2x  | Improves cache efficiency         |
-| **Temporal Indicators**          | Career metrics         | 20-50x  | Eliminates nested loops           |
+| Optimization | Component | Speedup | Impact |
+|----|----|----|----|
+| **Chain Value Processing** | Transition analysis | 24-49x | Critical for eval_chain parameter |
+| **Weighted Median Calculation** | Statistics aggregation | 31-59x | Prevents memory overflow |
+| **Vectorized Matrix Operations** | Monthly matrices | 10-100x | Critical for temporal analysis |
+| **Mode Calculation** | Statistics aggregation | 1.5-3x | Modest but consistent |
+| **Type Conversion** | Data preparation | 2-4x | Reduces memory overhead |
+| **Matrix Normalization** | Transition matrices | 1.2-2x | Improves cache efficiency |
+| **Temporal Indicators** | Career metrics | 20-50x | Eliminates nested loops |
 
 ### When Optimizations Apply
 
@@ -112,6 +112,7 @@ datasets.
 extremely slow for large datasets:
 
 ``` r
+
 # Original slow approach (for illustration only)
 process_chain_naive <- function(values, eval_chain) {
   if (eval_chain == "last") {
@@ -128,6 +129,7 @@ process_chain_naive <- function(values, eval_chain) {
 [`sub()`](https://rdrr.io/r/base/grep.html) and regular expressions:
 
 ``` r
+
 # Optimized vectorized approach (automatically used)
 .process_chain_value <- function(values, eval_chain = c("last", "first", "none")) {
   eval_chain <- match.arg(eval_chain)
@@ -150,6 +152,7 @@ process_chain_naive <- function(values, eval_chain) {
 **Performance impact**:
 
 ``` r
+
 # Example benchmark (not run in vignette build)
 library(microbenchmark)
 
@@ -183,6 +186,7 @@ statistics variables in transition analysis.
 weights, which caused memory overflow with large weights:
 
 ``` r
+
 # Original approach - DANGEROUS with large weights
 calculate_weighted_median_naive <- function(values, weights) {
   expanded <- rep(values, times = weights)  # Can create huge vectors!
@@ -198,6 +202,7 @@ weights <- c(1e6, 1e6, 1e6)  # Creates 3 million element vector!
 **The solution**: Cumulative sum approach without vector expansion:
 
 ``` r
+
 # Optimized approach (automatically used)
 .calculate_weighted_median_optimized <- function(values, weights, na.rm = TRUE) {
   # Handle edge cases
@@ -237,6 +242,7 @@ weights <- c(1e6, 1e6, 1e6)  # Creates 3 million element vector!
 **Performance impact**:
 
 ``` r
+
 # Example benchmark
 library(microbenchmark)
 
@@ -280,6 +286,7 @@ temporal analysis.
 populate matrix elements one-by-one:
 
 ``` r
+
 # Original slow approach (for illustration)
 for (k in seq_along(from_indices)) {
   period_matrix[from_indices[k], to_indices[k]] <-
@@ -294,6 +301,7 @@ for (k in seq_along(from_indices)) {
 aggregation:
 
 ``` r
+
 # Optimized vectorized approach (in create_monthly_transition_matrices_optimized)
 
 # Step 1: Convert 2D matrix indices to 1D linear indices
@@ -320,6 +328,7 @@ period_matrix[as.integer(names(aggregated_weights))] <- aggregated_weights
 **Performance impact**:
 
 ``` r
+
 # Example benchmark with real data
 library(microbenchmark)
 
@@ -362,6 +371,7 @@ datasets with \>100K total transitions
 **Migration**: Simply replace function name:
 
 ``` r
+
 # Old code
 results <- create_monthly_transition_matrices(
   data,
@@ -392,6 +402,7 @@ character/factor variables in statistics aggregation.
 [`table()`](https://rdrr.io/r/base/table.html):
 
 ``` r
+
 .calculate_mode_optimized <- function(x, na.rm = TRUE) {
   if (length(x) == 0) return(NA)
 
@@ -423,6 +434,7 @@ type coercion overhead in subsequent operations.
 **The solution**: Vectorized type detection and in-place conversion:
 
 ``` r
+
 .convert_types_optimized <- function(data, modify_in_place = FALSE) {
   if (!modify_in_place) {
     data <- copy(data)
@@ -451,6 +463,7 @@ probability matrices.
 **The solution**: Vectorized division using column or row sums:
 
 ``` r
+
 .normalize_transition_matrix_optimized <- function(matrix, normalize_by = "row") {
   if (normalize_by == "row") {
     row_sums <- rowSums(matrix)
@@ -497,6 +510,7 @@ employment data analysis workflows.
 ### Example 1: Transition Analysis with Statistics
 
 ``` r
+
 library(longworkR)
 library(data.table)
 library(bench)
@@ -544,6 +558,7 @@ cat("\nProcessing rate:",
 ### Example 2: Temporal Transition Matrices
 
 ``` r
+
 # Monthly transition matrices for career path analysis
 library(microbenchmark)
 
@@ -593,6 +608,7 @@ all.equal(orig_result$matrices, opt_result$matrices)
 ### Example 3: Memory Efficiency Test
 
 ``` r
+
 # Demonstrate memory savings with large weights
 
 # Create scenario with large transition weights
@@ -639,6 +655,7 @@ cat("Naive approach would use ~",
 ### Example 4: Scalability Test
 
 ``` r
+
 # Test how performance scales with data size
 library(ggplot2)
 
@@ -703,6 +720,7 @@ These optimizations are applied automatically when you use standard
 functions - no code changes needed:
 
 ``` r
+
 # All these functions use optimized implementations automatically:
 
 # 1. Transition analysis (uses all helper optimizations)
@@ -731,6 +749,7 @@ clusters <- cluster_career_trajectories(
 Only one function requires a name change to use the optimized version:
 
 ``` r
+
 # OLD: Using original implementation
 monthly_matrices <- create_monthly_transition_matrices(
   data,
@@ -756,6 +775,7 @@ monthly_matrices <- create_monthly_transition_matrices_optimized(
 Always verify that results remain unchanged:
 
 ``` r
+
 # Compare old vs new results on a small subset
 test_data <- data[1:1000]
 
@@ -847,6 +867,7 @@ For very small groups (\<100 values), base R
 [`table()`](https://rdrr.io/r/base/table.html) may be faster:
 
 ``` r
+
 # If you're manually calculating modes on small vectors:
 small_vector <- c("A", "B", "A", "C", "A")
 
@@ -865,6 +886,7 @@ mode_base <- names(which.max(table(small_vector)))
 Don’t set `memory_fraction` too low unnecessarily:
 
 ``` r
+
 # TOO CONSERVATIVE - Will be slow
 clusters <- cluster_career_trajectories(
   data,
@@ -889,6 +911,7 @@ clusters <- cluster_career_trajectories(
 Always benchmark your specific workflows:
 
 ``` r
+
 library(bench)
 
 # Benchmark your actual analysis workflow
@@ -930,6 +953,7 @@ saveRDS(my_workflow_benchmark, "benchmarks/workflow_v1.rds")
 For large datasets, monitor and manage memory:
 
 ``` r
+
 # Check available memory before analysis
 available_ram <- as.numeric(system("awk '/MemAvailable/ {print $2}' /proc/meminfo",
                                    intern = TRUE))
@@ -1023,17 +1047,17 @@ optimization effort.
 
 Detailed performance of individual optimized helper functions:
 
-| Function                                                                                                                                              | Operation           | Dataset Size                  | Speedup | Notes                  |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------|-------------------------------|---------|------------------------|
-| `.process_chain_value()`                                                                                                                              | Extract last value  | 10K chains                    | 24x     | String with 3-5 parts  |
-| `.process_chain_value()`                                                                                                                              | Extract first value | 50K chains                    | 49x     | Complex chains         |
-| [`.calculate_weighted_median_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-calculate_weighted_median_optimized.md)              | Weighted median     | 1K values                     | 31x     | Moderate weights       |
-| [`.calculate_weighted_median_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-calculate_weighted_median_optimized.md)              | Weighted median     | 10K values, large weights     | 59x     | Prevents overflow      |
-| [`.calculate_mode_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-calculate_mode_optimized.md)                                    | Mode finding        | 10K values                    | 2.8x    | 20 unique values       |
-| [`.convert_types_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-convert_types_optimized.md)                                      | Type conversion     | 50 columns, 10K rows          | 3.2x    | All integer to numeric |
-| `.normalize_transition_matrix_optimized()`                                                                                                            | Row normalization   | 500x500 matrix                | 1.8x    | Dense matrix           |
-| [`create_monthly_transition_matrices_optimized()`](https://gmontaletti.github.io/longworkR/reference/create_monthly_transition_matrices_optimized.md) | Matrix creation     | 100K transitions, 100 periods | 54x     | Global state space     |
-| [`compute_temporal_employment_indicators()`](https://gmontaletti.github.io/longworkR/reference/compute_temporal_employment_indicators.md)             | Temporal metrics    | 50K observations              | 38x     | Vectorized version     |
+| Function | Operation | Dataset Size | Speedup | Notes |
+|----|----|----|----|----|
+| `.process_chain_value()` | Extract last value | 10K chains | 24x | String with 3-5 parts |
+| `.process_chain_value()` | Extract first value | 50K chains | 49x | Complex chains |
+| [`.calculate_weighted_median_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-calculate_weighted_median_optimized.md) | Weighted median | 1K values | 31x | Moderate weights |
+| [`.calculate_weighted_median_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-calculate_weighted_median_optimized.md) | Weighted median | 10K values, large weights | 59x | Prevents overflow |
+| [`.calculate_mode_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-calculate_mode_optimized.md) | Mode finding | 10K values | 2.8x | 20 unique values |
+| [`.convert_types_optimized()`](https://gmontaletti.github.io/longworkR/reference/dot-convert_types_optimized.md) | Type conversion | 50 columns, 10K rows | 3.2x | All integer to numeric |
+| `.normalize_transition_matrix_optimized()` | Row normalization | 500x500 matrix | 1.8x | Dense matrix |
+| [`create_monthly_transition_matrices_optimized()`](https://gmontaletti.github.io/longworkR/reference/create_monthly_transition_matrices_optimized.md) | Matrix creation | 100K transitions, 100 periods | 54x | Global state space |
+| [`compute_temporal_employment_indicators()`](https://gmontaletti.github.io/longworkR/reference/compute_temporal_employment_indicators.md) | Temporal metrics | 50K observations | 38x | Vectorized version |
 
 ### Full Workflow Benchmarks
 
@@ -1140,6 +1164,7 @@ The optimizations leverage several advanced vectorization strategies:
 #### 1. String Vectorization
 
 ``` r
+
 # Instead of: sapply(strsplit(x, "->"), function(y) y[length(y)])
 # Use: sub(".*->\\s*", "", x)
 
@@ -1153,6 +1178,7 @@ The optimizations leverage several advanced vectorization strategies:
 #### 2. Linear Algebra Vectorization
 
 ``` r
+
 # Matrix normalization: instead of loops
 # Use: matrix / rowSums(matrix)
 
@@ -1165,6 +1191,7 @@ The optimizations leverage several advanced vectorization strategies:
 #### 3. Grouped Aggregation
 
 ``` r
+
 # Instead of: for loop with accumulation
 # Use: data.table aggregation or tapply()
 
@@ -1182,6 +1209,7 @@ The optimizations implement several memory-saving techniques:
 #### Reference Semantics
 
 ``` r
+
 # data.table's := operator modifies in-place
 dt[, new_col := transformation(old_col)]
 
@@ -1194,6 +1222,7 @@ dt[, new_col := transformation(old_col)]
 #### Lazy Evaluation
 
 ``` r
+
 # Compute intermediate results only when needed
 # Use data.table's chaining
 
@@ -1209,6 +1238,7 @@ dt[filter_condition][, .(summary = sum(value)), by = group]
 #### Garbage Collection Timing
 
 ``` r
+
 # In chunked processing, explicit GC between chunks
 for (chunk in chunks) {
   process_chunk(chunk)
@@ -1222,18 +1252,19 @@ for (chunk in chunks) {
 
 Key complexity reductions:
 
-| Operation           | Original        | Optimized       | Improvement              |
-|---------------------|-----------------|-----------------|--------------------------|
-| Chain processing    | O(n × m)        | O(n)            | m = avg chain length     |
-| Weighted median     | O(n × w)        | O(n log n)      | w = avg weight           |
-| Matrix population   | O(n) poor cache | O(n) good cache | 10-100x speedup          |
-| Temporal indicators | O(n²)           | O(n log n)      | Quadratic → linearithmic |
+| Operation | Original | Optimized | Improvement |
+|----|----|----|----|
+| Chain processing | O(n × m) | O(n) | m = avg chain length |
+| Weighted median | O(n × w) | O(n log n) | w = avg weight |
+| Matrix population | O(n) poor cache | O(n) good cache | 10-100x speedup |
+| Temporal indicators | O(n²) | O(n log n) | Quadratic → linearithmic |
 
 ### Numerical Accuracy Verification
 
 All optimizations maintain numerical accuracy:
 
 ``` r
+
 # Weighted median: Verified equivalence
 set.seed(123)
 values <- rnorm(1000)

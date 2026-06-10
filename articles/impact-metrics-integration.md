@@ -34,6 +34,7 @@ Let’s begin with a practical example using the package’s sample
 employment data:
 
 ``` r
+
 # Load sample employment data from package data directory
 # Try multiple data file locations in order of preference
 data_files <- c(
@@ -54,7 +55,7 @@ for (file_path in data_files) {
     })
   }
 }
-#> Successfully loaded data from: /tmp/RtmpN2nU3C/temp_libpath1ff673d78f36/longworkR/extdata/sample.rds
+#> Successfully loaded data from: /tmp/Rtmpj5U91D/temp_libpath219a69ac3e72/longworkR/extdata/sample.rds
 
 # If no data file found, create synthetic example data
 if (is.null(sample_data)) {
@@ -120,6 +121,7 @@ various aspects of employment quality and career trajectories.
 ### Basic Metrics Calculation
 
 ``` r
+
 # Calculate comprehensive employment metrics with error handling
 metrics_result <- NULL
 
@@ -221,6 +223,7 @@ The comprehensive metrics function calculates four main categories:
 4.  **Transition Pattern Metrics**: Success rates, duration patterns
 
 ``` r
+
 # Group metrics by category for better understanding
 stability_metrics <- grep("employment|stability|spell|turnover", names(metrics_result), value = TRUE)
 quality_metrics <- grep("contract|permanent|temporary|quality", names(metrics_result), value = TRUE) 
@@ -255,6 +258,7 @@ treatment assignments, and outcome variable selection.
 First, we need to define which individuals are treated vs. control:
 
 ``` r
+
 # Create treatment assignment
 # In real studies, this would come from your experimental design or policy assignment
 set.seed(123)  # For reproducibility
@@ -287,6 +291,7 @@ cat("Control:", sum(1 - treatment_data$is_treated), "(",
 ### Bridge to Impact Analysis Format
 
 ``` r
+
 # Prepare data for difference-in-differences analysis with error handling
 did_data <- NULL
 
@@ -434,6 +439,7 @@ The bridge function automatically detects suitable outcome variables,
 but you can also specify them manually:
 
 ``` r
+
 # Get automatically detected outcome variables with error handling
 available_outcomes <- character(0)
 
@@ -512,6 +518,7 @@ data:
 ### Basic DiD Estimation
 
 ``` r
+
 # Run difference-in-differences analysis with error handling
 did_results <- NULL
 
@@ -579,6 +586,7 @@ if (!is.null(did_data) && length(available_outcomes) > 0) {
 ### Results Interpretation
 
 ``` r
+
 if (exists("did_results") && !is.null(did_results)) {
   tryCatch({
     # Extract treatment effects with safe access
@@ -651,6 +659,7 @@ if (exists("did_results") && !is.null(did_results)) {
 For studying treatment effects over time, use event study design:
 
 ``` r
+
 # Prepare data for event study (requires event_time variable)
 # First, create event time structure in the original metrics data
 if ("event_period" %in% names(sample_data)) {
@@ -747,6 +756,7 @@ if ("event_period" %in% names(sample_data)) {
 Combine metrics with propensity score matching:
 
 ``` r
+
 # Prepare data for matching (preserves original structure)
 matching_data <- prepare_metrics_for_impact_analysis(
   metrics_output = metrics_result,
@@ -839,6 +849,7 @@ cat("Control group size:", sum(1 - matching_data$is_treated), "\n")
 Handle complex treatment scenarios:
 
 ``` r
+
 # Create multiple treatment groups
 treatment_multi <- copy(treatment_data)
 treatment_multi[, treatment_type := sample(c("none", "training", "subsidies", "both"), 
@@ -937,6 +948,7 @@ cat("Multi-treatment data includes treatment_type variable:",
 Always validate your data before analysis:
 
 ``` r
+
 # Function to check data quality
 validate_integration_data <- function(data, metrics_output, treatment_assignment) {
   issues <- character(0)
@@ -1002,6 +1014,7 @@ if (length(validation$issues) > 0) {
 For large datasets:
 
 ``` r
+
 # Use wide format for better memory efficiency
 metrics_wide <- calculate_comprehensive_impact_metrics(
   data = large_dataset,
@@ -1023,6 +1036,7 @@ impact_data <- prepare_metrics_for_impact_analysis(
 ### Treatment Effect Visualization
 
 ``` r
+
 if (exists("did_results") && !is.null(did_results)) {
   tryCatch({
     # Create a simple treatment effect plot
@@ -1105,6 +1119,7 @@ if (exists("did_results") && !is.null(did_results)) {
 ### Summary Report Generation
 
 ``` r
+
 # Generate a comprehensive summary with error handling
 generate_integration_summary <- function(metrics_result, did_data, did_results = NULL) {
   

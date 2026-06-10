@@ -119,6 +119,7 @@ consolidation logic since no same-employer merging is possible.
 This function is designed to be chained with other consolidation
 functions:
 
+
     data |>
       consolidate_overlapping() |>       # First merge concurrent
       consolidate_by_employer("datore") |> # Then merge same-employer
